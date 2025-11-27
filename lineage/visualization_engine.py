@@ -86,13 +86,13 @@ class DataLineageVisualizer:
                 colorbar=dict(
                     thickness=15,
                     title='Connections',
-                    xanchor='left',
-                    titleside='right'
+                    xanchor='left'
                 ),
                 line=dict(width=2)
             ),
             text=[],
-            textposition="top center"
+            textposition="top center",
+            hovertext=()
         )
         
         # Prepara dados das arestas
@@ -143,8 +143,7 @@ class DataLineageVisualizer:
         # Cria a figura
         fig = go.Figure(data=edge_traces + [node_trace],
                        layout=go.Layout(
-                           title=title,
-                           titlefont_size=16,
+                           title=dict(text=title, font=dict(size=16)),
                            showlegend=False,
                            hovermode='closest',
                            margin=dict(b=20, l=5, r=5, t=40),
@@ -228,8 +227,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=edge_traces + [node_trace],
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=False,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -299,8 +297,7 @@ class DataLineageVisualizer:
         )])
         
         fig.update_layout(
-            title=title,
-            titlefont_size=16,
+            title=dict(text=title, font=dict(size=16)),
             font=dict(size=10),
             height=600
         )
@@ -315,6 +312,10 @@ class DataLineageVisualizer:
         """
         if not changed_nodes:
             return self._create_empty_figure("No nodes selected for impact analysis")
+
+        changed_nodes = [n for n in changed_nodes if n in self.graph]
+        if not changed_nodes:
+            return self._create_empty_figure("Selected nodes are not present in the graph")
         
         # Calcula impacto
         directly_affected = set(changed_nodes)
@@ -392,8 +393,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=traces,
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=True,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -489,8 +489,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=[edge_trace, node_trace],
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=False,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -578,8 +577,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=traces,
             layout=go.Layout(
-                title=f"{title}<br>Center: {center_node}",
-                titlefont_size=16,
+                title=dict(text=f"{title}<br>Center: {center_node}", font=dict(size=16)),
                 showlegend=True,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=60),
