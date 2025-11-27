@@ -71,8 +71,7 @@ class DataLineageAgent:
         self.impact_analysis_cache = {}
         self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5")
         self.llm_api_key = os.getenv("OPENAI_API_KEY")
-        self.llm_base_url = os.getenv("OPENAI_API_URL")
-        self.llm_client: Optional[OpenAI] = None
+        self.llm_endpoint = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
         self.llm_disabled = False  # Evita tentativas repetidas após falha de autenticação
         self._llm_warning_logged = False
         self.parsers = {
@@ -582,6 +581,19 @@ class DataLineageAgent:
                     return parsed.get('lineage', [])
                 if isinstance(parsed, list):
                     return parsed
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 401:
+                    print(
+                        "⚠️ Falha ao usar LLM para "
+                        f"{file_path}: autenticação inválida (401). "
+                        "Verifique OPENAI_API_KEY/OPENAI_API_URL. Fallback desativado."
+                    )
+                    self.llm_disabled = True
+                    break
+                if attempt == 2:
+                    print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
+                else:
+                    time.sleep(2 ** attempt)
             except Exception as e:
                 status_code = getattr(getattr(e, "response", None), "status_code", None)
                 if status_code == 401:
