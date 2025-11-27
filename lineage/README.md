@@ -44,6 +44,35 @@ pip install -r requirements.txt
 - `sqlparse`: Parsing de SQL
 - `pandas`: Manipulação de dados
 - `matplotlib`: Visualizações estáticas
+- `requests`: Integração opcional com LLM para extração contextual de linhagem
+
+### Setup rápido com ambiente virtual
+
+```bash
+# 1) Crie e ative um ambiente virtual chamado dgagentkit
+python -m venv dgagentkit
+source dgagentkit/bin/activate  # Linux/macOS
+# .\\dgagentkit\\Scripts\\activate  # Windows PowerShell
+
+# 2) Instale as dependências dentro do venv
+pip install -r requirements.txt
+```
+
+### Integração Opcional com LLM
+- Defina `OPENAI_API_KEY` para habilitar o fallback de extração contextual (modelo padrão `gpt-4o-mini`).
+- Variáveis opcionais: `DATA_LINEAGE_LLM_MODEL` (nome do modelo) e `OPENAI_API_URL` (endpoint compatível com OpenAI). Sem token, o parser continua usando apenas regras determinísticas.
+
+Para configurar tokens antes de rodar a análise e aproveitar o fallback contextual:
+
+```bash
+# 3) Configure as variáveis de ambiente para o LLM
+export OPENAI_API_KEY="seu_token"
+export DATA_LINEAGE_LLM_MODEL="gpt-4o-mini"          # opcional
+export OPENAI_API_URL="https://api.openai.com/v1/chat/completions"  # opcional
+
+# 4) Execute a análise completa (CLI) após configurar o LLM
+python lineage_system.py /caminho/para/projeto --visualize dashboard --report
+```
 
 ## 🚀 Uso Rápido
 

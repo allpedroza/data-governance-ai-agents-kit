@@ -8,6 +8,7 @@ import ast
 import re
 import json
 import os
+import requests
 from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,6 +68,9 @@ class DataLineageAgent:
         self.transformations: List[Transformation] = []
         self.graph = nx.DiGraph()
         self.impact_analysis_cache = {}
+        self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-4o-mini")
+        self.llm_api_key = os.getenv("OPENAI_API_KEY")
+        self.llm_endpoint = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
         self.parsers = {
             '.py': self._parse_python,
             '.sql': self._parse_sql,
@@ -126,14 +130,11 @@ class DataLineageAgent:
     
     def _parse_python(self, content: str, file_path: str):
         """Parser para arquivos Python"""
-        # Check if this is an Airflow DAG file
-        if 'from airflow' in content or 'import airflow' in content:
-            self._parse_airflow(content, file_path)
-            return
-            
+        assets_before = len(self.assets)
+        transformations_before = len(self.transformations)
         try:
             tree = ast.parse(content)
-            
+
             for node in ast.walk(tree):
                 # Detecta imports de bibliotecas de dados
                 if isinstance(node, ast.Import):
@@ -147,6 +148,10 @@ class DataLineageAgent:
                     
         except Exception as e:
             print(f"Erro no parser Python: {e}")
+
+        # Fallback via LLM quando não encontramos nada
+        if len(self.assets) == assets_before and len(self.transformations) == transformations_before:
+            self._parse_python_with_llm(content, file_path)
     
     def _extract_python_data_operations(self, tree: ast.AST, file_path: str):
         """Extrai operações de dados em Python"""
@@ -297,16 +302,47 @@ class DataLineageAgent:
     def _parse_sql(self, content: str, file_path: str):
         """Parser para arquivos SQL"""
         statements = sqlparse.split(content)
-        
+
         for statement in statements:
             parsed = sqlparse.parse(statement)[0] if sqlparse.parse(statement) else None
             if not parsed:
                 continue
-                
+
             # Extrai tabelas fonte e destino
             sources = self._extract_sql_sources(parsed)
             targets = self._extract_sql_targets(parsed)
-            
+
+            # Se não for possível extrair de forma determinística, tenta LLM
+            if not sources or not targets:
+                llm_pairs = self._infer_lineage_with_llm(statement, file_path, language="SQL")
+                for pair in llm_pairs:
+                    source = pair.get('source')
+                    target = pair.get('target')
+                    if source and source not in self.assets:
+                        self.assets[source] = DataAsset(
+                            name=source,
+                            type='table',
+                            source_file=file_path
+                        )
+                    if target and target not in self.assets:
+                        self.assets[target] = DataAsset(
+                            name=target,
+                            type='table',
+                            source_file=file_path
+                        )
+                    if source and target and source != target:
+                        trans = Transformation(
+                            source=self.assets[source],
+                            target=self.assets[target],
+                            operation=pair.get('operation', 'INFERRED'),
+                            transformation_logic=pair.get('logic', statement[:200]),
+                            source_file=file_path,
+                            confidence_score=pair.get('confidence', 0.5)
+                        )
+                        self.transformations.append(trans)
+                if llm_pairs:
+                    continue
+
             # Registra assets
             for source in sources:
                 if source not in self.assets:
@@ -459,6 +495,81 @@ class DataLineageAgent:
         else:
             # Python regular
             self._parse_python(content, file_path)
+
+    def _parse_python_with_llm(self, content: str, file_path: str):
+        """Fallback baseado em LLM para blocos Python não estruturados"""
+        llm_pairs = self._infer_lineage_with_llm(content, file_path, language="Python")
+        for pair in llm_pairs:
+            source = pair.get('source')
+            target = pair.get('target')
+            if source and source not in self.assets:
+                self.assets[source] = DataAsset(
+                    name=source,
+                    type='table',
+                    source_file=file_path
+                )
+            if target and target not in self.assets:
+                self.assets[target] = DataAsset(
+                    name=target,
+                    type='table',
+                    source_file=file_path
+                )
+            if source and target and source != target:
+                trans = Transformation(
+                    source=self.assets[source],
+                    target=self.assets[target],
+                    operation=pair.get('operation', 'INFERRED'),
+                    transformation_logic=pair.get('logic', content[:200]),
+                    source_file=file_path,
+                    confidence_score=pair.get('confidence', 0.5)
+                )
+                self.transformations.append(trans)
+
+    def _infer_lineage_with_llm(self, snippet: str, file_path: str, language: str) -> List[Dict[str, Any]]:
+        """
+        Usa um LLM (via API OpenAI compatível) para inferir pares fonte->destino.
+        Retorna lista de dicionários com chaves: source, target, operation, logic, confidence.
+        """
+        if not self.llm_api_key:
+            return []
+
+        system_prompt = (
+            "Você é um assistente de engenharia de dados. Leia o trecho de código "
+            "e extraia pares de linhagem (fonte -> destino) em formato JSON. "
+            "Responda apenas JSON com lista de objetos contendo: source, target, operation, logic, confidence."
+        )
+        user_prompt = (
+            f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n" + snippet[:4000]
+        )
+
+        headers = {
+            "Authorization": f"Bearer {self.llm_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.llm_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.0,
+            "response_format": {"type": "json_object"}
+        }
+
+        try:
+            response = requests.post(self.llm_endpoint, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and 'lineage' in parsed:
+                return parsed.get('lineage', [])
+            if isinstance(parsed, list):
+                return parsed
+        except Exception as e:
+            print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
+
+        return []
     
     def _parse_databricks_sql(self, content: str, file_path: str):
         """Parser para SQL em Databricks"""

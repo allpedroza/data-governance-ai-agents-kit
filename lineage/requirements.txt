@@ -10,6 +10,7 @@ plotly>=5.0.0
 
 # SQL parsing
 sqlparse>=0.4.0
+requests>=2.31.0
 
 # AST parsing for Python code analysis
 astor>=0.8.0
