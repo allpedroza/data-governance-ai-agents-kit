@@ -10,6 +10,7 @@ numpy>=1.23.0
 
 # SQL parsing
 sqlparse>=0.4.0
+requests>=2.31.0
 
 # Visualization
 kaleido>=0.2.0  # For static image export
