@@ -44,6 +44,11 @@ pip install -r requirements.txt
 - `sqlparse`: Parsing de SQL
 - `pandas`: Manipulação de dados
 - `matplotlib`: Visualizações estáticas
+- `requests`: Integração opcional com LLM para extração contextual de linhagem
+
+### Integração Opcional com LLM
+- Defina `OPENAI_API_KEY` para habilitar o fallback de extração contextual (modelo padrão `gpt-4o-mini`).
+- Variáveis opcionais: `DATA_LINEAGE_LLM_MODEL` (nome do modelo) e `OPENAI_API_URL` (endpoint compatível com OpenAI). Sem token, o parser continua usando apenas regras determinísticas.
 
 ## 🚀 Uso Rápido
 
