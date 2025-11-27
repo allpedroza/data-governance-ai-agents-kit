@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # Main application
+  lineage-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lineage-web
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./examples:/app/examples
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./data:/data
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - lineage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Jupyter notebook for interactive analysis
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lineage-jupyter
+    command: jupyter lab --ip=0.0.0.0 --no-browser --allow-root
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/data
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=lineage
+    networks:
+      - lineage-network
+    profiles:
+      - development
+
+  # Optional: PostgreSQL for metadata storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: lineage-db
+    environment:
+      - POSTGRES_DB=lineage
+      - POSTGRES_USER=lineage
+      - POSTGRES_PASSWORD=lineage123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lineage-network
+    profiles:
+      - production
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: lineage-cache
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - lineage-network
+    profiles:
+      - production
+
+  # Optional: MinIO for S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    container_name: lineage-storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - lineage-network
+    profiles:
+      - development
+
+  # Optional: Grafana for monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lineage-monitoring
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - lineage-network
+    profiles:
+      - monitoring
+
+networks:
+  lineage-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  grafana_data:
