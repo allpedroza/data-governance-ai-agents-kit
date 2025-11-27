@@ -194,7 +194,8 @@ class DataLineageVisualizer:
                 line=dict(width=2)
             ),
             text=[],
-            textposition="top center"
+            textposition="top center",
+            hovertext=()
         )
         
         # Prepara dados das arestas
@@ -245,8 +246,7 @@ class DataLineageVisualizer:
         # Cria a figura
         fig = go.Figure(data=edge_traces + [node_trace],
                        layout=go.Layout(
-                           title=title,
-                           titlefont_size=16,
+                           title=dict(text=title, font=dict(size=16)),
                            showlegend=False,
                            hovermode='closest',
                            margin=dict(b=20, l=5, r=5, t=40),
@@ -330,8 +330,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=edge_traces + [node_trace],
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=False,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -401,8 +400,7 @@ class DataLineageVisualizer:
         )])
         
         fig.update_layout(
-            title=title,
-            titlefont_size=16,
+            title=dict(text=title, font=dict(size=16)),
             font=dict(size=10),
             height=600
         )
@@ -498,8 +496,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=traces,
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=True,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -595,8 +592,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=[edge_trace, node_trace],
             layout=go.Layout(
-                title=title,
-                titlefont_size=16,
+                title=dict(text=title, font=dict(size=16)),
                 showlegend=False,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=40),
@@ -684,8 +680,7 @@ class DataLineageVisualizer:
         fig = go.Figure(
             data=traces,
             layout=go.Layout(
-                title=f"{title}<br>Center: {center_node}",
-                titlefont_size=16,
+                title=dict(text=f"{title}<br>Center: {center_node}", font=dict(size=16)),
                 showlegend=True,
                 hovermode='closest',
                 margin=dict(b=20, l=5, r=5, t=60),

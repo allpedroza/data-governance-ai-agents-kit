@@ -9,6 +9,7 @@ import re
 import json
 import os
 import requests
+import time
 from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -556,18 +557,22 @@ class DataLineageAgent:
             "response_format": {"type": "json_object"}
         }
 
-        try:
-            response = requests.post(self.llm_endpoint, headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-            parsed = json.loads(content)
-            if isinstance(parsed, dict) and 'lineage' in parsed:
-                return parsed.get('lineage', [])
-            if isinstance(parsed, list):
-                return parsed
-        except Exception as e:
-            print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
+        for attempt in range(3):
+            try:
+                response = requests.post(self.llm_endpoint, headers=headers, json=payload, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+                parsed = json.loads(content)
+                if isinstance(parsed, dict) and 'lineage' in parsed:
+                    return parsed.get('lineage', [])
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception as e:
+                if attempt == 2:
+                    print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
+                else:
+                    time.sleep(2 ** attempt)
 
         return []
     
