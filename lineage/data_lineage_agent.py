@@ -8,7 +8,7 @@ import ast
 import re
 import json
 import os
-import requests
+from openai import OpenAI
 import time
 from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass, field
@@ -69,7 +69,7 @@ class DataLineageAgent:
         self.transformations: List[Transformation] = []
         self.graph = nx.DiGraph()
         self.impact_analysis_cache = {}
-        self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-4o-mini")
+        self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5")
         self.llm_api_key = os.getenv("OPENAI_API_KEY")
         self.llm_endpoint = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
         self.llm_disabled = False  # Evita tentativas repetidas após falha de autenticação
@@ -543,6 +543,9 @@ class DataLineageAgent:
             self.llm_disabled = True
             return []
 
+        if self.llm_client is None:
+            self.llm_client = OpenAI(api_key=self.llm_api_key, base_url=self.llm_base_url)
+
         system_prompt = (
             "Você é um assistente de engenharia de dados. Leia o trecho de código "
             "e extraia pares de linhagem (fonte -> destino) em formato JSON. "
@@ -552,27 +555,28 @@ class DataLineageAgent:
             f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n" + snippet[:4000]
         )
 
-        headers = {
-            "Authorization": f"Bearer {self.llm_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.llm_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.0,
-            "response_format": {"type": "json_object"}
-        }
-
         for attempt in range(3):
             try:
-                response = requests.post(self.llm_endpoint, headers=headers, json=payload, timeout=30)
-                response.raise_for_status()
-                data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-                parsed = json.loads(content)
+                response = self.llm_client.responses.create(
+                    model=self.llm_model,
+                    input=[
+                        {"role": "developer", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.0,
+                    response_format={"type": "json_object"}
+                )
+
+                content = response.output_text or ""
+                if not content and getattr(response, "output", None):
+                    text_chunks = []
+                    for item in response.output:
+                        for piece in item.get("content", []):
+                            if piece.get("type") == "output_text":
+                                text_chunks.append(piece.get("text", ""))
+                    content = "".join(text_chunks)
+
+                parsed = json.loads(content or "{}")
                 if isinstance(parsed, dict) and 'lineage' in parsed:
                     return parsed.get('lineage', [])
                 if isinstance(parsed, list):
@@ -591,6 +595,15 @@ class DataLineageAgent:
                 else:
                     time.sleep(2 ** attempt)
             except Exception as e:
+                status_code = getattr(getattr(e, "response", None), "status_code", None)
+                if status_code == 401:
+                    print(
+                        "⚠️ Falha ao usar LLM para "
+                        f"{file_path}: autenticação inválida (401). "
+                        "Verifique OPENAI_API_KEY/OPENAI_API_URL. Fallback desativado."
+                    )
+                    self.llm_disabled = True
+                    break
                 if attempt == 2:
                     print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
                 else:
