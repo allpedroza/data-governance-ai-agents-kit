@@ -1,0 +1,57 @@
+# Data Lineage AI Agent - Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+pandas>=1.5.0
+numpy>=1.23.0
+networkx>=3.0
+matplotlib>=3.6.0
+plotly>=5.0.0
+
+# SQL parsing
+sqlparse>=0.4.0
+
+# AST parsing for Python code analysis
+astor>=0.8.0
+astunparse>=1.6.0
+
+# Terraform parsing
+python-hcl2>=3.0.0
+pyhcl>=0.4.0
+
+# Web interface (ESSENTIAL)
+streamlit>=1.25.0
+streamlit-plotly-events>=0.0.6
+
+# Visualization
+kaleido>=0.2.0  # For static image export
+python-igraph>=0.10.0  # Advanced graph algorithms (optional)
+seaborn>=0.12.0
+
+# Data processing
+pyarrow>=10.0.0  # For Parquet files
+openpyxl>=3.0.0  # For Excel files
+
+# Databricks support
+pyspark>=3.3.0  # For PySpark code analysis
+databricks-sdk>=0.5.0  # Optional
+
+# Cloud storage support (optional)
+boto3>=1.26.0  # AWS S3
+azure-storage-blob>=12.14.0  # Azure Blob Storage
+google-cloud-storage>=2.7.0  # Google Cloud Storage
+
+# Additional utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+
+# Development tools (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.990
+
+# Documentation (optional)
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
