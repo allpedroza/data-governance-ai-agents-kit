@@ -12,18 +12,6 @@ plotly>=5.0.0
 sqlparse>=0.4.0
 requests>=2.31.0
 
-# AST parsing for Python code analysis
-astor>=0.8.0
-astunparse>=1.6.0
-
-# Terraform parsing
-python-hcl2>=3.0.0
-pyhcl>=0.4.0
-
-# Web interface (ESSENTIAL)
-streamlit>=1.25.0
-streamlit-plotly-events>=0.0.6
-
 # Visualization
 kaleido>=0.2.0  # For static image export
 python-igraph>=0.10.0  # Advanced graph algorithms (optional)

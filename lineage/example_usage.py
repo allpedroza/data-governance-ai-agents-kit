@@ -8,6 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 import shutil
+import networkx as nx
 from lineage_system import DataLineageSystem
 
 

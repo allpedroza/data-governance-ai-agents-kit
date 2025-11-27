@@ -189,8 +189,7 @@ class DataLineageVisualizer:
                 colorbar=dict(
                     thickness=15,
                     title='Connections',
-                    xanchor='left',
-                    titleside='right'
+                    xanchor='left'
                 ),
                 line=dict(width=2)
             ),
@@ -418,6 +417,10 @@ class DataLineageVisualizer:
         """
         if not changed_nodes:
             return self._create_empty_figure("No nodes selected for impact analysis")
+
+        changed_nodes = [n for n in changed_nodes if n in self.graph]
+        if not changed_nodes:
+            return self._create_empty_figure("Selected nodes are not present in the graph")
         
         # Calcula impacto
         directly_affected = set(changed_nodes)
