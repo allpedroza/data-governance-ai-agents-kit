@@ -28,6 +28,12 @@ class DataLineageVisualizer:
             'type_based': self._get_type_colors()
         }
         self.layout_cache = {}
+        self.metrics = None  # Store calculated metrics
+        self.llm_analysis = None  # Store LLM analysis
+        
+        # Calculate metrics and LLM analysis on initialization if graph provided
+        if self.graph.number_of_nodes() > 0:
+            self._calculate_metrics_and_analysis()
         
     def _get_default_colors(self) -> Dict:
         """Esquema de cores padrão"""
@@ -58,6 +64,103 @@ class DataLineageVisualizer:
             'databricks_table': '#e74c3c',
             'delta_table': '#16a085'
         }
+    
+    def _calculate_metrics_and_analysis(self):
+        """
+        Calcula métricas do grafo e gera análise LLM
+        """
+        # Calculate basic metrics
+        self.metrics = {
+            'total_nodes': self.graph.number_of_nodes(),
+            'total_edges': self.graph.number_of_edges(),
+            'density': nx.density(self.graph) if self.graph.number_of_nodes() > 0 else 0,
+            'is_dag': nx.is_directed_acyclic_graph(self.graph),
+        }
+        
+        if self.graph.number_of_nodes() > 0:
+            try:
+                self.metrics['avg_degree'] = sum(dict(self.graph.degree()).values()) / self.graph.number_of_nodes()
+                self.metrics['connected_components'] = nx.number_weakly_connected_components(self.graph)
+                
+                # Find sources and sinks
+                self.metrics['sources'] = [n for n in self.graph.nodes() if self.graph.in_degree(n) == 0]
+                self.metrics['sinks'] = [n for n in self.graph.nodes() if self.graph.out_degree(n) == 0]
+                
+                # Calculate longest path if DAG
+                if self.metrics['is_dag']:
+                    try:
+                        longest_path = nx.dag_longest_path(self.graph)
+                        self.metrics['longest_path_length'] = len(longest_path)
+                        self.metrics['longest_path'] = longest_path
+                    except:
+                        pass
+                
+                # Centrality measures for small graphs
+                if self.graph.number_of_nodes() < 1000:
+                    self.metrics['betweenness'] = nx.betweenness_centrality(self.graph)
+                    self.metrics['pagerank'] = nx.pagerank(self.graph, max_iter=100)
+            except:
+                pass
+        
+        # Generate LLM analysis
+        try:
+            from llm_graph_analyzer import GraphLLMAnalyzer
+            analyzer = GraphLLMAnalyzer()
+            self.llm_analysis = analyzer.analyze_graph(self.graph, self.metrics)
+            
+            # Merge key insights into metrics
+            if self.llm_analysis:
+                self.metrics['llm_summary'] = self.llm_analysis.get('overall_summary', '')
+                self.metrics['insights'] = self.llm_analysis.get('insights', [])
+                self.metrics['recommendations'] = self.llm_analysis.get('recommendations', [])
+                self.metrics['natural_language_report'] = self.llm_analysis.get('natural_language_report', '')
+        except Exception as e:
+            print(f"LLM analysis not available: {e}")
+            self.llm_analysis = None
+    
+    def get_llm_summary(self) -> str:
+        """
+        Retorna o resumo em linguagem natural do grafo
+        """
+        if not self.llm_analysis:
+            self._calculate_metrics_and_analysis()
+        
+        if self.llm_analysis:
+            return self.llm_analysis.get('overall_summary', 'No LLM summary available')
+        return "LLM analysis not available"
+    
+    def get_insights(self) -> List[Dict]:
+        """
+        Retorna insights detectados pelo LLM
+        """
+        if not self.llm_analysis:
+            self._calculate_metrics_and_analysis()
+        
+        if self.llm_analysis:
+            return self.llm_analysis.get('insights', [])
+        return []
+    
+    def get_recommendations(self) -> List[Dict]:
+        """
+        Retorna recomendações de melhorias
+        """
+        if not self.llm_analysis:
+            self._calculate_metrics_and_analysis()
+        
+        if self.llm_analysis:
+            return self.llm_analysis.get('recommendations', [])
+        return []
+    
+    def get_natural_language_report(self) -> str:
+        """
+        Retorna relatório completo em linguagem natural
+        """
+        if not self.llm_analysis:
+            self._calculate_metrics_and_analysis()
+        
+        if self.llm_analysis:
+            return self.llm_analysis.get('natural_language_report', '')
+        return "No natural language report available"
     
     def visualize_force_directed(self, 
                                 highlight_nodes: List[str] = None,
@@ -696,8 +799,204 @@ class DataLineageVisualizer:
     
     def export_to_html(self, fig: go.Figure, filename: str = "lineage_viz.html"):
         """
-        Exporta visualização para arquivo HTML interativo
+        Exporta visualização para arquivo HTML interativo com resumos LLM
         """
+        # Generate LLM analysis if not already done
+        if not self.llm_analysis:
+            self._calculate_metrics_and_analysis()
+        
+        # Create enhanced HTML with LLM insights
+        html_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Data Lineage Analysis - AI Enhanced</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }}
+                .container {{
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    overflow: hidden;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 40px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 2.5em;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                }}
+                .content {{
+                    padding: 40px;
+                }}
+                .summary-section {{
+                    background: #f8f9fa;
+                    border-left: 5px solid #667eea;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 10px;
+                }}
+                .insights-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin: 20px 0;
+                }}
+                .insight-card {{
+                    background: white;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 10px;
+                    padding: 20px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    transition: transform 0.3s;
+                }}
+                .insight-card:hover {{
+                    transform: translateY(-5px);
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+                }}
+                .severity-critical {{
+                    border-top: 5px solid #e74c3c;
+                }}
+                .severity-high {{
+                    border-top: 5px solid #f39c12;
+                }}
+                .severity-medium {{
+                    border-top: 5px solid #3498db;
+                }}
+                .severity-low {{
+                    border-top: 5px solid #95a5a6;
+                }}
+                .metric {{
+                    display: inline-block;
+                    background: #667eea;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 20px;
+                    margin: 5px;
+                    font-weight: bold;
+                }}
+                .recommendation {{
+                    background: #e8f5e9;
+                    border: 1px solid #4caf50;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 10px 0;
+                }}
+                .recommendation h4 {{
+                    color: #2e7d32;
+                    margin-top: 0;
+                }}
+                pre {{
+                    background: #f4f4f4;
+                    padding: 15px;
+                    border-radius: 5px;
+                    overflow-x: auto;
+                    white-space: pre-wrap;
+                }}
+                #plotly-div {{
+                    margin: 30px 0;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 10px;
+                    overflow: hidden;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🔍 Data Lineage Intelligence Report</h1>
+                    <p>AI-Powered Pipeline Analysis</p>
+                </div>
+                
+                <div class="content">
+                    <!-- Executive Summary -->
+                    <div class="summary-section">
+                        <h2>📊 Executive Summary</h2>
+                        <p>{summary}</p>
+                    </div>
+                    
+                    <!-- Key Metrics -->
+                    <h2>📈 Key Metrics</h2>
+                    <div>
+                        <span class="metric">Assets: {nodes}</span>
+                        <span class="metric">Connections: {edges}</span>
+                        <span class="metric">Components: {components}</span>
+                        <span class="metric">Complexity: {complexity}</span>
+                        <span class="metric">Critical Path: {critical_path} steps</span>
+                    </div>
+                    
+                    <!-- Interactive Visualization -->
+                    <h2>🎨 Interactive Visualization</h2>
+                    <div id="plotly-div">{plotly_graph}</div>
+                    
+                    <!-- Key Insights -->
+                    <h2>💡 Key Insights</h2>
+                    <div class="insights-grid">
+                        {insights_html}
+                    </div>
+                    
+                    <!-- Recommendations -->
+                    <h2>🎯 Recommendations</h2>
+                    {recommendations_html}
+                    
+                    <!-- Natural Language Report -->
+                    <h2>📝 Detailed Analysis</h2>
+                    <pre>{detailed_report}</pre>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Prepare data for template
+        summary = self.llm_analysis.get('overall_summary', 'No summary available') if self.llm_analysis else 'Analysis pending'
+        
+        # Generate insights HTML
+        insights_html = self._generate_insights_html()
+        
+        # Generate recommendations HTML
+        recommendations_html = self._generate_recommendations_html()
+        
+        # Get detailed report
+        detailed_report = self.llm_analysis.get('natural_language_report', '') if self.llm_analysis else ''
+        
+        # Calculate complexity description
+        complexity = self._describe_complexity()
+        
+        # Convert figure to HTML
+        plotly_html = fig.to_html(include_plotlyjs='cdn', div_id="plotly-div")
+        
+        # Fill template
+        html_content = html_template.format(
+            summary=summary,
+            nodes=self.metrics.get('total_nodes', 0) if self.metrics else 0,
+            edges=self.metrics.get('total_edges', 0) if self.metrics else 0,
+            components=self.metrics.get('connected_components', 0) if self.metrics else 0,
+            complexity=complexity,
+            critical_path=self.metrics.get('longest_path_length', 'N/A') if self.metrics else 'N/A',
+            plotly_graph=plotly_html,
+            insights_html=insights_html,
+            recommendations_html=recommendations_html,
+            detailed_report=detailed_report
+        )
+        
+        # Write to file
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        return filename
         fig.write_html(filename, include_plotlyjs='cdn')
         return filename
     
@@ -879,3 +1178,60 @@ class DataLineageVisualizer:
         hue = 0.6 - (distance / max_distance) * 0.3
         rgb = colorsys.hsv_to_rgb(hue, 0.8, 0.9)
         return f'rgb({int(rgb[0]*255)}, {int(rgb[1]*255)}, {int(rgb[2]*255)})'
+    
+    def _generate_insights_html(self) -> str:
+        """Gera HTML para seção de insights"""
+        if not self.llm_analysis or 'insights' not in self.llm_analysis:
+            return "<p>No insights available</p>"
+        
+        html_parts = []
+        for insight in self.llm_analysis['insights'][:6]:  # Top 6 insights
+            severity_class = f"severity-{insight['severity'].lower()}"
+            html_parts.append(f"""
+            <div class="insight-card {severity_class}">
+                <h3>{insight['title']}</h3>
+                <p><strong>Severity:</strong> {insight['severity']}</p>
+                <p>{insight['description']}</p>
+                <p><strong>Affected:</strong> {len(insight.get('affected_nodes', []))} nodes</p>
+                <p><strong>Action:</strong> {insight['recommendation']}</p>
+            </div>
+            """)
+        
+        return ''.join(html_parts)
+    
+    def _generate_recommendations_html(self) -> str:
+        """Gera HTML para seção de recomendações"""
+        if not self.llm_analysis or 'recommendations' not in self.llm_analysis:
+            return "<p>No recommendations available</p>"
+        
+        html_parts = []
+        for rec in self.llm_analysis['recommendations'][:5]:
+            html_parts.append(f"""
+            <div class="recommendation">
+                <h4>{rec['title']} (Priority: {rec['priority']})</h4>
+                <p>{rec['description']}</p>
+                <ul>
+                    {''.join(f"<li>{action}</li>" for action in rec.get('actions', [])[:3])}
+                </ul>
+                <p><strong>Impact:</strong> {rec.get('impact', 'N/A')}</p>
+            </div>
+            """)
+        
+        return ''.join(html_parts)
+    
+    def _describe_complexity(self) -> str:
+        """Descreve complexidade do grafo"""
+        if not self.metrics:
+            return "Unknown"
+        
+        density = self.metrics.get('density', 0)
+        nodes = self.metrics.get('total_nodes', 0)
+        
+        if nodes > 100 or density > 0.3:
+            return "Very High"
+        elif nodes > 50 or density > 0.2:
+            return "High"
+        elif nodes > 20 or density > 0.1:
+            return "Medium"
+        else:
+            return "Low"
