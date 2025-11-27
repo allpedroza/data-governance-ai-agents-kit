@@ -71,19 +71,16 @@ class DataLineageAgent:
         self.impact_analysis_cache = {}
         self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-4o-mini")
         self.llm_api_key = os.getenv("OPENAI_API_KEY")
-        self.llm_endpoint = os.getenv(
-            "OPENAI_API_URL", "https://api.openai.com/v1/chat/completions"
-        )
-        self.llm_disabled_reason: Optional[str] = None
+        self.llm_endpoint = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
         self.parsers = {
             '.py': self._parse_python,
             '.sql': self._parse_sql,
             '.tf': self._parse_terraform,
             '.json': self._parse_terraform,  # terraform json
             '.scala': self._parse_databricks,
-            '.py': self._parse_databricks_python,
-            '.sql': self._parse_databricks_sql
+            '.dag': self._parse_airflow,  # Airflow DAG files
         }
+        self.airflow_dags = []  # Store Airflow DAGs separately
         
     def analyze_pipeline(self, file_paths: List[str]) -> Dict:
         """
@@ -218,6 +215,90 @@ class DataLineageAgent:
             if node.func.attr in spark_ops:
                 # Registra transformação
                 pass  # Implementar lógica detalhada
+    
+    def _parse_airflow(self, content: str, file_path: str):
+        """Parser para Airflow DAGs"""
+        from parsers.airflow_parser import AirflowParser
+        
+        parser = AirflowParser()
+        dags, tasks = parser.parse_dag_file(file_path)
+        
+        # Store Airflow DAGs
+        self.airflow_dags.extend(dags)
+        
+        # Convert Airflow tasks to our data model
+        for task in tasks:
+            # Create asset for each task
+            asset = DataAsset(
+                name=f"{task.dag_id}.{task.task_id}",
+                type='airflow_task',
+                source_file=file_path,
+                line_number=task.line_number,
+                metadata={
+                    'operator': task.operator_type,
+                    'dag_id': task.dag_id,
+                    'task_id': task.task_id
+                }
+            )
+            self.assets[asset.name] = asset
+            
+            # Create assets for data inputs/outputs
+            for data_input in task.data_inputs:
+                input_asset = DataAsset(
+                    name=data_input,
+                    type='data_source',
+                    source_file=file_path,
+                    metadata={'referenced_by': task.get_full_id()}
+                )
+                self.assets[data_input] = input_asset
+                
+                # Create transformation
+                transform = Transformation(
+                    source=input_asset,
+                    target=asset,
+                    operation='read',
+                    transformation_logic=task.operator_type,
+                    source_file=file_path,
+                    line_number=task.line_number
+                )
+                self.transformations.append(transform)
+            
+            for data_output in task.data_outputs:
+                output_asset = DataAsset(
+                    name=data_output,
+                    type='data_sink',
+                    source_file=file_path,
+                    metadata={'produced_by': task.get_full_id()}
+                )
+                self.assets[data_output] = output_asset
+                
+                # Create transformation
+                transform = Transformation(
+                    source=asset,
+                    target=output_asset,
+                    operation='write',
+                    transformation_logic=task.operator_type,
+                    source_file=file_path,
+                    line_number=task.line_number
+                )
+                self.transformations.append(transform)
+        
+        # Process task dependencies
+        for dag in dags:
+            for task_id, task in dag.tasks.items():
+                for downstream_id in task.downstream:
+                    source_name = f"{dag.dag_id}.{task_id}"
+                    target_name = f"{dag.dag_id}.{downstream_id}"
+                    
+                    if source_name in self.assets and target_name in self.assets:
+                        transform = Transformation(
+                            source=self.assets[source_name],
+                            target=self.assets[target_name],
+                            operation='task_dependency',
+                            transformation_logic='airflow_dependency',
+                            source_file=file_path
+                        )
+                        self.transformations.append(transform)
     
     def _parse_sql(self, content: str, file_path: str):
         """Parser para arquivos SQL"""
@@ -450,19 +531,8 @@ class DataLineageAgent:
         Usa um LLM (via API OpenAI compatível) para inferir pares fonte->destino.
         Retorna lista de dicionários com chaves: source, target, operation, logic, confidence.
         """
-        if self.llm_disabled_reason:
-            return []
-
         if not self.llm_api_key:
-            self.llm_disabled_reason = "OPENAI_API_KEY não definido; LLM desativado"
             return []
-
-        # Normaliza endpoints sem o path /chat/completions para evitar 404s
-        if self.llm_endpoint.rstrip('/').endswith("/v1"):
-            self.llm_endpoint = self.llm_endpoint.rstrip('/') + "/chat/completions"
-
-        endpoint_lower = self.llm_endpoint.lower()
-        use_responses_api = endpoint_lower.endswith("/responses")
 
         system_prompt = (
             "Você é um assistente de engenharia de dados. Leia o trecho de código "
@@ -477,64 +547,28 @@ class DataLineageAgent:
             "Authorization": f"Bearer {self.llm_api_key}",
             "Content-Type": "application/json",
         }
-
-        if use_responses_api:
-            payload = {
-                "model": self.llm_model,
-                "input": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.0,
-                "response_format": {"type": "json_object"},
-            }
-        else:
-            payload = {
-                "model": self.llm_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.0,
-                "response_format": {"type": "json_object"},
-            }
+        payload = {
+            "model": self.llm_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.0,
+            "response_format": {"type": "json_object"}
+        }
 
         for attempt in range(3):
             try:
                 response = requests.post(self.llm_endpoint, headers=headers, json=payload, timeout=30)
                 response.raise_for_status()
                 data = response.json()
-                if use_responses_api:
-                    outputs = data.get("output", [])
-                    first_text = ""
-                    if outputs:
-                        message = outputs[0].get("message", {})
-                        contents = message.get("content", [])
-                        if contents and isinstance(contents[0], dict):
-                            first_text = contents[0].get("text", "")
-                    content = first_text or data.get("output_text", "{}")
-                else:
-                    content = (
-                        data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content", "{}")
-                    )
-
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and 'lineage' in parsed:
                     return parsed.get('lineage', [])
                 if isinstance(parsed, list):
                     return parsed
             except Exception as e:
-                # Erros 401/404 costumam indicar endpoint ou token incorretos; desativa para evitar ruído
-                status_code = getattr(getattr(e, "response", None), "status_code", None)
-                if status_code in {401, 404}:
-                    self.llm_disabled_reason = (
-                        "LLM desativado: verifique OPENAI_API_KEY e OPENAI_API_URL (use /v1/chat/completions)."
-                    )
-                    print(f"⚠️ {self.llm_disabled_reason}")
-                    return []
-
                 if attempt == 2:
                     print(f"⚠️ Falha ao usar LLM para {file_path}: {e}")
                 else:

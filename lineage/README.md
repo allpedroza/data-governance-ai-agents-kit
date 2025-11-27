@@ -472,12 +472,13 @@ Este projeto está sob licença MIT. Veja o arquivo `LICENSE` para mais detalhes
 - Plotly pela engine de visualização
 - SQLParse pelo parser SQL
 - Comunidade Python pelos pacotes essenciais
-- Claude AI Assistant pela celeridade gerada no processo de coding
 
 ## 📞 Suporte
 
 Para suporte, abra uma issue no repositório ou entre em contato através do email do projeto.
 
 ---
+
+**Desenvolvido com ❤️ por Claude AI Assistant**
 
 *Última atualização: Novembro 2024*
