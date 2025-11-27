@@ -1,0 +1,33 @@
+# Data Lineage AI Agent - Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+networkx>=3.0
+matplotlib>=3.6.0
+plotly>=5.0.0
+pandas>=1.5.0
+numpy>=1.23.0
+
+# SQL parsing
+sqlparse>=0.4.0
+
+# Visualization
+kaleido>=0.2.0  # For static image export
+python-igraph>=0.10.0  # Advanced graph algorithms (optional)
+
+# Databricks support (optional)
+pyspark>=3.3.0  # For PySpark code analysis
+
+# Terraform parsing (optional)
+python-hcl2>=3.0.0  # For parsing HCL files
+pyhcl>=0.4.0  # Alternative HCL parser
+
+# Development tools (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.990
+
+# Documentation (optional)
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
