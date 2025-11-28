@@ -102,14 +102,23 @@ class DataLineageAgent:
         
         # Constrói o grafo de linhagem
         self._build_lineage_graph()
-        
+
         # Calcula métricas
         metrics = self._calculate_metrics()
-        
+
+        # Identifica componentes críticos
+        critical_components = self._identify_critical_components()
+
+        # Gera insights automáticos
+        print("🤖 Gerando insights automáticos...")
+        insights = self._generate_graph_insights(metrics, critical_components)
+
         return {
             'assets': list(self.assets.values()),
             'transformations': self.transformations,
             'metrics': metrics,
+            'critical_components': critical_components,
+            'insights': insights,
             'graph': self.graph
         }
     
@@ -677,7 +686,310 @@ class DataLineageAgent:
                 metrics['complexity_metrics']['has_cycles'] = False
         
         return metrics
-    
+
+    def _identify_critical_components(self) -> Dict[str, Any]:
+        """
+        Identifica componentes críticos do grafo:
+        - Pontos únicos de falha (articulation points)
+        - Caminhos críticos (longest paths)
+        - Assets com maior impacto (high fan-out/fan-in)
+        - Subgrafos por domínio
+        """
+        critical_info = {
+            'single_points_of_failure': [],
+            'critical_paths': [],
+            'high_impact_assets': [],
+            'bottleneck_assets': [],
+            'subgraphs': [],
+            'isolated_components': []
+        }
+
+        if self.graph.number_of_nodes() == 0:
+            return critical_info
+
+        # Converte para grafo não direcionado para encontrar articulation points
+        undirected = self.graph.to_undirected()
+
+        # Pontos de articulação (single points of failure)
+        articulation_points = list(nx.articulation_points(undirected))
+        for node in articulation_points:
+            downstream_count = len(self.get_downstream_impact(node))
+            critical_info['single_points_of_failure'].append({
+                'asset': node,
+                'downstream_impact': downstream_count,
+                'type': self.graph.nodes[node].get('type', 'unknown')
+            })
+
+        # Assets com alto impacto (muitas dependências downstream)
+        for node in self.graph.nodes():
+            out_degree = self.graph.out_degree(node)
+            in_degree = self.graph.in_degree(node)
+
+            # High fan-out (muitas saídas)
+            if out_degree >= 3:
+                critical_info['high_impact_assets'].append({
+                    'asset': node,
+                    'downstream_count': out_degree,
+                    'upstream_count': in_degree,
+                    'type': self.graph.nodes[node].get('type', 'unknown'),
+                    'reason': 'high_fan_out'
+                })
+
+            # Bottlenecks (muitas entradas e saídas)
+            if in_degree >= 2 and out_degree >= 2:
+                critical_info['bottleneck_assets'].append({
+                    'asset': node,
+                    'in_degree': in_degree,
+                    'out_degree': out_degree,
+                    'type': self.graph.nodes[node].get('type', 'unknown')
+                })
+
+        # Caminhos críticos (longest paths em DAG)
+        if nx.is_directed_acyclic_graph(self.graph):
+            try:
+                # Encontra o caminho mais longo
+                longest_path = nx.dag_longest_path(self.graph)
+                if len(longest_path) > 1:
+                    critical_info['critical_paths'].append({
+                        'path': longest_path,
+                        'length': len(longest_path),
+                        'description': f"Caminho crítico com {len(longest_path)} assets"
+                    })
+            except:
+                pass
+
+        # Componentes fracamente conectados (subgrafos)
+        weak_components = list(nx.weakly_connected_components(self.graph))
+        for i, component in enumerate(weak_components):
+            if len(component) > 1:
+                # Identifica tipo dominante no componente
+                types = [self.graph.nodes[n].get('type', 'unknown') for n in component]
+                dominant_type = max(set(types), key=types.count)
+
+                critical_info['subgraphs'].append({
+                    'id': i,
+                    'size': len(component),
+                    'assets': list(component)[:10],  # Primeiros 10
+                    'dominant_type': dominant_type,
+                    'description': f"Componente com {len(component)} assets ({dominant_type})"
+                })
+
+        # Nós isolados
+        isolated = list(nx.isolates(self.graph))
+        if isolated:
+            critical_info['isolated_components'] = isolated[:20]  # Primeiros 20
+
+        return critical_info
+
+    def _generate_graph_insights(self, metrics: Dict, critical_info: Dict) -> Dict[str, Any]:
+        """
+        Gera insights e recomendações usando LLM baseado nas métricas e componentes críticos
+        """
+        insights = {
+            'summary': '',
+            'recommendations': [],
+            'risk_assessment': '',
+            'subgraph_summaries': []
+        }
+
+        # Se LLM não disponível, gera insights baseados em regras
+        if self.llm_disabled or not self.llm_api_key:
+            insights = self._generate_rule_based_insights(metrics, critical_info)
+            return insights
+
+        # Prepara contexto para o LLM
+        context = self._prepare_insights_context(metrics, critical_info)
+
+        # Gera insights com LLM
+        llm_insights = self._call_llm_for_insights(context)
+
+        if llm_insights:
+            insights.update(llm_insights)
+        else:
+            # Fallback para regras se LLM falhar
+            insights = self._generate_rule_based_insights(metrics, critical_info)
+
+        return insights
+
+    def _prepare_insights_context(self, metrics: Dict, critical_info: Dict) -> str:
+        """Prepara contexto estruturado para enviar ao LLM"""
+        context_parts = []
+
+        # Resumo do grafo
+        context_parts.append(f"# Análise de Linhagem de Dados\n")
+        context_parts.append(f"Total de Assets: {metrics.get('total_assets', 0)}")
+        context_parts.append(f"Total de Transformações: {metrics.get('total_transformations', 0)}")
+
+        # Tipos de assets
+        if metrics.get('asset_types'):
+            context_parts.append(f"\nTipos de Assets:")
+            for asset_type, count in metrics['asset_types'].items():
+                context_parts.append(f"  - {asset_type}: {count}")
+
+        # Métricas de complexidade
+        complexity = metrics.get('complexity_metrics', {})
+        if complexity:
+            context_parts.append(f"\nComplexidade:")
+            context_parts.append(f"  - Nós: {complexity.get('nodes', 0)}")
+            context_parts.append(f"  - Arestas: {complexity.get('edges', 0)}")
+            context_parts.append(f"  - Densidade: {complexity.get('density', 0):.3f}")
+            context_parts.append(f"  - Grau médio: {complexity.get('avg_degree', 0):.2f}")
+            context_parts.append(f"  - Ciclos: {'Sim' if complexity.get('has_cycles') else 'Não'}")
+
+        # Pontos críticos
+        spof = critical_info.get('single_points_of_failure', [])
+        if spof:
+            context_parts.append(f"\nPontos Únicos de Falha ({len(spof)}):")
+            for point in spof[:5]:
+                context_parts.append(f"  - {point['asset']}: impacta {point['downstream_impact']} assets downstream")
+
+        # Assets de alto impacto
+        high_impact = critical_info.get('high_impact_assets', [])
+        if high_impact:
+            context_parts.append(f"\nAssets de Alto Impacto ({len(high_impact)}):")
+            for asset in high_impact[:5]:
+                context_parts.append(f"  - {asset['asset']}: {asset['downstream_count']} dependências downstream")
+
+        # Bottlenecks
+        bottlenecks = critical_info.get('bottleneck_assets', [])
+        if bottlenecks:
+            context_parts.append(f"\nBottlenecks ({len(bottlenecks)}):")
+            for bn in bottlenecks[:5]:
+                context_parts.append(f"  - {bn['asset']}: {bn['in_degree']} → {bn['out_degree']}")
+
+        # Subgrafos
+        subgraphs = critical_info.get('subgraphs', [])
+        if subgraphs:
+            context_parts.append(f"\nComponentes/Subgrafos ({len(subgraphs)}):")
+            for sg in subgraphs[:3]:
+                context_parts.append(f"  - {sg['description']}")
+
+        return "\n".join(context_parts)
+
+    def _call_llm_for_insights(self, context: str) -> Optional[Dict]:
+        """Chama LLM para gerar insights"""
+        if self.llm_client is None:
+            try:
+                self.llm_client = OpenAI(api_key=self.llm_api_key, base_url=self.llm_base_url)
+            except Exception as e:
+                print(f"⚠️ Erro ao inicializar LLM client: {e}")
+                self.llm_disabled = True
+                return None
+
+        system_prompt = """Você é um especialista em engenharia de dados e análise de pipelines.
+Analise o grafo de linhagem de dados fornecido e gere:
+1. Um resumo executivo em português (2-3 parágrafos)
+2. Lista de recomendações específicas de melhorias
+3. Avaliação de risco (LOW/MEDIUM/HIGH) com justificativa
+4. Para cada componente/subgrafo, uma breve descrição
+
+Responda em formato JSON com as chaves: summary, recommendations (array), risk_assessment, subgraph_summaries (array)."""
+
+        try:
+            response = self.llm_client.responses.create(
+                model=self.llm_model,
+                input=[
+                    {"role": "developer", "content": system_prompt},
+                    {"role": "user", "content": context}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+
+            content = response.output_text or ""
+            if not content and hasattr(response, "output"):
+                text_chunks = []
+                for item in response.output:
+                    for piece in item.get("content", []):
+                        if piece.get("type") == "output_text":
+                            text_chunks.append(piece.get("text", ""))
+                content = "".join(text_chunks)
+
+            if content:
+                return json.loads(content)
+        except Exception as e:
+            print(f"⚠️ Erro ao gerar insights com LLM: {e}")
+            self.llm_disabled = True
+
+        return None
+
+    def _generate_rule_based_insights(self, metrics: Dict, critical_info: Dict) -> Dict:
+        """Gera insights baseados em regras quando LLM não está disponível"""
+        insights = {
+            'summary': '',
+            'recommendations': [],
+            'risk_assessment': 'LOW',
+            'subgraph_summaries': []
+        }
+
+        total_assets = metrics.get('total_assets', 0)
+        total_trans = metrics.get('total_transformations', 0)
+        complexity = metrics.get('complexity_metrics', {})
+
+        # Gera resumo
+        summary_parts = []
+        summary_parts.append(f"O pipeline analisado contém {total_assets} assets de dados com {total_trans} transformações.")
+
+        if complexity.get('has_cycles'):
+            summary_parts.append("⚠️ ALERTA: O pipeline contém ciclos, o que pode indicar dependências circulares problemáticas.")
+
+        spof = critical_info.get('single_points_of_failure', [])
+        if spof:
+            summary_parts.append(f"Foram identificados {len(spof)} pontos únicos de falha que requerem atenção especial.")
+
+        insights['summary'] = " ".join(summary_parts)
+
+        # Gera recomendações
+        if spof:
+            insights['recommendations'].append(
+                f"🔴 Implementar redundância para {len(spof)} pontos únicos de falha identificados"
+            )
+
+        bottlenecks = critical_info.get('bottleneck_assets', [])
+        if bottlenecks:
+            insights['recommendations'].append(
+                f"⚠️ Otimizar {len(bottlenecks)} bottlenecks identificados para melhorar performance"
+            )
+
+        if complexity.get('has_cycles'):
+            insights['recommendations'].append(
+                "🔄 Refatorar dependências circulares para simplificar o pipeline"
+            )
+
+        isolated = critical_info.get('isolated_components', [])
+        if isolated:
+            insights['recommendations'].append(
+                f"📦 Revisar {len(isolated)} assets isolados que podem estar órfãos"
+            )
+
+        high_impact = critical_info.get('high_impact_assets', [])
+        if len(high_impact) > 5:
+            insights['recommendations'].append(
+                "📊 Considerar modularização de assets com alto fan-out para facilitar manutenção"
+            )
+
+        # Avaliação de risco
+        risk_score = 0
+        if spof: risk_score += len(spof) * 2
+        if complexity.get('has_cycles'): risk_score += 5
+        if bottlenecks: risk_score += len(bottlenecks)
+
+        if risk_score >= 10:
+            insights['risk_assessment'] = 'HIGH - Pipeline com múltiplos pontos críticos'
+        elif risk_score >= 5:
+            insights['risk_assessment'] = 'MEDIUM - Alguns pontos de atenção identificados'
+        else:
+            insights['risk_assessment'] = 'LOW - Pipeline com estrutura saudável'
+
+        # Resumos de subgrafos
+        for subgraph in critical_info.get('subgraphs', []):
+            insights['subgraph_summaries'].append({
+                'id': subgraph['id'],
+                'summary': f"Componente {subgraph['dominant_type']} com {subgraph['size']} assets interconectados"
+            })
+
+        return insights
+
     def get_upstream_dependencies(self, asset_name: str) -> List[str]:
         """Retorna todas as dependências upstream de um asset"""
         if asset_name not in self.graph:
