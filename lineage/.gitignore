@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Generated demo files
+demo_*.html
+demo_*.json
+demo_*.md
+
+# Generated report files
+report_*.html
+lineage_report_*.html
+
+# Temporary files
+*.tmp
+.DS_Store

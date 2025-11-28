@@ -145,7 +145,46 @@ class DataLineageSystem:
                 cycles = complexity.get('cycles', [])
                 if cycles:
                     print(f"    Exemplo: {' → '.join(cycles[0] + [cycles[0][0]])}")
-        
+
+        # Componentes Críticos
+        critical = analysis.get('critical_components', {})
+        if critical:
+            spof = critical.get('single_points_of_failure', [])
+            if spof:
+                print(f"\n🔴 Pontos Únicos de Falha:")
+                for point in spof[:3]:
+                    print(f"  • {point['asset']} (impacta {point['downstream_impact']} assets)")
+
+            bottlenecks = critical.get('bottleneck_assets', [])
+            if bottlenecks:
+                print(f"\n⚠️ Bottlenecks:")
+                for bn in bottlenecks[:3]:
+                    print(f"  • {bn['asset']} ({bn['in_degree']} → {bn['out_degree']})")
+
+            critical_paths = critical.get('critical_paths', [])
+            if critical_paths:
+                print(f"\n🛣️ Caminhos Críticos:")
+                for cp in critical_paths[:1]:
+                    print(f"  • {cp['description']}")
+
+        # Insights e Recomendações
+        insights = analysis.get('insights', {})
+        if insights:
+            print(f"\n🤖 Insights Automáticos:")
+            summary = insights.get('summary', '')
+            if summary:
+                # Limita a 200 caracteres
+                summary_short = summary[:200] + "..." if len(summary) > 200 else summary
+                print(f"  {summary_short}")
+
+            print(f"\n💡 Avaliação de Risco: {insights.get('risk_assessment', 'N/A')}")
+
+            recommendations = insights.get('recommendations', [])
+            if recommendations:
+                print(f"\n📋 Recomendações Principais:")
+                for rec in recommendations[:3]:
+                    print(f"  • {rec}")
+
         print("\n" + "="*60 + "\n")
     
     def analyze_impact(self, changed_assets: List[str]) -> Dict:
@@ -341,7 +380,9 @@ class DataLineageSystem:
                             }
                             for t in self.current_analysis.get('transformations', [])
                         ],
-                        'metrics': self.current_analysis.get('metrics', {})
+                        'metrics': self.current_analysis.get('metrics', {}),
+                        'critical_components': self.current_analysis.get('critical_components', {}),
+                        'insights': self.current_analysis.get('insights', {})
                     }
                     json.dump(export_data, f, indent=2)
                 
@@ -479,12 +520,69 @@ class DataLineageSystem:
             color: #95a5a6;
             font-size: 14px;
         }}
+        .insights-section {{
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .insight-summary {{
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+            border-radius: 4px;
+        }}
+        .risk-badge {{
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+        }}
+        .risk-low {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        .risk-medium {{
+            background: #fff3cd;
+            color: #856404;
+        }}
+        .risk-high {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        .recommendation-list {{
+            list-style: none;
+            padding: 0;
+        }}
+        .recommendation-list li {{
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }}
+        .critical-component {{
+            background: #fff3cd;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border-left: 3px solid #ffc107;
+        }}
+        .warning-icon {{
+            color: #ff9800;
+        }}
+        .error-icon {{
+            color: #f44336;
+        }}
     </style>
 </head>
 <body>
     <h1>📊 Data Lineage Analysis Report</h1>
     <p class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    
+
     <div class="metrics">
         <div class="metric-card">
             <div class="metric-value">{self.current_analysis.get('metrics', {}).get('total_assets', 0)}</div>
@@ -499,15 +597,104 @@ class DataLineageSystem:
             <div class="metric-label">Asset Types</div>
         </div>
     </div>
-    
+"""
+
+        # Adiciona seção de insights
+        insights = self.current_analysis.get('insights', {})
+        critical = self.current_analysis.get('critical_components', {})
+
+        if insights or critical:
+            report_html += """
+    <h2>🤖 Insights Automáticos e Análise Crítica</h2>
+    <div class="insights-section">
+"""
+
+            # Resumo e avaliação de risco
+            if insights:
+                summary = insights.get('summary', '')
+                risk = insights.get('risk_assessment', 'N/A')
+
+                # Determina classe CSS do risco
+                risk_class = 'risk-low'
+                if 'HIGH' in risk.upper():
+                    risk_class = 'risk-high'
+                elif 'MEDIUM' in risk.upper():
+                    risk_class = 'risk-medium'
+
+                report_html += f"""
+        <h3>📊 Resumo Executivo</h3>
+        <div class="insight-summary">
+            <p>{summary}</p>
+        </div>
+
+        <h3>💡 Avaliação de Risco</h3>
+        <div class="risk-badge {risk_class}">{risk}</div>
+"""
+
+                # Recomendações
+                recommendations = insights.get('recommendations', [])
+                if recommendations:
+                    report_html += """
+        <h3>📋 Recomendações</h3>
+        <ul class="recommendation-list">
+"""
+                    for rec in recommendations:
+                        report_html += f"            <li>{rec}</li>\n"
+
+                    report_html += "        </ul>\n"
+
+            # Componentes críticos
+            if critical:
+                spof = critical.get('single_points_of_failure', [])
+                if spof:
+                    report_html += """
+        <h3><span class="error-icon">🔴</span> Pontos Únicos de Falha</h3>
+"""
+                    for point in spof[:5]:
+                        report_html += f"""        <div class="critical-component">
+            <strong>{point['asset']}</strong> ({point['type']})<br>
+            Impacta <strong>{point['downstream_impact']}</strong> assets downstream
+        </div>
+"""
+
+                bottlenecks = critical.get('bottleneck_assets', [])
+                if bottlenecks:
+                    report_html += """
+        <h3><span class="warning-icon">⚠️</span> Bottlenecks Identificados</h3>
+"""
+                    for bn in bottlenecks[:5]:
+                        report_html += f"""        <div class="critical-component">
+            <strong>{bn['asset']}</strong> ({bn['type']})<br>
+            {bn['in_degree']} inputs → {bn['out_degree']} outputs
+        </div>
+"""
+
+                critical_paths = critical.get('critical_paths', [])
+                if critical_paths:
+                    report_html += """
+        <h3>🛣️ Caminhos Críticos</h3>
+"""
+                    for cp in critical_paths[:3]:
+                        path_str = ' → '.join(cp['path'][:10])
+                        if len(cp['path']) > 10:
+                            path_str += ' → ...'
+                        report_html += f"""        <div class="critical-component">
+            <strong>{cp['description']}</strong><br>
+            <code style="font-size: 0.85em;">{path_str}</code>
+        </div>
+"""
+
+            report_html += "    </div>\n"
+
+        report_html += """
     <h2>📈 Interactive Visualizations</h2>
     <div class="visualization-links">
 """
-        
+
         for viz_name, viz_file in visualizations:
             report_html += f'        <a href="{viz_file}" class="viz-link" target="_blank">{viz_name}</a>\n'
-        
-        report_html += f"""
+
+        report_html += """
     </div>
     
     <h2>📝 Detailed Documentation</h2>
