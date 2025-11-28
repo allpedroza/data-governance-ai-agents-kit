@@ -556,25 +556,21 @@ class DataLineageAgent:
         if self.llm_client is None:
             self.llm_client = OpenAI(api_key=self.llm_api_key, base_url=self.llm_base_url)
 
-        system_prompt = (
+        # Combina system prompt e user prompt em um único input
+        full_prompt = (
             "Você é um assistente de engenharia de dados. Leia o trecho de código "
             "e extraia pares de linhagem (fonte -> destino) em formato JSON. "
-            "Responda apenas JSON com lista de objetos contendo: source, target, operation, logic, confidence."
-        )
-        user_prompt = (
-            f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n" + snippet[:4000]
+            "Responda apenas JSON com lista de objetos contendo: source, target, operation, logic, confidence.\n\n"
+            f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n{snippet[:4000]}"
         )
 
         for attempt in range(3):
             try:
                 response = self.llm_client.responses.create(
                     model=self.llm_model,
-                    input=[
-                        {"role": "developer", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.0,
-                    response_format={"type": "json_object"}
+                    input=full_prompt,
+                    reasoning={"effort": "none"},
+                    text={"verbosity": "low"}
                 )
 
                 content = response.output_text or ""
@@ -876,24 +872,25 @@ class DataLineageAgent:
                 self.llm_disabled = True
                 return None
 
-        system_prompt = """Você é um especialista em engenharia de dados e análise de pipelines.
-Analise o grafo de linhagem de dados fornecido e gere:
-1. Um resumo executivo em português (2-3 parágrafos)
-2. Lista de recomendações específicas de melhorias
-3. Avaliação de risco (LOW/MEDIUM/HIGH) com justificativa
-4. Para cada componente/subgrafo, uma breve descrição
-
-Responda em formato JSON com as chaves: summary, recommendations (array), risk_assessment, subgraph_summaries (array)."""
+        # Combina system prompt e contexto em um único input
+        full_prompt = (
+            "Você é um especialista em engenharia de dados e análise de pipelines. "
+            "Analise o grafo de linhagem de dados fornecido e gere:\n"
+            "1. Um resumo executivo em português (2-3 parágrafos)\n"
+            "2. Lista de recomendações específicas de melhorias\n"
+            "3. Avaliação de risco (LOW/MEDIUM/HIGH) com justificativa\n"
+            "4. Para cada componente/subgrafo, uma breve descrição\n\n"
+            "Responda em formato JSON com as chaves: summary, recommendations (array), "
+            "risk_assessment, subgraph_summaries (array).\n\n"
+            f"{context}"
+        )
 
         try:
             response = self.llm_client.responses.create(
                 model=self.llm_model,
-                input=[
-                    {"role": "developer", "content": system_prompt},
-                    {"role": "user", "content": context}
-                ],
-                temperature=0.3,
-                response_format={"type": "json_object"}
+                input=full_prompt,
+                reasoning={"effort": "low"},
+                text={"verbosity": "medium"}
             )
 
             content = response.output_text or ""
