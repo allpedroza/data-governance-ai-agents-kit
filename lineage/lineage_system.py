@@ -16,19 +16,31 @@ import traceback
 # Importa os módulos do sistema
 from data_lineage_agent import DataLineageAgent, DataAsset, Transformation
 from visualization_engine import DataLineageVisualizer
+from i18n import set_language, get_i18n
 
 
 class DataLineageSystem:
     """
     Sistema principal de análise de linhagem de dados
     """
-    
-    def __init__(self, verbose: bool = True):
+
+    def __init__(self, verbose: bool = True, language: str = None):
         self.agent = DataLineageAgent()
         self.visualizer = None
         self.verbose = verbose
         self.current_analysis = None
         self.analysis_history = []
+
+        # Configura idioma
+        if language:
+            set_language(language)
+        else:
+            # Detecta do ambiente ou usa padrão
+            import os
+            lang = os.getenv('DATA_LINEAGE_LANGUAGE', 'pt')
+            set_language(lang)
+
+        self.i18n = get_i18n()
         
     def log(self, message: str, level: str = "INFO"):
         """Log com timestamp"""
@@ -314,6 +326,7 @@ class DataLineageSystem:
             'impact': self.visualizer.visualize_impact_analysis,
             '3d': self.visualizer.visualize_3d_graph,
             'radial': self.visualizer.visualize_radial,
+            'atlas': self.visualizer.visualize_atlas_style,
             'dashboard': self.visualizer.create_dashboard
         }
         

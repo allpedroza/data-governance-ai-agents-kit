@@ -10,6 +10,11 @@ demo_*.html
 demo_*.json
 demo_*.md
 
+# Generated visualization files
+compare_*.html
+lineage_atlas_*.html
+lineage_*.html
+
 # Generated report files
 report_*.html
 lineage_report_*.html
