@@ -573,8 +573,7 @@ class DataLineageAgent:
                         {"role": "developer", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.0,
-                    response_format={"type": "json_object"}
+                    temperature=0.0
                 )
 
                 content = response.output_text or ""
@@ -892,8 +891,7 @@ Responda em formato JSON com as chaves: summary, recommendations (array), risk_a
                     {"role": "developer", "content": system_prompt},
                     {"role": "user", "content": context}
                 ],
-                temperature=0.3,
-                response_format={"type": "json_object"}
+                temperature=0.3
             )
 
             content = response.output_text or ""
