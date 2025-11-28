@@ -1233,3 +1233,217 @@ class DataLineageVisualizer:
             return "Medium"
         else:
             return "Low"
+
+    def visualize_atlas_style(self,
+                              title: str = "Data Lineage - Atlas View",
+                              group_by_type: bool = True) -> go.Figure:
+        """
+        Visualização estilo Apache Atlas/Neo4j
+        - Layout hierárquico limpo
+        - Nodes grandes e coloridos por tipo
+        - Labels sempre visíveis
+        - Agrupamento por tipo de asset
+        - Setas direcionais claras
+        """
+        if self.graph.number_of_nodes() == 0:
+            return self._create_empty_figure("No data to visualize")
+
+        # Define cores por tipo de asset (estilo Atlas)
+        type_colors = {
+            'table': '#1f77b4',      # Azul
+            'view': '#ff7f0e',       # Laranja
+            'file': '#2ca02c',       # Verde
+            'stream': '#d62728',     # Vermelho
+            'dataset': '#9467bd',    # Roxo
+            'terraform_resource': '#8c564b',  # Marrom
+            'databricks_table': '#e377c2',    # Rosa
+            'airflow_task': '#7f7f7f',        # Cinza
+            'delta_table': '#bcbd22',         # Amarelo-verde
+            'unknown': '#17becf'     # Ciano
+        }
+
+        # Layout hierárquico (tenta usar graphviz, fallback para kamada_kawai)
+        try:
+            from networkx.drawing.nx_agraph import graphviz_layout
+            pos = graphviz_layout(self.graph, prog='dot', args='-Grankdir=LR')
+        except:
+            try:
+                pos = nx.kamada_kawai_layout(self.graph)
+            except:
+                pos = nx.spring_layout(self.graph, k=3, iterations=100, seed=42)
+
+        # Normaliza posições para melhor visualização
+        if pos:
+            xs = [p[0] for p in pos.values()]
+            ys = [p[1] for p in pos.values()]
+            x_range = max(xs) - min(xs) if len(set(xs)) > 1 else 1
+            y_range = max(ys) - min(ys) if len(set(ys)) > 1 else 1
+            pos = {
+                node: ((x - min(xs)) / x_range * 1000, (y - min(ys)) / y_range * 600)
+                for node, (x, y) in pos.items()
+            }
+
+        # Prepara edges com setas
+        edge_traces = []
+        for edge in self.graph.edges(data=True):
+            source, target, data = edge
+            x0, y0 = pos[source]
+            x1, y1 = pos[target]
+
+            # Linha da aresta
+            edge_trace = go.Scatter(
+                x=[x0, x1, None],
+                y=[y0, y1, None],
+                mode='lines',
+                line=dict(width=2, color='#888'),
+                hoverinfo='text',
+                hovertext=f"{source} → {target}<br>Operation: {data.get('operation', 'N/A')}",
+                showlegend=False
+            )
+            edge_traces.append(edge_trace)
+
+            # Seta (annotation)
+            # Calcula ponto para a seta (80% do caminho)
+            arrow_x = x0 + 0.8 * (x1 - x0)
+            arrow_y = y0 + 0.8 * (y1 - y0)
+
+        # Agrupa nodes por tipo
+        nodes_by_type = {}
+        for node in self.graph.nodes(data=True):
+            node_name, node_data = node
+            node_type = node_data.get('type', 'unknown')
+            if node_type not in nodes_by_type:
+                nodes_by_type[node_type] = []
+            nodes_by_type[node_type].append((node_name, node_data))
+
+        # Cria trace para cada tipo de node
+        node_traces = []
+        for node_type, nodes in nodes_by_type.items():
+            color = type_colors.get(node_type, type_colors['unknown'])
+
+            # Dados do trace
+            x_vals = []
+            y_vals = []
+            hover_texts = []
+            labels = []
+
+            for node_name, node_data in nodes:
+                x, y = pos[node_name]
+                x_vals.append(x)
+                y_vals.append(y)
+
+                # Label do nó (nome curto)
+                label = node_name[:30] + '...' if len(node_name) > 30 else node_name
+                labels.append(label)
+
+                # Hover text rico
+                in_degree = self.graph.in_degree(node_name)
+                out_degree = self.graph.out_degree(node_name)
+                source_file = node_data.get('source_file', 'N/A')
+
+                hover_text = f"""<b>{node_name}</b><br>
+<b>Type:</b> {node_type}<br>
+<b>Source:</b> {source_file}<br>
+<b>Connections:</b> {in_degree + out_degree}<br>
+<b>Upstream:</b> {in_degree} | <b>Downstream:</b> {out_degree}"""
+                hover_texts.append(hover_text)
+
+            # Cria trace do tipo
+            node_trace = go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode='markers+text',
+                name=node_type,
+                marker=dict(
+                    size=25,
+                    color=color,
+                    line=dict(width=2, color='white'),
+                    symbol='circle'
+                ),
+                text=labels,
+                textposition='top center',
+                textfont=dict(size=10, color='black', family='Arial Black'),
+                hovertext=hover_texts,
+                hoverinfo='text',
+                showlegend=True
+            )
+            node_traces.append(node_trace)
+
+        # Cria figura
+        fig = go.Figure(data=edge_traces + node_traces)
+
+        # Layout estilo Atlas
+        fig.update_layout(
+            title=dict(
+                text=title,
+                font=dict(size=20, family='Arial', color='#2c3e50'),
+                x=0.5,
+                xanchor='center'
+            ),
+            showlegend=True,
+            legend=dict(
+                title=dict(text="Asset Types", font=dict(size=14, family='Arial')),
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.01,
+                bgcolor="rgba(255, 255, 255, 0.9)",
+                bordercolor="#ccc",
+                borderwidth=1
+            ),
+            hovermode='closest',
+            margin=dict(b=40, l=40, r=200, t=100),
+            xaxis=dict(
+                showgrid=True,
+                gridcolor='#f0f0f0',
+                zeroline=False,
+                showticklabels=False,
+                title=''
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='#f0f0f0',
+                zeroline=False,
+                showticklabels=False,
+                title=''
+            ),
+            paper_bgcolor='white',
+            plot_bgcolor='#fafafa',
+            font=dict(family='Arial', size=12)
+        )
+
+        # Adiciona setas como annotations
+        annotations = []
+        for edge in self.graph.edges():
+            source, target = edge
+            x0, y0 = pos[source]
+            x1, y1 = pos[target]
+
+            # Seta no final da linha
+            annotations.append(
+                dict(
+                    ax=x0,
+                    ay=y0,
+                    x=x1,
+                    y=y1,
+                    xref='x',
+                    yref='y',
+                    axref='x',
+                    ayref='y',
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1.5,
+                    arrowwidth=1.5,
+                    arrowcolor='#888',
+                    standoff=10
+                )
+            )
+
+        fig.update_layout(annotations=annotations)
+
+        # Configura interatividade
+        fig.update_xaxes(fixedrange=False)
+        fig.update_yaxes(fixedrange=False)
+
+        return fig
