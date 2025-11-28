@@ -69,7 +69,8 @@ class DataLineageAgent:
         self.transformations: List[Transformation] = []
         self.graph = nx.DiGraph()
         self.impact_analysis_cache = {}
-        self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5")
+        # Modelo padrão: gpt-5.1 suporta reasoning="none", gpt-5 usa "minimal"
+        self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5.1")
         self.llm_api_key = os.getenv("OPENAI_API_KEY")
         self.llm_base_url = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
         self.llm_client = None  # Inicializado sob demanda quando necessário
@@ -564,12 +565,15 @@ class DataLineageAgent:
             f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n{snippet[:4000]}"
         )
 
+        # GPT-5.1 suporta "none", GPT-5 usa "minimal"
+        reasoning_effort = "none" if "5.1" in self.llm_model else "minimal"
+
         for attempt in range(3):
             try:
                 response = self.llm_client.responses.create(
                     model=self.llm_model,
                     input=full_prompt,
-                    reasoning={"effort": "none"},
+                    reasoning={"effort": reasoning_effort},
                     text={"verbosity": "low"}
                 )
 
