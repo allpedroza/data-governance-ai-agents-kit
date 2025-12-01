@@ -1,0 +1,48 @@
+{
+  "name": "BlobParquetDataset",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "AzureBlobStorage",
+      "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "Parquet",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobStorageLocation",
+        "fileName": "customer_data.parquet",
+        "folderPath": "raw/customers",
+        "container": "datalake"
+      },
+      "compressionCodec": "snappy"
+    },
+    "schema": [
+      {
+        "name": "customer_id",
+        "type": "INT64"
+      },
+      {
+        "name": "customer_name",
+        "type": "UTF8"
+      },
+      {
+        "name": "email",
+        "type": "UTF8"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP_MILLIS"
+      },
+      {
+        "name": "country",
+        "type": "UTF8"
+      },
+      {
+        "name": "total_purchases",
+        "type": "DECIMAL",
+        "precision": 18,
+        "scale": 2
+      }
+    ]
+  }
+}
