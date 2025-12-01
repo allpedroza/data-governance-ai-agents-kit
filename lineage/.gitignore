@@ -10,6 +10,10 @@ demo_*.html
 demo_*.json
 demo_*.md
 
+# Generated test files
+test_*.html
+test_*.json
+
 # Generated visualization files
 compare_*.html
 lineage_atlas_*.html
