@@ -627,6 +627,10 @@ class DataLineageSystem:
                 summary = insights.get('summary', '')
                 risk = insights.get('risk_assessment', 'N/A')
 
+                # Garante que risk é uma string
+                if risk is None:
+                    risk = 'N/A'
+
                 # Determina classe CSS do risco
                 risk_class = 'risk-low'
                 if 'HIGH' in risk.upper():
