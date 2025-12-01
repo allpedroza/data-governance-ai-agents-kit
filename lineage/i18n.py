@@ -55,9 +55,33 @@ TRANSLATIONS = {
         # Tipos de visualização
         'dashboard': 'Dashboard',
         'force_graph': 'Grafo Force-Directed',
-        'sankey_diagram': 'Diagrama Sankey',
+        'sankey_diagram': 'Diagrama de Fluxo de Dados',
         'impact_analysis': 'Análise de Impacto',
-        'atlas_view': 'Visualização Atlas'
+        'atlas_view': 'Visualização Atlas',
+
+        # Métricas do relatório
+        'transformations': 'Transformações',
+        'inputs': 'entradas',
+        'outputs': 'saídas',
+        'identified_bottlenecks': 'Bottlenecks Identificados',
+        'critical_paths_found': 'Caminhos Críticos Encontrados',
+        'length': 'comprimento',
+
+        # Componentes críticos detalhados
+        'single_points_failure_title': '<span class="error-icon">🔴</span> Pontos Únicos de Falha',
+        'bottlenecks_identified_title': '<span class="warning-icon">⚠️</span> Bottlenecks Identificados',
+        'critical_paths_title': '<span class="warning-icon">📊</span> Caminhos Críticos',
+
+        # Seções do relatório
+        'auto_insights_analysis': '🤖 Insights Automáticos e Análise Crítica',
+
+        # Navegação
+        'view_visualization': 'Ver Visualização',
+        'expand_level': 'Expandir nível',
+        'collapse_level': 'Recolher nível',
+        'show_upstream': 'Mostrar upstream',
+        'show_downstream': 'Mostrar downstream',
+        'reset_view': 'Resetar visualização'
     },
 
     'en': {
@@ -111,9 +135,33 @@ TRANSLATIONS = {
         # Visualization types
         'dashboard': 'Dashboard',
         'force_graph': 'Force-Directed Graph',
-        'sankey_diagram': 'Sankey Diagram',
+        'sankey_diagram': 'Data Flow Diagram',
         'impact_analysis': 'Impact Analysis',
-        'atlas_view': 'Atlas View'
+        'atlas_view': 'Atlas View',
+
+        # Report metrics
+        'transformations': 'Transformations',
+        'inputs': 'inputs',
+        'outputs': 'outputs',
+        'identified_bottlenecks': 'Identified Bottlenecks',
+        'critical_paths_found': 'Critical Paths Found',
+        'length': 'length',
+
+        # Detailed critical components
+        'single_points_failure_title': '<span class="error-icon">🔴</span> Single Points of Failure',
+        'bottlenecks_identified_title': '<span class="warning-icon">⚠️</span> Identified Bottlenecks',
+        'critical_paths_title': '<span class="warning-icon">📊</span> Critical Paths',
+
+        # Report sections
+        'auto_insights_analysis': '🤖 Automatic Insights and Critical Analysis',
+
+        # Navigation
+        'view_visualization': 'View Visualization',
+        'expand_level': 'Expand level',
+        'collapse_level': 'Collapse level',
+        'show_upstream': 'Show upstream',
+        'show_downstream': 'Show downstream',
+        'reset_view': 'Reset view'
     }
 }
 
