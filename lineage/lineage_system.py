@@ -317,7 +317,14 @@ class DataLineageSystem:
             return ""
         
         self.log(f"🎨 Gerando visualização: {visualization_type}")
-        
+
+        # Tratamento especial para atlas-interactive
+        if visualization_type == 'atlas-interactive':
+            if not output_file:
+                output_file = 'lineage_atlas_interactive.html'
+            kwargs['language'] = self.i18n.language
+            return self.visualizer.visualize_atlas_interactive(output_file, **kwargs)
+
         # Mapa de tipos de visualização
         viz_methods = {
             'force': self.visualizer.visualize_force_directed,
@@ -329,10 +336,10 @@ class DataLineageSystem:
             'atlas': self.visualizer.visualize_atlas_style,
             'dashboard': self.visualizer.create_dashboard
         }
-        
+
         if visualization_type not in viz_methods:
             self.log(f"❌ Tipo de visualização inválido: {visualization_type}", "ERROR")
-            self.log(f"   Tipos disponíveis: {', '.join(viz_methods.keys())}")
+            self.log(f"   Tipos disponíveis: {', '.join(list(viz_methods.keys()) + ['atlas-interactive'])}")
             return ""
         
         try:
@@ -441,15 +448,15 @@ class DataLineageSystem:
         
         # Dashboard principal
         self.visualize('dashboard', 'report_dashboard.html')
-        visualizations.append(('Dashboard', 'report_dashboard.html'))
-        
+        visualizations.append((self.i18n.t('dashboard'), 'report_dashboard.html'))
+
         # Force-directed
         self.visualize('force', 'report_force.html')
-        visualizations.append(('Force-Directed Graph', 'report_force.html'))
-        
+        visualizations.append((self.i18n.t('force_graph'), 'report_force.html'))
+
         # Sankey
         self.visualize('sankey', 'report_sankey.html')
-        visualizations.append(('Data Flow (Sankey)', 'report_sankey.html'))
+        visualizations.append((self.i18n.t('sankey_diagram'), 'report_sankey.html'))
         
         # Gera documentação
         doc = self.agent.generate_documentation()
@@ -459,7 +466,7 @@ class DataLineageSystem:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Data Lineage Report</title>
+    <title>{self.i18n.t('report_title')}</title>
     <meta charset="utf-8">
     <style>
         body {{
@@ -593,21 +600,21 @@ class DataLineageSystem:
     </style>
 </head>
 <body>
-    <h1>📊 Data Lineage Analysis Report</h1>
-    <p class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <h1>📊 {self.i18n.t('report_title')}</h1>
+    <p class="timestamp">{self.i18n.t('generated')}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
     <div class="metrics">
         <div class="metric-card">
             <div class="metric-value">{self.current_analysis.get('metrics', {}).get('total_assets', 0)}</div>
-            <div class="metric-label">Total Assets</div>
+            <div class="metric-label">{self.i18n.t('total_assets')}</div>
         </div>
         <div class="metric-card">
             <div class="metric-value">{self.current_analysis.get('metrics', {}).get('total_transformations', 0)}</div>
-            <div class="metric-label">Transformations</div>
+            <div class="metric-label">{self.i18n.t('transformations')}</div>
         </div>
         <div class="metric-card">
             <div class="metric-value">{len(self.current_analysis.get('metrics', {}).get('asset_types', {}))}</div>
-            <div class="metric-label">Asset Types</div>
+            <div class="metric-label">{self.i18n.t('asset_types')}</div>
         </div>
     </div>
 """
@@ -617,8 +624,8 @@ class DataLineageSystem:
         critical = self.current_analysis.get('critical_components', {})
 
         if insights or critical:
-            report_html += """
-    <h2>🤖 Insights Automáticos e Análise Crítica</h2>
+            report_html += f"""
+    <h2>{self.i18n.t('auto_insights_analysis')}</h2>
     <div class="insights-section">
 """
 
@@ -639,20 +646,20 @@ class DataLineageSystem:
                     risk_class = 'risk-medium'
 
                 report_html += f"""
-        <h3>📊 Resumo Executivo</h3>
+        <h3>📊 {self.i18n.t('executive_summary')}</h3>
         <div class="insight-summary">
             <p>{summary}</p>
         </div>
 
-        <h3>💡 Avaliação de Risco</h3>
+        <h3>💡 {self.i18n.t('risk_assessment')}</h3>
         <div class="risk-badge {risk_class}">{risk}</div>
 """
 
                 # Recomendações
                 recommendations = insights.get('recommendations', [])
                 if recommendations:
-                    report_html += """
-        <h3>📋 Recomendações</h3>
+                    report_html += f"""
+        <h3>📋 {self.i18n.t('recommendations')}</h3>
         <ul class="recommendation-list">
 """
                     for rec in recommendations:
@@ -664,25 +671,25 @@ class DataLineageSystem:
             if critical:
                 spof = critical.get('single_points_of_failure', [])
                 if spof:
-                    report_html += """
-        <h3><span class="error-icon">🔴</span> Pontos Únicos de Falha</h3>
+                    report_html += f"""
+        <h3>{self.i18n.t('single_points_failure_title')}</h3>
 """
                     for point in spof[:5]:
                         report_html += f"""        <div class="critical-component">
             <strong>{point['asset']}</strong> ({point['type']})<br>
-            Impacta <strong>{point['downstream_impact']}</strong> assets downstream
+            {self.i18n.t('impacts').capitalize()} <strong>{point['downstream_impact']}</strong> {self.i18n.t('assets_downstream')}
         </div>
 """
 
                 bottlenecks = critical.get('bottleneck_assets', [])
                 if bottlenecks:
-                    report_html += """
-        <h3><span class="warning-icon">⚠️</span> Bottlenecks Identificados</h3>
+                    report_html += f"""
+        <h3>{self.i18n.t('bottlenecks_identified_title')}</h3>
 """
                     for bn in bottlenecks[:5]:
                         report_html += f"""        <div class="critical-component">
             <strong>{bn['asset']}</strong> ({bn['type']})<br>
-            {bn['in_degree']} inputs → {bn['out_degree']} outputs
+            {bn['in_degree']} {self.i18n.t('inputs')} → {bn['out_degree']} {self.i18n.t('outputs')}
         </div>
 """
 
@@ -703,18 +710,18 @@ class DataLineageSystem:
 
             report_html += "    </div>\n"
 
-        report_html += """
-    <h2>📈 Interactive Visualizations</h2>
+        report_html += f"""
+    <h2>📈 {self.i18n.t('visualizations')}</h2>
     <div class="visualization-links">
 """
 
         for viz_name, viz_file in visualizations:
             report_html += f'        <a href="{viz_file}" class="viz-link" target="_blank">{viz_name}</a>\n'
 
-        report_html += """
+        report_html += f"""
     </div>
-    
-    <h2>📝 Detailed Documentation</h2>
+
+    <h2>📝 {self.i18n.t('detailed_docs')}</h2>
     <div class="documentation">
         <pre>{doc}</pre>
     </div>

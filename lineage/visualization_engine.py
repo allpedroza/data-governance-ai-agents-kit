@@ -1447,3 +1447,27 @@ class DataLineageVisualizer:
         fig.update_yaxes(fixedrange=False)
 
         return fig
+
+    def visualize_atlas_interactive(self,
+                                    output_file: str = "lineage_atlas_interactive.html",
+                                    initial_nodes: list = None,
+                                    initial_levels: int = 2,
+                                    title: str = None,
+                                    language: str = 'pt') -> str:
+        """
+        Visualização Atlas interativa com expansão de níveis
+
+        Args:
+            output_file: Arquivo HTML de saída
+            initial_nodes: Nós iniciais (None = mais importantes)
+            initial_levels: Número inicial de níveis
+            title: Título da visualização
+            language: Idioma da interface ('pt' ou 'en')
+
+        Returns:
+            Caminho do arquivo gerado
+        """
+        from atlas_interactive import AtlasInteractiveVisualization
+
+        viz = AtlasInteractiveVisualization(self.graph, language=language)
+        return viz.generate_html(output_file, initial_nodes, initial_levels, title)
