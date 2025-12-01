@@ -1,0 +1,137 @@
+{
+  "name": "CopyFromBlobToSynapse",
+  "properties": {
+    "description": "Pipeline to copy data from Azure Blob Storage to Synapse Analytics",
+    "activities": [
+      {
+        "name": "CopyBlobToSynapse",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "wildcardFolderPath": "data/raw",
+              "wildcardFileName": "*.parquet",
+              "enablePartitionDiscovery": true
+            }
+          },
+          "sink": {
+            "type": "SqlDWSink",
+            "preCopyScript": "TRUNCATE TABLE staging.customer_data",
+            "writeBehavior": "Insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate"
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "BlobParquetDataset",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "SynapseTableDataset",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "ExecuteDataQualityCheck",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyBlobToSynapse",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": "SELECT COUNT(*) as total_rows, COUNT(DISTINCT customer_id) as unique_customers FROM staging.customer_data"
+            }
+          ],
+          "scriptBlockExecutionTimeout": "02:00:00"
+        },
+        "linkedServiceName": {
+          "referenceName": "AzureSynapseAnalytics",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "TransformData",
+        "type": "ExecuteDataFlow",
+        "dependsOn": [
+          {
+            "activity": "ExecuteDataQualityCheck",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "dataflow": {
+            "referenceName": "CustomerDataTransformation",
+            "type": "DataFlowReference"
+          },
+          "compute": {
+            "coreCount": 8,
+            "computeType": "General"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "sourceFolder": {
+        "type": "string",
+        "defaultValue": "data/raw"
+      },
+      "targetTable": {
+        "type": "string",
+        "defaultValue": "staging.customer_data"
+      }
+    },
+    "variables": {
+      "executionDate": {
+        "type": "String"
+      },
+      "rowCount": {
+        "type": "String"
+      }
+    },
+    "annotations": ["production", "customer-data", "daily-load"]
+  }
+}
