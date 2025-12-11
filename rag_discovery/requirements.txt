@@ -1,0 +1,32 @@
+# Data Discovery RAG Agent - Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Vector database
+chromadb>=0.4.0
+
+# OpenAI for embeddings and LLM
+openai>=1.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+
+# Optional: Alternative embedding models
+# sentence-transformers>=2.2.0  # For local embeddings
+
+# Optional: Data catalog integrations
+# apache-atlas-client>=1.0.0  # For Apache Atlas integration
+# databricks-sdk>=0.5.0  # For Databricks Unity Catalog
+# pyiceberg>=0.5.0  # For Apache Iceberg catalog
+
+# Development tools (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+
+# Documentation (optional)
+sphinx>=5.0.0
