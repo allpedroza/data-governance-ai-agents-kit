@@ -1,0 +1,382 @@
+# 🤖 Data Governance AI Agents Kit
+
+**Kit completo de agentes de IA para governança de dados**, incluindo análise de linhagem e descoberta de dados com RAG.
+
+## 📋 Visão Geral
+
+Este projeto fornece **agentes de IA especializados** para resolver desafios comuns de governança de dados:
+
+1. **🔗 Data Lineage Agent**: Análise automática de linhagem de dados
+2. **🔍 Data Discovery RAG Agent**: Descoberta de dados usando RAG com banco vetorizado
+
+## 🚀 Agentes Disponíveis
+
+### 1. Data Lineage Agent
+
+Sistema de IA para **análise automática de linhagem de dados** em pipelines complexos.
+
+**Características**:
+- ✅ Análise de múltiplos formatos (Python, SQL, Terraform, Databricks, Airflow)
+- ✅ Extração automática de dependências
+- ✅ Visualização interativa de grafos
+- ✅ Análise de impacto de mudanças
+- ✅ Identificação de componentes críticos
+- ✅ Integração com Apache Atlas
+
+**Documentação**: [lineage/README.md](lineage/README.md)
+
+**Casos de Uso**:
+- Mapeamento de dependências em pipelines
+- Análise de impacto antes de mudanças
+- Identificação de pontos únicos de falha
+- Auditoria e compliance
+
+**Exemplo Rápido**:
+```python
+from lineage.data_lineage_agent import DataLineageAgent
+
+agent = DataLineageAgent()
+analysis = agent.analyze_pipeline([
+    "etl/extract.sql",
+    "etl/transform.py",
+    "etl/load.sql"
+])
+
+# Análise de impacto
+impact = agent.analyze_change_impact(["customers_table"])
+print(f"Risk Level: {impact['risk_level']}")
+```
+
+---
+
+### 2. Data Discovery RAG Agent
+
+Sistema de IA para **descoberta de dados** usando **RAG (Retrieval-Augmented Generation)** com banco vetorizado.
+
+**Características**:
+- ✅ Busca semântica em linguagem natural
+- ✅ Banco vetorizado (ChromaDB) para metadados
+- ✅ Perguntas e respostas com contexto completo
+- ✅ Integração com Apache Atlas
+- ✅ Integração com Data Lineage Agent
+- ✅ Suporte a múltiplos formatos (Parquet, Delta, CSV)
+
+**Documentação**: [rag_discovery/README.md](rag_discovery/README.md)
+
+**Casos de Uso**:
+- Descoberta de dados em data lakes complexos
+- Onboarding de novos membros
+- Identificação de dados sensíveis (PII)
+- Documentação automática
+- Recomendação de datasets
+
+**Exemplo Rápido**:
+```python
+from rag_discovery import DataDiscoveryRAGAgent, TableMetadata
+
+# Inicializa o agente
+agent = DataDiscoveryRAGAgent(
+    collection_name="my_data_lake"
+)
+
+# Indexa uma tabela
+table = TableMetadata(
+    name="customers",
+    database="production",
+    description="Dados de clientes",
+    columns=[
+        {"name": "id", "type": "bigint"},
+        {"name": "name", "type": "varchar"}
+    ],
+    tags=["pii", "critical"]
+)
+agent.index_table(table)
+
+# Busca semântica
+results = agent.search("Onde estão os dados de clientes?")
+
+# Pergunta com RAG
+response = agent.ask(
+    "Quais tabelas devo usar para análise de vendas?"
+)
+print(response['answer'])
+```
+
+---
+
+## 🔗 Integração entre Agentes
+
+Os dois agentes podem ser **integrados** para governança completa:
+
+```python
+from lineage.data_lineage_agent import DataLineageAgent
+from rag_discovery import DataDiscoveryRAGAgent
+from rag_discovery.examples.lineage_integration import convert_lineage_assets_to_metadata
+
+# 1. Analisa linhagem
+lineage_agent = DataLineageAgent()
+lineage_agent.analyze_pipeline(["pipeline.sql", "etl.py"])
+
+# 2. Converte para metadados RAG (com contexto de linhagem)
+tables = convert_lineage_assets_to_metadata(lineage_agent)
+
+# 3. Indexa com contexto de dependências
+rag_agent = DataDiscoveryRAGAgent()
+rag_agent.index_tables_batch(tables)
+
+# 4. Busca considerando impacto
+results = rag_agent.search("tabelas críticas com alto impacto downstream")
+
+# 5. Análise de impacto enriquecida
+response = rag_agent.ask(
+    "Se eu modificar a tabela customers, qual o impacto?"
+)
+```
+
+**Benefícios da Integração**:
+- 🎯 Descoberta de dados com contexto de linhagem
+- 📊 Análise de impacto enriquecida com IA
+- 🔍 Busca semântica considerando dependências
+- 📝 Documentação automática de pipelines completos
+
+---
+
+## 📦 Instalação
+
+### Pré-requisitos
+
+- Python 3.8+
+- OpenAI API Key (para RAG Agent)
+
+### Instalação Completa
+
+```bash
+# Clone o repositório
+git clone <repo-url>
+cd data-governance-ai-agents-kit
+
+# Instale dependências do Lineage Agent
+pip install -r lineage/requirements.txt
+
+# Instale dependências do RAG Agent
+pip install -r rag_discovery/requirements.txt
+
+# Configure variáveis de ambiente
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
+### Instalação Individual
+
+**Apenas Lineage Agent**:
+```bash
+pip install -r lineage/requirements.txt
+```
+
+**Apenas RAG Agent**:
+```bash
+pip install -r rag_discovery/requirements.txt
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
+---
+
+## 🎯 Casos de Uso Combinados
+
+### 1. Governança Completa de Data Lake
+
+**Cenário**: Empresa precisa de visibilidade completa do data lake
+
+**Solução**:
+1. Use **Lineage Agent** para mapear dependências
+2. Use **RAG Agent** para descoberta semântica
+3. Combine para análise de impacto contextualizada
+
+### 2. Migração de Plataforma
+
+**Cenário**: Migração de on-premise para cloud
+
+**Solução**:
+1. **Lineage Agent** identifica todas as dependências
+2. **RAG Agent** documenta e organiza metadados
+3. Análise de impacto previne quebras
+
+### 3. Compliance e Auditoria
+
+**Cenário**: Atender LGPD/GDPR
+
+**Solução**:
+1. **RAG Agent** identifica todos os dados PII
+2. **Lineage Agent** rastreia fluxo de dados sensíveis
+3. Documentação automática para auditoria
+
+### 4. Onboarding de Equipe
+
+**Cenário**: Novos data engineers precisam entender o data lake
+
+**Solução**:
+1. **RAG Agent** responde perguntas em linguagem natural
+2. **Lineage Agent** mostra dependências visualmente
+3. Documentação contextualizada automática
+
+---
+
+## 📚 Exemplos
+
+### Lineage Agent
+
+```bash
+# Exemplo básico
+cd lineage
+python examples/basic_usage.py
+
+# Análise de impacto
+python examples/impact_analysis.py
+
+# Visualização Atlas
+python examples/atlas_visualization.py
+```
+
+### RAG Agent
+
+```bash
+# Exemplo básico
+cd rag_discovery
+python examples/basic_usage.py
+
+# Integração com Atlas
+python examples/atlas_integration.py
+
+# Integração com Lineage
+python examples/lineage_integration.py
+```
+
+---
+
+## 🏗️ Arquitetura
+
+```
+data-governance-ai-agents-kit/
+│
+├── lineage/                          # Data Lineage Agent
+│   ├── data_lineage_agent.py         # Agente principal
+│   ├── parsers/                      # Parsers (SQL, Python, etc)
+│   ├── examples/                     # Exemplos de uso
+│   ├── requirements.txt
+│   └── README.md
+│
+├── rag_discovery/                    # Data Discovery RAG Agent
+│   ├── data_discovery_rag_agent.py   # Agente principal
+│   ├── examples/                     # Exemplos de uso
+│   │   ├── basic_usage.py
+│   │   ├── atlas_integration.py
+│   │   └── lineage_integration.py
+│   ├── requirements.txt
+│   ├── .gitignore
+│   └── README.md
+│
+└── README.md                         # Este arquivo
+```
+
+---
+
+## 🔧 Configuração
+
+### Variáveis de Ambiente
+
+```bash
+# OpenAI (para RAG Agent)
+export OPENAI_API_KEY="sk-..."
+export OPENAI_API_URL="https://api.openai.com/v1"  # Opcional
+
+# Data Lineage LLM (opcional - para fallback parsing)
+export DATA_LINEAGE_LLM_MODEL="gpt-5.1"
+
+# Apache Atlas (opcional)
+export ATLAS_HOST="http://atlas-host:21000"
+export ATLAS_USERNAME="admin"
+export ATLAS_PASSWORD="admin"
+```
+
+---
+
+## 📊 Comparação de Agentes
+
+| Característica | Lineage Agent | RAG Agent |
+|---------------|---------------|-----------|
+| **Objetivo** | Mapear dependências | Descobrir dados |
+| **Input** | Código (SQL, Python) | Metadados |
+| **Output** | Grafo de linhagem | Respostas em LN |
+| **Técnica** | AST parsing + Graph | Embeddings + RAG |
+| **LLM** | Opcional (fallback) | Requerido |
+| **Casos de Uso** | Análise de impacto | Busca semântica |
+
+---
+
+## 🛣️ Roadmap
+
+### Lineage Agent
+- [x] Parsers básicos (SQL, Python, Terraform)
+- [x] Visualização de grafos
+- [x] Análise de impacto
+- [x] Integração com Apache Atlas
+- [ ] Suporte a dbt
+- [ ] Suporte a Airflow nativo
+- [ ] Column-level lineage
+
+### RAG Agent
+- [x] Busca semântica básica
+- [x] Integração com Atlas
+- [x] Integração com Lineage Agent
+- [ ] Suporte a modelos locais (sentence-transformers)
+- [ ] Interface web interativa
+- [ ] Integração com AWS Glue
+- [ ] Integração com Databricks Unity Catalog
+- [ ] Cache de embeddings
+
+---
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor:
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/amazing-feature`)
+3. Commit suas mudanças (`git commit -m 'Add amazing feature'`)
+4. Push para a branch (`git push origin feature/amazing-feature`)
+5. Abra um Pull Request
+
+---
+
+## 📄 Licença
+
+Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para detalhes.
+
+---
+
+## 📧 Suporte
+
+Para dúvidas, sugestões ou suporte:
+
+- 🐛 **Issues**: Abra uma issue no GitHub
+- 💬 **Discussões**: Use a seção de Discussions
+- 📧 **Email**: [seu-email]
+
+---
+
+## 🙏 Agradecimentos
+
+- **Apache Atlas** - Integração de catálogo
+- **ChromaDB** - Banco vetorizado
+- **OpenAI** - Embeddings e LLM
+- **NetworkX** - Análise de grafos
+- **Plotly** - Visualizações interativas
+
+---
+
+## ⭐ Star History
+
+Se este projeto foi útil para você, considere dar uma ⭐!
+
+---
+
+**Desenvolvido com ❤️ usando Claude AI**
