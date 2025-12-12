@@ -492,5 +492,3 @@ Contribuições são bem-vindas! Por favor, abra issues e pull requests.
 Para dúvidas e suporte, abra uma issue no repositório.
 
 ---
-
-**Desenvolvido com ❤️ usando Claude AI**
