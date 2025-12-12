@@ -378,5 +378,3 @@ Para dúvidas, sugestões ou suporte:
 Se este projeto foi útil para você, considere dar uma ⭐!
 
 ---
-
-**Desenvolvido com ❤️ usando Claude AI**
