@@ -3,6 +3,7 @@ import csv
 import json
 import sys
 import tempfile
+from importlib.util import find_spec
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List
@@ -13,6 +14,15 @@ import streamlit as st
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR / "lineage"))
 sys.path.append(str(BASE_DIR / "rag_discovery"))
+
+missing_core_modules = [module for module in ["openai"] if find_spec(module) is None]
+if missing_core_modules:
+    missing_list = ", ".join(sorted(missing_core_modules))
+    raise ModuleNotFoundError(
+        "Required dependency not found: {}. "
+        "Install with 'python -m pip install -r requirements.txt' "
+        "using the same interpreter that runs Streamlit.".format(missing_list)
+    )
 
 from lineage.data_lineage_agent import DataLineageAgent  # noqa: E402
 from rag_discovery.data_discovery_rag_agent import (  # noqa: E402
