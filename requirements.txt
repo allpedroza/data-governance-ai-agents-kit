@@ -1,0 +1,4 @@
+# Unified app requirements
+-r lineage/requirements.txt
+-r rag_discovery/requirements.txt
+streamlit>=1.32.0
