@@ -1,6 +1,7 @@
 """Unified Streamlit UI to orchestrate the two available agents."""
 import csv
 import json
+import os
 import sys
 import tempfile
 from importlib.util import find_spec
@@ -50,6 +51,19 @@ st.markdown(
 )
 
 
+def _initialize_rag_agent() -> None:
+    """Initialize the RAG agent using the current environment variables."""
+    try:
+        st.session_state.rag_agent = DataDiscoveryRAGAgent(
+            persist_directory=str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+            collection_name="ui_catalog",
+        )
+        st.session_state.rag_agent_error = None
+    except Exception as exc:  # noqa: BLE001 - surface initialization issues
+        st.session_state.rag_agent = None
+        st.session_state.rag_agent_error = str(exc)
+
+
 def init_session_state() -> None:
     """Prepare shared agents and caches."""
     if "lineage_agent" not in st.session_state:
@@ -65,16 +79,17 @@ def init_session_state() -> None:
     if "discovery_messages" not in st.session_state:
         st.session_state.discovery_messages = []
 
+    if "connection_settings" not in st.session_state:
+        st.session_state.connection_settings = {
+            "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+            "openai_api_url": os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1"),
+            "atlas_host": os.environ.get("ATLAS_HOST", ""),
+            "glue_region": os.environ.get("AWS_REGION", ""),
+            "chroma_persist": str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+        }
+
     if "rag_agent" not in st.session_state:
-        try:
-            st.session_state.rag_agent = DataDiscoveryRAGAgent(
-                persist_directory=str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
-                collection_name="ui_catalog",
-            )
-            st.session_state.rag_agent_error = None
-        except Exception as exc:  # noqa: BLE001 - surface initialization issues
-            st.session_state.rag_agent = None
-            st.session_state.rag_agent_error = str(exc)
+        _initialize_rag_agent()
 
 
 def hero_section() -> None:
@@ -94,7 +109,7 @@ def hero_section() -> None:
         st.image(
             "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
             caption="Governança de dados assistida por IA",
-            use_column_width=True,
+            use_container_width=True,
         )
 
 
@@ -152,6 +167,21 @@ def render_lineage_tab() -> None:
         st.info(
             "Para visualização completa do grafo, execute `streamlit run lineage/app.py`."
         )
+
+
+def _apply_connection_settings(settings: Dict[str, str]) -> None:
+    """Persist connection settings in memory and environment, then refresh the agent."""
+    st.session_state.connection_settings.update(settings)
+    if settings.get("openai_api_key"):
+        os.environ["OPENAI_API_KEY"] = settings["openai_api_key"]
+    if settings.get("openai_api_url"):
+        os.environ["OPENAI_API_URL"] = settings["openai_api_url"]
+    if settings.get("atlas_host"):
+        os.environ["ATLAS_HOST"] = settings["atlas_host"]
+    if settings.get("glue_region"):
+        os.environ["AWS_REGION"] = settings["glue_region"]
+
+    _initialize_rag_agent()
 
 
 def _render_table_catalog(catalog: List[TableMetadata]) -> None:
@@ -243,6 +273,68 @@ def _render_connected_catalogs() -> None:
     st.markdown(" ".join(badges), unsafe_allow_html=True)
 
 
+def _render_connection_guide() -> None:
+    """Display a guided experience for configuring external connections."""
+    st.markdown("### Guia de conexões essenciais")
+    settings: Dict[str, str] = st.session_state.connection_settings
+
+    status_labels = []
+    status_labels.append(
+        "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
+    )
+    st.markdown("; ".join(status_labels))
+
+    with st.expander("Configurar IA (OpenAI) e vetorização", expanded=not settings.get("openai_api_key")):
+        st.markdown(
+            "- Defina a `OPENAI_API_KEY` para habilitar embeddings e evitar erros 401 como o exibido na indexação.\n"
+            "- Opcionalmente ajuste a `OPENAI_API_URL` para provedores compatíveis.\n"
+            "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
+                settings.get("chroma_persist")
+            )
+        )
+        with st.form("openai_settings_form"):
+            openai_key = st.text_input(
+                "OPENAI_API_KEY",
+                value=settings.get("openai_api_key", ""),
+                type="password",
+                help="Copie a chave exata do painel da OpenAI para evitar erros de autenticação.",
+            )
+            openai_url = st.text_input(
+                "OPENAI_API_URL",
+                value=settings.get("openai_api_url", "https://api.openai.com/v1"),
+                help="Use o endpoint padrão ou um compatível (Azure/OpenAI compatível).",
+            )
+            apply_credentials = st.form_submit_button("Salvar e reiniciar o agente RAG")
+
+        if apply_credentials:
+            _apply_connection_settings(
+                {
+                    "openai_api_key": openai_key.strip(),
+                    "openai_api_url": openai_url.strip(),
+                    "atlas_host": settings.get("atlas_host", ""),
+                    "glue_region": settings.get("glue_region", ""),
+                }
+            )
+            if st.session_state.get("rag_agent"):
+                st.success("Credenciais aplicadas. O agente RAG foi reiniciado com a nova configuração.")
+            else:
+                st.error(
+                    "Atualizamos as credenciais, mas o agente ainda não inicializou. "
+                    "Revise os valores e tente novamente."
+                )
+
+    with st.expander("Conexões de catálogos corporativos"):
+        st.markdown(
+            "- **Apache Atlas**: informe o host em `ATLAS_HOST` (ex.: `http://atlas-host:21000`).\n"
+            "- **Glue Data Catalog**: use a região em `AWS_REGION` e credenciais AWS no ambiente.\n"
+            "- **BigQuery/Snowflake**: a conexão é guiada na seção de conectores; inclua o projeto/warehouse ao selecionar.\n"
+            "- Após salvar, volte à aba de conexão de catálogo para sincronizar metadados."
+        )
+
+
 def _parse_tables_from_file(uploaded_file) -> List[TableMetadata]:
     """Parse uploaded catalog files (JSON or CSV) into TableMetadata objects."""
     suffix = Path(uploaded_file.name).suffix.lower()
@@ -311,6 +403,8 @@ def render_rag_tab() -> None:
             f"Detalhes: {st.session_state['rag_agent_error']}"
         )
 
+    _render_connection_guide()
+
     connection_tab, chat_tab = st.tabs(["Conectar catálogo", "Conversar com o agente"])
 
     with connection_tab:
@@ -322,6 +416,7 @@ def render_rag_tab() -> None:
                 horizontal=True,
             )
             catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
+            dataset_hint = ""
 
             if mode == "Arquivo de catálogo":
                 uploaded = st.file_uploader(
