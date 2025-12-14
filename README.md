@@ -155,15 +155,16 @@ response = rag_agent.ask(
 git clone <repo-url>
 cd data-governance-ai-agents-kit
 
-# Instale dependências do Lineage Agent
-pip install -r lineage/requirements.txt
-
-# Instale dependências do RAG Agent
-pip install -r rag_discovery/requirements.txt
+# Instale todas as dependências da UI + agentes usando o MESMO Python do Streamlit
+python -m pip install -r requirements.txt
 
 # Configure variáveis de ambiente
 export OPENAI_API_KEY="sua-chave-aqui"
 ```
+
+> Se ainda aparecer `ModuleNotFoundError: No module named 'openai'`, confirme que o
+> `python -m pip` acima corresponde ao Python que executará `streamlit run app.py`.
+> Você pode verificar com `python -V` e `python -m pip -V`.
 
 ### Instalação Individual
 
