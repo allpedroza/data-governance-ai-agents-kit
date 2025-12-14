@@ -7,6 +7,7 @@ numpy>=1.23.0
 networkx>=3.0
 matplotlib>=3.6.0
 plotly>=5.0.0
+openai>=1.0.0
 
 # SQL parsing
 sqlparse>=0.4.0
