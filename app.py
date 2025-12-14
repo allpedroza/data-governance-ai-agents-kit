@@ -1,8 +1,11 @@
 """Unified Streamlit UI to orchestrate the two available agents."""
+import csv
+import json
 import sys
 import tempfile
+from io import StringIO
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import streamlit as st
 
@@ -45,6 +48,12 @@ def init_session_state() -> None:
 
     if "rag_catalog" not in st.session_state:
         st.session_state.rag_catalog: List[TableMetadata] = []
+
+    if "connected_catalogs" not in st.session_state:
+        st.session_state.connected_catalogs: List[Dict[str, Any]] = []
+
+    if "discovery_messages" not in st.session_state:
+        st.session_state.discovery_messages = []
 
     if "rag_agent" not in st.session_state:
         try:
@@ -210,6 +219,74 @@ def _search_with_fallback(query: str) -> List[Dict[str, str]]:
     return fallback
 
 
+def _render_connected_catalogs() -> None:
+    """Show connected catalog badges for quick context."""
+    if not st.session_state.get("connected_catalogs"):
+        st.info("Nenhum catálogo conectado ainda. Conecte um catálogo para conversar com o agente.")
+        return
+
+    st.markdown("**Catálogos conectados**")
+    badges = []
+    for catalog in st.session_state.connected_catalogs:
+        label = f"{catalog['name']} • {catalog['source']}"
+        badges.append(f"<span class='pill'>{label}</span>")
+    st.markdown(" ".join(badges), unsafe_allow_html=True)
+
+
+def _parse_tables_from_file(uploaded_file) -> List[TableMetadata]:
+    """Parse uploaded catalog files (JSON or CSV) into TableMetadata objects."""
+    suffix = Path(uploaded_file.name).suffix.lower()
+    content = uploaded_file.read()
+
+    if suffix == ".json":
+        data = json.loads(content.decode("utf-8"))
+        raw_tables = data if isinstance(data, list) else data.get("tables", [])
+    elif suffix in {".csv", ".txt"}:
+        decoded = content.decode("utf-8")
+        reader = csv.DictReader(StringIO(decoded))
+        raw_tables = list(reader)
+    else:
+        raise ValueError("Formato não suportado. Envie JSON ou CSV.")
+
+    tables: List[TableMetadata] = []
+    for raw in raw_tables:
+        tags = raw.get("tags", [])
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        tables.append(
+            TableMetadata(
+                name=raw.get("name", ""),
+                database=raw.get("database", ""),
+                schema=raw.get("schema", ""),
+                description=raw.get("description", ""),
+                tags=tags,
+            )
+        )
+    return tables
+
+
+def _answer_discovery_question(prompt: str) -> str:
+    """Generate an answer using the RAG agent or a simple fallback search."""
+    agent = st.session_state.get("rag_agent")
+    if agent:
+        try:
+            response = agent.ask(prompt, n_context=4)
+            return response.get("answer") or "Não foi possível gerar uma resposta agora."
+        except Exception as exc:  # noqa: BLE001
+            st.warning(f"Falha ao usar RAG completo. Retornando uma busca simples: {exc}")
+
+    results = _search_with_fallback(prompt)
+    if not results:
+        return "Nenhum resultado encontrado. Adicione catálogos ou tabelas antes de perguntar."
+
+    lines = ["Resultados encontrados via busca simples:"]
+    for idx, res in enumerate(results, start=1):
+        lines.append(
+            f"{idx}. {res['Tabela']} — {res['Motivo']} (Trecho: {res['Trecho']})"
+        )
+    return "\n".join(lines)
+
+
 def render_rag_tab() -> None:
     """UI for the RAG discovery agent."""
     st.subheader("🔍 Data Discovery RAG Agent")
@@ -224,47 +301,134 @@ def render_rag_tab() -> None:
             f"Detalhes: {st.session_state['rag_agent_error']}"
         )
 
-    with st.form("table_form"):
-        name = st.text_input("Nome da tabela", placeholder="customers")
-        database = st.text_input("Banco de dados", placeholder="production")
-        schema = st.text_input("Schema", placeholder="public")
-        description = st.text_area(
-            "Descrição",
-            placeholder="Dados de clientes, incluindo status de assinatura e país.",
-        )
-        tags = st.multiselect(
-            "Tags",
-            options=["pii", "critical", "finance", "marketing", "raw", "silver", "gold"],
-            default=["critical"],
-        )
-        add_table = st.form_submit_button("Adicionar ao catálogo")
+    connection_tab, chat_tab = st.tabs(["Conectar catálogo", "Conversar com o agente"])
 
-    if add_table and name:
-        metadata = TableMetadata(
-            name=name,
-            database=database,
-            schema=schema,
-            description=description,
-            tags=tags,
-        )
-        st.session_state.rag_catalog.append(metadata)
-        _index_table_if_possible(metadata)
-        st.success(f"Tabela {name} adicionada ao catálogo")
+    with connection_tab:
+        st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
+        with st.form("catalog_connection_form"):
+            mode = st.radio(
+                "Origem do catálogo",
+                options=["Arquivo de catálogo", "Conectores disponíveis"],
+                horizontal=True,
+            )
+            catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
 
-    _render_table_catalog(st.session_state.get("rag_catalog", []))
-
-    st.divider()
-
-    query = st.text_input("Pergunte sobre seus dados", placeholder="Onde estão os dados de clientes ativos?")
-    if st.button("Buscar"):
-        if not query:
-            st.warning("Digite uma pergunta ou termo de busca.")
-        else:
-            results = _search_with_fallback(query)
-            if not results:
-                st.info("Nenhum resultado encontrado. Adicione algumas tabelas ao catálogo.")
+            if mode == "Arquivo de catálogo":
+                uploaded = st.file_uploader(
+                    "Envie um arquivo JSON ou CSV com as tabelas",
+                    type=["json", "csv", "txt"],
+                    accept_multiple_files=False,
+                )
             else:
-                st.dataframe(results, use_container_width=True, hide_index=True)
+                connector = st.selectbox(
+                    "Selecione um conector existente",
+                    [
+                        "Apache Atlas",
+                        "Glue Data Catalog",
+                        "BigQuery",
+                        "Snowflake",
+                    ],
+                )
+                dataset_hint = st.text_input(
+                    "Escopo ou dataset", placeholder="ex: projeto-analytics"
+                )
+                uploaded = None
+
+            connect = st.form_submit_button("Conectar catálogo")
+
+        if connect:
+            if mode == "Arquivo de catálogo" and not uploaded:
+                st.warning("Envie um arquivo de metadados para conectar.")
+            else:
+                catalog_label = catalog_name or (
+                    uploaded.name if uploaded else connector  # type: ignore[misc]
+                )
+                tables_added = 0
+                if uploaded:
+                    try:
+                        tables = _parse_tables_from_file(uploaded)
+                        for table in tables:
+                            st.session_state.rag_catalog.append(table)
+                            _index_table_if_possible(table)
+                        tables_added = len(tables)
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Não foi possível processar o arquivo: {exc}")
+                        tables_added = 0
+
+                st.session_state.connected_catalogs.append(
+                    {
+                        "name": catalog_label,
+                        "source": "Arquivo" if uploaded else connector,  # type: ignore[misc]
+                        "tables": tables_added,
+                        "scope": dataset_hint if mode != "Arquivo de catálogo" else "",
+                    }
+                )
+                if tables_added:
+                    st.success(
+                        f"Catálogo '{catalog_label}' conectado e {tables_added} tabelas adicionadas."
+                    )
+                else:
+                    st.info(
+                        f"Catálogo '{catalog_label}' conectado. Adicione tabelas manualmente ou sincronize depois."
+                    )
+
+        with st.expander("Adicionar tabela manualmente"):
+            with st.form("table_form"):
+                name = st.text_input("Nome da tabela", placeholder="customers")
+                database = st.text_input("Banco de dados", placeholder="production")
+                schema = st.text_input("Schema", placeholder="public")
+                description = st.text_area(
+                    "Descrição",
+                    placeholder=(
+                        "Dados de clientes, incluindo status de assinatura e país."
+                    ),
+                )
+                tags = st.multiselect(
+                    "Tags",
+                    options=[
+                        "pii",
+                        "critical",
+                        "finance",
+                        "marketing",
+                        "raw",
+                        "silver",
+                        "gold",
+                    ],
+                    default=["critical"],
+                )
+                add_table = st.form_submit_button("Adicionar ao catálogo")
+
+            if add_table and name:
+                metadata = TableMetadata(
+                    name=name,
+                    database=database,
+                    schema=schema,
+                    description=description,
+                    tags=tags,
+                )
+                st.session_state.rag_catalog.append(metadata)
+                _index_table_if_possible(metadata)
+                st.success(f"Tabela {name} adicionada ao catálogo")
+
+        _render_connected_catalogs()
+        _render_table_catalog(st.session_state.get("rag_catalog", []))
+
+    with chat_tab:
+        _render_connected_catalogs()
+        st.divider()
+
+        for message in st.session_state.discovery_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        prompt = st.chat_input("Pergunte sobre seus dados")
+        if prompt:
+            st.session_state.discovery_messages.append({"role": "user", "content": prompt})
+            answer = _answer_discovery_question(prompt)
+            st.session_state.discovery_messages.append(
+                {"role": "assistant", "content": answer}
+            )
+            st.experimental_rerun()
 
 
 init_session_state()
