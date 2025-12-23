@@ -534,3 +534,142 @@ Gere uma resposta recomendando as tabelas mais relevantes."""
         count = self.validator.load_catalog(catalog_source)
         self.logger.info(f"Loaded catalog with {count} tables")
         return count
+
+    def index_from_openmetadata(
+        self,
+        host: str = "http://localhost:8585",
+        jwt_token: Optional[str] = None,
+        database: Optional[str] = None,
+        schema: Optional[str] = None,
+        service: Optional[str] = None,
+        limit: Optional[int] = None,
+        show_progress: bool = True,
+        also_load_catalog: bool = True
+    ) -> int:
+        """
+        Index metadata directly from OpenMetadata
+
+        Args:
+            host: OpenMetadata server URL
+            jwt_token: JWT token for authentication (or set OPENMETADATA_JWT_TOKEN env var)
+            database: Filter by database name
+            schema: Filter by schema name
+            service: Filter by service name
+            limit: Maximum tables to index
+            show_progress: Show progress during indexing
+            also_load_catalog: Also load table names into validator for validation
+
+        Returns:
+            Number of tables indexed
+        """
+        from .connectors.openmetadata_connector import OpenMetadataConnector, OpenMetadataConfig
+
+        if show_progress:
+            print("Connecting to OpenMetadata...")
+
+        config = OpenMetadataConfig(
+            server_host=host,
+            jwt_token=jwt_token
+        )
+
+        connector = OpenMetadataConnector(config)
+
+        if show_progress:
+            print("Fetching tables from OpenMetadata...")
+
+        # Get tables in discovery format
+        tables_data = connector.get_tables_as_discovery_format(
+            database=database,
+            schema=schema,
+            service=service,
+            limit=limit
+        )
+
+        if not tables_data:
+            self.logger.warning("No tables found in OpenMetadata")
+            return 0
+
+        # Convert to TableMetadata objects
+        tables = []
+        for t in tables_data:
+            tables.append(TableMetadata.from_dict(t))
+
+        # Index
+        count = self.index_metadata(tables, show_progress=show_progress)
+
+        # Also load into validator catalog
+        if also_load_catalog:
+            if self.validator is None:
+                self.validator = TableValidator()
+
+            fqns = [t.get("openmetadata_fqn") or f"{t['database']}.{t['schema']}.{t['name']}" for t in tables_data]
+            self.validator.add_tables(fqns)
+
+            if show_progress:
+                print(f"Added {len(fqns)} tables to validation catalog")
+
+        return count
+
+    @classmethod
+    def from_openmetadata(
+        cls,
+        embedding_provider: "EmbeddingProvider",
+        llm_provider: "LLMProvider",
+        vector_store: "VectorStoreProvider",
+        openmetadata_host: str = "http://localhost:8585",
+        openmetadata_token: Optional[str] = None,
+        database: Optional[str] = None,
+        schema: Optional[str] = None,
+        service: Optional[str] = None,
+        limit: Optional[int] = None,
+        log_dir: str = "./logs",
+        alpha: float = 0.7,
+        beta: float = 0.2,
+        gamma: float = 0.1
+    ) -> "DataDiscoveryAgent":
+        """
+        Factory method to create agent with data from OpenMetadata
+
+        Args:
+            embedding_provider: Embedding provider
+            llm_provider: LLM provider
+            vector_store: Vector store provider
+            openmetadata_host: OpenMetadata server URL
+            openmetadata_token: JWT token for authentication
+            database: Filter by database
+            schema: Filter by schema
+            service: Filter by service
+            limit: Maximum tables
+            log_dir: Log directory
+            alpha: Semantic weight
+            beta: Lexical weight
+            gamma: Importance weight
+
+        Returns:
+            Configured DataDiscoveryAgent with OpenMetadata data
+        """
+        # Create agent
+        agent = cls(
+            embedding_provider=embedding_provider,
+            llm_provider=llm_provider,
+            vector_store=vector_store,
+            catalog_source=None,
+            log_dir=log_dir,
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma
+        )
+
+        # Load from OpenMetadata
+        agent.index_from_openmetadata(
+            host=openmetadata_host,
+            jwt_token=openmetadata_token,
+            database=database,
+            schema=schema,
+            service=service,
+            limit=limit,
+            show_progress=True,
+            also_load_catalog=True
+        )
+
+        return agent
