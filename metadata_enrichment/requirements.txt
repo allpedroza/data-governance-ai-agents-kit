@@ -1,0 +1,25 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Embedding providers
+sentence-transformers>=2.2.0
+
+# Vector stores
+chromadb>=0.4.0
+
+# LLM providers (optional based on usage)
+openai>=1.0.0
+
+# Data sampling
+pyarrow>=14.0.0  # Parquet support
+sqlalchemy>=2.0.0  # SQL support
+
+# Optional: Delta Lake support
+# deltalake>=0.14.0
+
+# Optional: Google Cloud
+# google-cloud-aiplatform>=1.38.0
+
+# UI
+streamlit>=1.28.0

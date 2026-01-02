@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Convenção de Nomenclatura de Tabelas",
+    "content": "Tabelas devem seguir o padrão: dominio_entidade_tipo\n\nExemplos:\n- customer_profile_dim (dimensão de perfil de cliente)\n- sales_transaction_fact (fato de transação de vendas)\n- product_inventory_snapshot (snapshot de inventário)\n\nPrefixos por tipo:\n- dim_ ou _dim: Dimensões\n- fact_ ou _fact: Fatos\n- stg_: Staging\n- raw_: Dados brutos\n- tmp_: Tabelas temporárias",
+    "category": "naming_convention",
+    "tags": ["nomenclatura", "tabelas", "padrão"]
+  },
+  {
+    "title": "Convenção de Nomenclatura de Colunas",
+    "content": "Colunas devem seguir snake_case em minúsculas.\n\nPrefixos comuns:\n- id_: Identificadores (id_cliente, id_produto)\n- dt_: Datas (dt_criacao, dt_atualizacao)\n- fl_: Flags booleanos (fl_ativo, fl_deletado)\n- vl_: Valores monetários (vl_total, vl_desconto)\n- qt_: Quantidades (qt_itens, qt_estoque)\n- cd_: Códigos (cd_status, cd_tipo)\n- ds_: Descrições (ds_produto, ds_erro)\n- nm_: Nomes (nm_cliente, nm_fantasia)",
+    "category": "naming_convention",
+    "tags": ["nomenclatura", "colunas", "padrão"]
+  },
+  {
+    "title": "Classificação de Dados Pessoais (PII) - LGPD",
+    "content": "Dados pessoais que exigem proteção especial segundo a LGPD:\n\nDados Sensíveis (Art. 5º, II):\n- Origem racial ou étnica\n- Convicção religiosa\n- Opinião política\n- Filiação sindical\n- Dados de saúde\n- Dados biométricos\n- Dados genéticos\n\nDados Pessoais Identificáveis:\n- CPF, CNPJ, RG\n- Nome completo\n- Email pessoal\n- Telefone\n- Endereço\n- Data de nascimento\n- Dados bancários\n\nClassificação recomendada:\n- restricted: Dados sensíveis e financeiros\n- confidential: Dados pessoais identificáveis\n- internal: Dados agregados ou pseudonimizados\n- public: Dados públicos",
+    "category": "data_classification",
+    "tags": ["pii", "lgpd", "classificação", "dados pessoais", "privacidade"]
+  },
+  {
+    "title": "Padrões de Segurança de Dados",
+    "content": "Requisitos de segurança por classificação:\n\nRestricted:\n- Criptografia em repouso e em trânsito\n- Acesso apenas por necessidade (least privilege)\n- Logs de acesso obrigatórios\n- Mascaramento em ambientes não-produtivos\n\nConfidential:\n- Criptografia em trânsito\n- Controle de acesso por função\n- Retenção limitada\n\nInternal:\n- Autenticação obrigatória\n- Controle de acesso básico\n\nPublic:\n- Sem restrições especiais",
+    "category": "security",
+    "tags": ["segurança", "acesso", "criptografia", "compliance"]
+  },
+  {
+    "title": "Glossário de Negócios - Clientes",
+    "content": "Termos relacionados a clientes:\n\n- Cliente (Customer): Pessoa física ou jurídica que adquire produtos ou serviços\n- Prospect: Potencial cliente em processo de qualificação\n- Lead: Contato inicial que demonstrou interesse\n- Churn: Cliente que cancelou ou deixou de comprar\n- LTV (Lifetime Value): Valor total que um cliente gera durante seu relacionamento\n- CAC (Customer Acquisition Cost): Custo de aquisição de cliente\n- NPS (Net Promoter Score): Métrica de satisfação e lealdade\n- Cohort: Grupo de clientes com características comuns\n- Segmento: Classificação de clientes por perfil",
+    "category": "glossary",
+    "tags": ["cliente", "customer", "glossário", "negócio", "crm"]
+  },
+  {
+    "title": "Glossário de Negócios - Vendas",
+    "content": "Termos relacionados a vendas:\n\n- Pedido (Order): Solicitação de compra de produtos/serviços\n- SKU (Stock Keeping Unit): Identificador único de produto\n- GMV (Gross Merchandise Value): Valor total de mercadorias vendidas\n- AOV (Average Order Value): Valor médio por pedido\n- Conversão: Taxa de visitantes que realizam compra\n- Ticket Médio: Valor médio gasto por cliente\n- Cross-sell: Venda de produtos complementares\n- Up-sell: Venda de produtos superiores\n- Carrinho abandonado: Pedido iniciado mas não finalizado",
+    "category": "glossary",
+    "tags": ["vendas", "sales", "glossário", "e-commerce", "pedido"]
+  },
+  {
+    "title": "Glossário de Negócios - Finanças",
+    "content": "Termos relacionados a finanças:\n\n- Receita (Revenue): Valor total de vendas\n- Receita Líquida: Receita menos impostos e devoluções\n- Margem Bruta: (Receita - Custo) / Receita\n- EBITDA: Lucro antes de juros, impostos, depreciação e amortização\n- Faturamento: Emissão de nota fiscal\n- Inadimplência: Pagamentos em atraso\n- Provisão: Reserva para perdas esperadas\n- Conciliação: Verificação entre sistemas financeiros\n- Chargeback: Estorno de transação",
+    "category": "glossary",
+    "tags": ["finanças", "finance", "glossário", "contabilidade", "receita"]
+  },
+  {
+    "title": "Domínios de Dados Padrão",
+    "content": "Domínios de dados da organização:\n\n1. Customer: Dados de clientes, prospects e leads\n2. Sales: Pedidos, transações, carrinho\n3. Product: Catálogo, estoque, preços\n4. Finance: Faturamento, pagamentos, contabilidade\n5. Marketing: Campanhas, leads, atribuição\n6. Operations: Logística, fulfillment, entregas\n7. HR: Funcionários, folha, benefícios\n8. Analytics: Métricas, KPIs, relatórios\n9. Master: Dados mestres (países, moedas, etc.)\n10. Logs: Eventos, auditoria, telemetria",
+    "category": "architecture",
+    "tags": ["domínio", "arquitetura", "organização", "data mesh"]
+  },
+  {
+    "title": "Padrões de Qualidade de Dados",
+    "content": "Dimensões de qualidade de dados:\n\n1. Completude: Dados não devem ter valores nulos inesperados\n   - Campos obrigatórios: 100% preenchidos\n   - Campos opcionais: documentar taxa esperada\n\n2. Unicidade: Chaves primárias sem duplicatas\n\n3. Validade: Dados dentro de domínios esperados\n   - Emails: formato válido\n   - Datas: dentro de ranges razoáveis\n   - Códigos: pertencentes a listas válidas\n\n4. Consistência: Dados coerentes entre tabelas\n   - Integridade referencial\n   - Regras de negócio respeitadas\n\n5. Atualidade: Dados atualizados conforme SLA\n   - Real-time: < 1 minuto\n   - Near real-time: < 15 minutos\n   - Batch: conforme frequência definida",
+    "category": "quality",
+    "tags": ["qualidade", "quality", "completude", "validação"]
+  },
+  {
+    "title": "Modelo de Governança de Dados",
+    "content": "Papéis e responsabilidades:\n\n1. Data Owner (Proprietário):\n   - Define regras de acesso\n   - Aprova uso dos dados\n   - Responsável pela qualidade\n\n2. Data Steward (Curador):\n   - Mantém metadados atualizados\n   - Monitora qualidade\n   - Documenta linhagem\n\n3. Data Consumer (Consumidor):\n   - Solicita acesso\n   - Reporta problemas\n   - Segue políticas de uso\n\n4. Data Engineer:\n   - Implementa pipelines\n   - Garante SLAs técnicos\n   - Mantém infraestrutura\n\n5. Data Protection Officer (DPO):\n   - Garante compliance LGPD\n   - Avalia riscos de privacidade\n   - Atende requisições de titulares",
+    "category": "governance",
+    "tags": ["governança", "papéis", "responsabilidades", "ownership"]
+  }
+]
