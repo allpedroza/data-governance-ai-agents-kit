@@ -217,6 +217,17 @@ print(f"Status: {report.overall_status}")
 print(f"Schema Drift: {report.schema_drift}")
 ```
 
+**Apenas Data Classification Agent**:
+```bash
+pip install -r classification/requirements.txt
+```
+
+**Apenas Metadata Enrichment Agent**:
+```bash
+pip install -r metadata_enrichment/requirements.txt
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
 ---
 
 ## Integração entre Agentes
@@ -562,6 +573,19 @@ for alert in agent.get_active_alerts():
 - [ ] API REST para integração com outras ferramentas
 - [ ] Dashboard de métricas de governança
 - [ ] Suporte a modelos locais (Ollama)
+
+### Classification Agent
+- [x] Regras de PII/PHI/Financeiro baseadas em metadados
+- [x] Níveis de severidade e recomendações LGPD/GDPR
+- [ ] Validação multilíngue com LLM
+- [ ] Biblioteca ampliada de regras setoriais
+
+### Metadata Enrichment Agent
+- [x] RAG sobre normativos internos
+- [x] Suporte a sampling (CSV, Parquet, SQL, Delta)
+- [x] Exportação em JSON/Markdown/HTML
+- [ ] Conectores adicionais (BigQuery, S3 inventories)
+- [ ] Templates personalizáveis de catálogo
 
 ---
 
