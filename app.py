@@ -77,14 +77,69 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        .metric-card {background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 12px;}
-        .section-card {background: #0b1220; padding: 1.25rem; border-radius: 16px; border: 1px solid #1f2937;}
-        .pill {display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; background: #1e293b; color: #e2e8f0; margin-right: 0.5rem;}
-        .callout {border-left: 4px solid #22c55e; background: #0f172a; padding: 0.75rem; border-radius: 12px;}
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #2563eb;
+        }
+
+        .main {
+            background: var(--bg);
+        }
+
+        .section-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 0.2rem 0.7rem;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: var(--text);
+            margin-right: 0.4rem;
+            border: 1px solid var(--border);
+        }
+
+        .callout {
+            border-left: 4px solid var(--accent);
+            background: #eef2ff;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            color: var(--text);
+        }
+
+        .compact-header h1, .compact-header p {
+            margin-bottom: 0.35rem;
+            color: var(--text);
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def section_header(title: str, description: str | None = None) -> None:
+    """Consistent header used across tabs to keep the UI minimal."""
+
+    st.markdown("<div class='compact-header'>", unsafe_allow_html=True)
+    st.subheader(title)
+    if description:
+        st.markdown(f"<p style='color:#475569;'>{description}</p>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def card_container():
+    """Provide a lightly styled container similar to OpenMetadata panels."""
+
+    return st.container(border=True)
 
 
 def _initialize_rag_agent() -> None:
@@ -139,38 +194,38 @@ def init_session_state() -> None:
 
 def hero_section() -> None:
     """Top banner with quick context."""
-    left, right = st.columns([3, 2])
-    with left:
-        st.title("Data Governance AI Agents")
-        st.markdown(
-            "**Interface unificada para trabalhar com o Data Lineage Agent e o Data Discovery RAG Agent.**\n"
-            "Envie pipelines, documente tabelas e faça perguntas em um único lugar."
-        )
-        st.markdown(
-            "<div class='callout'>Configuração rápida: defina sua `OPENAI_API_KEY` para habilitar todos os recursos.</div>",
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.image(
-            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-            caption="Governança de dados assistida por IA",
-            use_container_width=True,
-        )
+    with st.container(border=True):
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            st.title("Data Governance AI Agents")
+            st.markdown(
+                "Uma interface enxuta inspirada no OpenMetadata para orquestrar linhagem, catalogação e qualidade de dados."
+            )
+            st.markdown(
+                "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.metric("Agentes disponíveis", "5", help="Lineage, Discovery, Enrichment, Classification e Quality")
+            st.metric("Status da sessão", "Pronto", help="Sessão inicializada com os caches padrões")
 
 
 def render_lineage_tab() -> None:
     """UI for running the Data Lineage Agent."""
-    st.subheader("🔗 Data Lineage Agent")
-    st.markdown("Analise rapidamente pipelines e visualize o estado da análise em tempo real.")
+    section_header(
+        "🔗 Data Lineage Agent",
+        "Envie pipelines e acompanhe a análise de forma direta, sem painéis complexos.",
+    )
 
-    with st.form("lineage_form"):
-        uploads = st.file_uploader(
-            "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
-            type=["py", "sql", "tf", "json", "scala", "dag"],
-            accept_multiple_files=True,
-        )
-        st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
-        analyze = st.form_submit_button("Gerar linhagem")
+    with card_container():
+        with st.form("lineage_form"):
+            uploads = st.file_uploader(
+                "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
+                type=["py", "sql", "tf", "json", "scala", "dag"],
+                accept_multiple_files=True,
+            )
+            st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
+            analyze = st.form_submit_button("Gerar linhagem")
 
     if analyze:
         if not uploads:
@@ -338,35 +393,36 @@ def _render_connected_catalogs() -> None:
 
 def _render_connection_guide() -> None:
     """Display a guided experience for configuring external connections."""
-    st.markdown("### Guia de conexões essenciais")
-    settings: Dict[str, str] = st.session_state.connection_settings
+    with card_container():
+        st.markdown("### Guia de conexões essenciais")
+        settings: Dict[str, str] = st.session_state.connection_settings
 
-    status_labels = []
-    status_labels.append(
-        "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
-    )
-    status_labels.append(
-        "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
-    )
-    status_labels.append(
-        "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
-    )
-    status_labels.append(
-        "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
-    )
-    status_labels.append(
-        "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
-    )
-    st.markdown("; ".join(status_labels))
-
-    with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
-        st.markdown(
-            "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
-            "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
-            "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
-                settings.get("chroma_persist")
-            )
+        status_labels = []
+        status_labels.append(
+            "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
         )
+        status_labels.append(
+            "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
+        )
+        status_labels.append(
+            "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
+        )
+        status_labels.append(
+            "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
+        )
+        status_labels.append(
+            "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
+        )
+        st.markdown("; ".join(status_labels))
+
+        with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
+            st.markdown(
+                "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
+                "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
+                "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
+                    settings.get("chroma_persist")
+                )
+            )
 
         openai_models = [
             "gpt-4o-mini",
@@ -594,10 +650,9 @@ def _answer_discovery_question(prompt: str) -> str:
 
 def render_rag_tab() -> None:
     """UI for the RAG discovery agent."""
-    st.subheader("🔍 Data Discovery RAG Agent")
-    st.markdown(
-        "Construa um catálogo rápido de tabelas e faça perguntas em linguagem natural. "
-        "Se a `OPENAI_API_KEY` estiver configurada, a busca usa embeddings e RAG; caso contrário, aplica busca textual simples."
+    section_header(
+        "🔍 Data Discovery RAG Agent",
+        "Construa um catálogo rápido e converse em linguagem natural com uma experiência limpa.",
     )
 
     if st.session_state.get("rag_agent_error"):
@@ -612,37 +667,38 @@ def render_rag_tab() -> None:
 
     with connection_tab:
         st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
-        with st.form("catalog_connection_form"):
-            mode = st.radio(
-                "Origem do catálogo",
-                options=["Arquivo de catálogo", "Conectores disponíveis"],
-                horizontal=True,
-            )
-            catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
-            dataset_hint = ""
+        with card_container():
+            with st.form("catalog_connection_form"):
+                mode = st.radio(
+                    "Origem do catálogo",
+                    options=["Arquivo de catálogo", "Conectores disponíveis"],
+                    horizontal=True,
+                )
+                catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
+                dataset_hint = ""
 
-            if mode == "Arquivo de catálogo":
-                uploaded = st.file_uploader(
-                    "Envie um arquivo JSON ou CSV com as tabelas",
-                    type=["json", "csv", "txt"],
-                    accept_multiple_files=False,
-                )
-            else:
-                connector = st.selectbox(
-                    "Selecione um conector existente",
-                    [
-                        "Apache Atlas",
-                        "Glue Data Catalog",
-                        "BigQuery",
-                        "Snowflake",
-                    ],
-                )
-                dataset_hint = st.text_input(
-                    "Escopo ou dataset", placeholder="ex: projeto-analytics"
-                )
-                uploaded = None
+                if mode == "Arquivo de catálogo":
+                    uploaded = st.file_uploader(
+                        "Envie um arquivo JSON ou CSV com as tabelas",
+                        type=["json", "csv", "txt"],
+                        accept_multiple_files=False,
+                    )
+                else:
+                    connector = st.selectbox(
+                        "Selecione um conector existente",
+                        [
+                            "Apache Atlas",
+                            "Glue Data Catalog",
+                            "BigQuery",
+                            "Snowflake",
+                        ],
+                    )
+                    dataset_hint = st.text_input(
+                        "Escopo ou dataset", placeholder="ex: projeto-analytics"
+                    )
+                    uploaded = None
 
-            connect = st.form_submit_button("Conectar catálogo")
+                connect = st.form_submit_button("Conectar catálogo")
 
         if connect:
             if mode == "Arquivo de catálogo" and not uploaded:
