@@ -2187,6 +2187,36 @@ def render_vault_tab() -> None:
                     help="Senha do usuário administrador"
                 )
 
+            retention_mode = st.selectbox(
+                "Política após decriptação",
+                [
+                    "Apagar imediatamente (padrão)",
+                    "Reter por um período",
+                    "Reter indefinidamente",
+                ],
+                help=(
+                    "Escolha se as sessões devem ser excluídas após a decriptação "
+                    "ou mantidas por um período configurável."
+                ),
+            )
+
+            retention_days = None
+            delete_after_decrypt = True
+
+            if retention_mode == "Reter por um período":
+                retention_days = int(
+                    st.number_input(
+                        "Dias de retenção após decriptar",
+                        min_value=1,
+                        max_value=3650,
+                        value=30,
+                        help="Quantidade de dias para manter a sessão decriptada antes de removê-la.",
+                    )
+                )
+                delete_after_decrypt = False
+            elif retention_mode == "Reter indefinidamente":
+                delete_after_decrypt = False
+
             if st.button("🚀 Inicializar Vault", type="primary"):
                 if not master_password or not admin_password:
                     st.error("Preencha ambas as senhas para inicializar o vault.")
@@ -2195,6 +2225,8 @@ def render_vault_tab() -> None:
                         vault_config = VaultConfig(
                             storage_path=str(BASE_DIR / ".vault_data"),
                             require_authentication=True,
+                            delete_after_decrypt=delete_after_decrypt,
+                            decryption_retention_days=retention_days,
                         )
                         vault = SecureVault(vault_config)
                         vault.initialize(master_password)
@@ -2252,12 +2284,22 @@ def render_vault_tab() -> None:
             if sessions:
                 session_data = []
                 for s in sessions:
+                    retention_info = s.get("metadata", {}).get("decryption_retention", {})
+                    retention_label = "Apagar após decriptar"
+                    if retention_info.get("mode") == "retain":
+                        days = retention_info.get("retention_days")
+                        if days:
+                            retention_label = f"Reter {days}d"
+                        else:
+                            retention_label = "Reter indefinido"
+
                     session_data.append({
                         "ID": s["session_id"][:20] + "...",
                         "Entidades": s["entity_count"],
                         "Risco": f"{s['risk_score']:.0%}",
                         "Criado": s["created_at"][:19],
                         "Acessos": s["access_count"],
+                        "Retenção": retention_label,
                         "Preview": s.get("anonymized_preview", "")[:50]
                     })
 
@@ -2311,6 +2353,21 @@ def render_vault_tab() -> None:
             "⚠️ Esta operação revela os dados originais. "
             "Apenas usuários autorizados devem ter acesso."
         )
+
+        retention_message = "As sessões são apagadas imediatamente após a decriptação."
+        if not vault.config.delete_after_decrypt:
+            if vault.config.decryption_retention_days:
+                retention_message = (
+                    f"As sessões permanecem armazenadas por "
+                    f"{vault.config.decryption_retention_days} dia(s) após a decriptação."
+                )
+            else:
+                retention_message = (
+                    "As sessões permanecem armazenadas mesmo após a decriptação "
+                    "(retenção perene)."
+                )
+
+        st.info(retention_message)
 
         session_id_input = st.text_input(
             "ID da Sessão",
