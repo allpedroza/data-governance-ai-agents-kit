@@ -31,6 +31,17 @@ from rag_discovery.data_discovery_rag_agent import (  # noqa: E402
     TableMetadata,
 )
 
+# Metadata Enrichment Agent imports
+sys.path.append(str(BASE_DIR / "metadata_enrichment"))
+ENRICHMENT_AVAILABLE = True
+try:
+    from metadata_enrichment.agent import MetadataEnrichmentAgent, EnrichmentResult
+    from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+    from rag_discovery.providers.llm import OpenAILLM
+    from rag_discovery.providers.vectorstore import ChromaStore
+except ImportError:
+    ENRICHMENT_AVAILABLE = False
+
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -536,11 +547,228 @@ def render_rag_tab() -> None:
             st.experimental_rerun()
 
 
+def _initialize_enrichment_agent():
+    """Initialize the Metadata Enrichment Agent."""
+    if not ENRICHMENT_AVAILABLE:
+        return None
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        embedding_provider = SentenceTransformerEmbeddings()
+        llm_provider = OpenAILLM(model="gpt-4o-mini")
+        vector_store = ChromaStore(
+            collection_name="metadata_standards",
+            persist_directory=str(BASE_DIR / "metadata_enrichment" / ".chroma_standards")
+        )
+
+        return MetadataEnrichmentAgent(
+            embedding_provider=embedding_provider,
+            llm_provider=llm_provider,
+            vector_store=vector_store,
+            standards_persist_dir=str(BASE_DIR / "metadata_enrichment" / ".standards_index")
+        )
+    except Exception:
+        return None
+
+
+def render_enrichment_tab() -> None:
+    """UI for the Metadata Enrichment Agent."""
+    st.subheader("🏷️ Metadata Enrichment Agent")
+    st.markdown(
+        "Gere automaticamente descrições, tags e classificações para suas tabelas de dados. "
+        "O agente analisa amostras de dados e usa padrões de arquitetura para inferir metadados."
+    )
+
+    if not ENRICHMENT_AVAILABLE:
+        st.error(
+            "⚠️ Metadata Enrichment Agent não disponível. "
+            "Verifique se as dependências estão instaladas: `pip install -r metadata_enrichment/requirements.txt`"
+        )
+        return
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        st.warning("⚠️ Configure a `OPENAI_API_KEY` para usar o agente de enriquecimento.")
+        return
+
+    # Initialize agent in session state
+    if "enrichment_agent" not in st.session_state:
+        with st.spinner("Inicializando agente de enriquecimento..."):
+            st.session_state.enrichment_agent = _initialize_enrichment_agent()
+
+    agent = st.session_state.get("enrichment_agent")
+    if not agent:
+        st.error("Não foi possível inicializar o agente. Verifique as configurações.")
+        return
+
+    # Standards management
+    with st.expander("📚 Gerenciar Normativos e Padrões"):
+        st.markdown(
+            "Indexe documentos de padrões de nomenclatura, glossário de negócios e políticas de classificação."
+        )
+
+        standards_file = st.file_uploader(
+            "Carregar arquivo de normativos (JSON)",
+            type=["json"],
+            help="Arquivo JSON com padrões de nomenclatura, glossário, etc.",
+            key="standards_upload"
+        )
+
+        if standards_file and st.button("Indexar Normativos", key="index_standards"):
+            with st.spinner("Indexando normativos..."):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as f:
+                    f.write(standards_file.read())
+                    temp_path = f.name
+
+                try:
+                    count = agent.index_standards_from_json(temp_path)
+                    st.success(f"✓ {count} documentos indexados com sucesso!")
+                except Exception as exc:
+                    st.error(f"Erro ao indexar: {exc}")
+                finally:
+                    os.unlink(temp_path)
+
+        stats = agent.get_statistics()
+        st.caption(f"📊 {stats.get('standards', {}).get('total_documents', 0)} normativos indexados")
+
+    st.divider()
+
+    # File upload for enrichment
+    st.markdown("### Enriquecer Metadados")
+
+    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="enrich_file_type")
+
+    uploaded_file = st.file_uploader(
+        f"Selecione o arquivo {file_type}",
+        type=["csv"] if file_type == "CSV" else ["parquet"],
+        key="enrich_file"
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        sample_size = st.number_input(
+            "Tamanho da amostra",
+            min_value=10,
+            max_value=1000,
+            value=100,
+            key="enrich_sample_size"
+        )
+    with col2:
+        if file_type == "CSV":
+            encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "cp1252"], key="csv_encoding")
+            separator = st.selectbox("Separador", [",", ";", "|"], key="csv_sep")
+
+    additional_context = st.text_area(
+        "Contexto adicional (opcional)",
+        placeholder="Informações adicionais sobre a tabela, domínio de negócio, etc.",
+        key="enrich_context"
+    )
+
+    if uploaded_file and st.button("🚀 Gerar Metadados", type="primary", key="run_enrichment"):
+        with st.spinner("Analisando dados e gerando metadados..."):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type.lower()}") as f:
+                f.write(uploaded_file.read())
+                temp_path = f.name
+
+            try:
+                if file_type == "CSV":
+                    result = agent.enrich_from_csv(
+                        temp_path,
+                        sample_size=sample_size,
+                        encoding=encoding,
+                        separator=separator,
+                        additional_context=additional_context if additional_context else None
+                    )
+                else:
+                    result = agent.enrich_from_parquet(
+                        temp_path,
+                        sample_size=sample_size,
+                        additional_context=additional_context if additional_context else None
+                    )
+
+                st.session_state.enrichment_result = result
+                st.success("✓ Metadados gerados com sucesso!")
+
+            except Exception as exc:
+                st.error(f"Erro ao processar: {exc}")
+            finally:
+                os.unlink(temp_path)
+
+    # Display results
+    if "enrichment_result" in st.session_state:
+        result = st.session_state.enrichment_result
+        st.divider()
+
+        # Header metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Tabela", result.business_name)
+        with col2:
+            if result.has_pii:
+                st.metric("PII", "⚠️ Detectado", delta=f"{len(result.pii_columns)} colunas")
+            else:
+                st.metric("PII", "✓ Não detectado")
+        with col3:
+            st.metric("Classificação", result.classification)
+        with col4:
+            st.metric("Confiança", f"{result.confidence:.0%}")
+
+        # Description
+        st.markdown("### Descrição")
+        st.write(result.description)
+
+        # Metadata
+        st.markdown(f"**Domínio:** {result.domain} | **Tags:** {', '.join(result.tags)}")
+        st.markdown(f"**Proprietário sugerido:** {result.owner_suggestion}")
+
+        # Columns table
+        st.markdown("### Colunas")
+        columns_data = []
+        for col in result.columns:
+            pii_marker = "⚠️" if col.is_pii else ""
+            columns_data.append({
+                "Coluna": f"{col.name} {pii_marker}",
+                "Tipo": col.original_type,
+                "Descrição": col.description[:60] + "..." if len(col.description) > 60 else col.description,
+                "Classificação": col.classification,
+                "Tags": ", ".join(col.tags[:3]) if col.tags else "-"
+            })
+
+        st.dataframe(columns_data, use_container_width=True, hide_index=True)
+
+        # PII Warning
+        if result.pii_columns:
+            st.warning(f"⚠️ Colunas com dados pessoais (PII): {', '.join(result.pii_columns)}")
+
+        # Export
+        st.markdown("### Exportar")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 Baixar JSON",
+                result.to_json(),
+                file_name=f"{result.table_name}_metadata.json",
+                mime="application/json"
+            )
+        with col2:
+            st.download_button(
+                "📥 Baixar Markdown",
+                result.to_markdown(),
+                file_name=f"{result.table_name}_metadata.md",
+                mime="text/markdown"
+            )
+
+
 init_session_state()
 hero_section()
-tab1, tab2 = st.tabs(["Lineage", "Discovery"])
+tab1, tab2, tab3 = st.tabs(["Lineage", "Discovery", "Enrichment"])
 with tab1:
     render_lineage_tab()
 with tab2:
     render_rag_tab()
+with tab3:
+    render_enrichment_tab()
 
