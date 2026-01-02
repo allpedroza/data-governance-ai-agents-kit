@@ -64,6 +64,29 @@ report = agent.analyze_from_query_logs(
 print(report.to_markdown())
 ```
 
+### Reprocessar com LLM após a análise determinística
+
+Use um provedor LLM para revisar o ranking, riscos e próximos passos. Passe o `llm_provider` na criação do agente e habilite `llm_review=True` na chamada de análise.
+
+```python
+from rag_discovery.providers.llm import OpenAILLM
+from data_asset_value import DataAssetValueAgent
+
+llm = OpenAILLM(model="gpt-4o-mini")
+agent = DataAssetValueAgent(llm_provider=llm)
+
+report = agent.analyze_from_query_logs(
+    query_logs=query_logs,
+    lineage_data=lineage,
+    data_product_config=data_products,
+    asset_metadata=metadata,
+    llm_review=True,
+    llm_additional_context="Priorize ativos que suportam receita recorrente"
+)
+
+print(report.llm_review["insights"])
+```
+
 ### Comparar ativos e exportar relatórios
 
 ```python

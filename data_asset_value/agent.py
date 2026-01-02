@@ -24,6 +24,8 @@ import sqlparse
 from sqlparse.sql import IdentifierList, Identifier, Where, Comparison
 from sqlparse.tokens import Keyword, DML
 
+from rag_discovery.providers.base import LLMProvider
+
 
 class ValueCategory(Enum):
     """Categories for asset value classification"""
@@ -215,6 +217,9 @@ class AssetValueReport:
     # Summary metrics
     summary: Dict[str, Any] = field(default_factory=dict)
 
+    # Optional GenAI review
+    llm_review: Optional[Dict[str, Any]] = None
+
     # Recommendations
     recommendations: List[str] = field(default_factory=list)
 
@@ -233,6 +238,7 @@ class AssetValueReport:
             'hub_assets': self.hub_assets,
             'data_product_impacts': [d.to_dict() for d in self.data_product_impacts],
             'summary': self.summary,
+            'llm_review': self.llm_review,
             'recommendations': self.recommendations
         }
 
@@ -316,6 +322,26 @@ class AssetValueReport:
             md.append("\n## Recommendations\n")
             for i, rec in enumerate(self.recommendations, 1):
                 md.append(f"{i}. {rec}")
+
+        if self.llm_review and isinstance(self.llm_review, dict):
+            md.append("\n## LLM Review (Post-Processing)\n")
+            insights = self.llm_review.get('insights') or self.llm_review.get('parsed', {}).get('insights', [])
+            if insights:
+                md.append("**Insights:**")
+                for insight in insights:
+                    md.append(f"- {insight}")
+
+            next_steps = self.llm_review.get('next_steps') or self.llm_review.get('parsed', {}).get('next_steps', [])
+            if next_steps:
+                md.append("\n**Next steps suggested by LLM:**")
+                for step in next_steps:
+                    md.append(f"- {step}")
+
+            re_ranked = self.llm_review.get('re_ranked_top_assets') or self.llm_review.get('parsed', {}).get('re_ranked_top_assets', [])
+            if re_ranked:
+                md.append("\n**LLM-prioritized assets:**")
+                for asset in re_ranked:
+                    md.append(f"- `{asset}`")
 
         return "\n".join(md)
 
@@ -948,7 +974,8 @@ class DataAssetValueAgent:
         self,
         weights: Optional[Dict[str, float]] = None,
         time_range_days: int = 30,
-        persist_dir: Optional[str] = None
+        persist_dir: Optional[str] = None,
+        llm_provider: Optional[LLMProvider] = None
     ):
         """
         Initialize the Data Asset Value Agent.
@@ -962,6 +989,7 @@ class DataAssetValueAgent:
         self.value_calculator = ValueCalculator(weights)
         self.time_range_days = time_range_days
         self.persist_dir = persist_dir
+        self.llm_provider = llm_provider
 
         if persist_dir:
             os.makedirs(persist_dir, exist_ok=True)
@@ -972,7 +1000,9 @@ class DataAssetValueAgent:
         lineage_data: Optional[Dict[str, Any]] = None,
         data_product_config: Optional[List[Dict[str, Any]]] = None,
         asset_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
-        time_range_days: Optional[int] = None
+        time_range_days: Optional[int] = None,
+        llm_review: bool = False,
+        llm_additional_context: Optional[str] = None
     ) -> AssetValueReport:
         """
         Analyze data asset value from query logs.
@@ -1045,6 +1075,14 @@ class DataAssetValueAgent:
         # Persist if configured
         if self.persist_dir:
             self._persist_report(report)
+
+        if llm_review and self.llm_provider:
+            report.llm_review = self._run_llm_review(
+                report=report,
+                data_product_config=data_product_config,
+                asset_metadata=asset_metadata,
+                additional_context=llm_additional_context
+            )
 
         return report
 
@@ -1413,6 +1451,64 @@ class DataAssetValueAgent:
             summary=summary,
             recommendations=recommendations
         )
+
+    def _run_llm_review(
+        self,
+        report: AssetValueReport,
+        data_product_config: Optional[List[Dict[str, Any]]] = None,
+        asset_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
+        additional_context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Ask an LLM to re-run the analysis using the deterministic summary as context."""
+
+        summary_payload = {
+            'summary': report.summary,
+            'top_value_assets': report.top_value_assets,
+            'critical_assets': report.critical_assets,
+            'orphan_assets': report.orphan_assets,
+            'declining_assets': report.declining_assets,
+            'recommendations': report.recommendations,
+            'data_products': data_product_config or [],
+            'asset_metadata': asset_metadata or {},
+            'additional_context': additional_context,
+        }
+
+        prompt = (
+            "Você é um arquiteto de dados e governança. Recebeu um resumo determinístico "
+            "sobre valor de ativos (uso, joins, linhagem e data products) e precisa revisar o ranking, "
+            "apontar riscos e sugerir próximos passos. Responda em JSON com as chaves: "
+            "insights (lista), re_ranked_top_assets (lista de strings), risk_flags (lista), next_steps (lista).\n\n"
+            f"Contexto:\n{json.dumps(summary_payload, ensure_ascii=False)}"
+        )
+
+        system_prompt = (
+            "Analise o contexto de forma crítica, mantenha respostas concisas e priorize ativos com impacto "
+            "de negócio ou risco (PII/SLAs)."
+        )
+
+        llm_response = self.llm_provider.generate(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.2,
+            max_tokens=600
+        )
+
+        parsed: Dict[str, Any] = {}
+        try:
+            parsed = json.loads(llm_response.content)
+        except Exception:
+            parsed = {'insights': [llm_response.content]}
+
+        return {
+            'model': getattr(self.llm_provider, 'model_name', ''),
+            'prompt': prompt,
+            'parsed': parsed,
+            'raw_response': llm_response.content,
+            'insights': parsed.get('insights', []),
+            're_ranked_top_assets': parsed.get('re_ranked_top_assets', []),
+            'risk_flags': parsed.get('risk_flags', []),
+            'next_steps': parsed.get('next_steps', []),
+        }
 
     def _generate_global_recommendations(
         self,
