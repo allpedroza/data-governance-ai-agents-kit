@@ -119,6 +119,15 @@ def init_session_state() -> None:
         st.session_state.connection_settings = {
             "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
             "openai_api_url": os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1"),
+            "llm_provider": os.environ.get("LLM_PROVIDER", "openai"),
+            "llm_model": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+            "gemini_api_key": os.environ.get("GOOGLE_API_KEY", ""),
+            "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
+            "deepseek_api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
+            "deepseek_model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+            "deepseek_api_url": os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com"),
+            "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+            "anthropic_model": os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620"),
             "atlas_host": os.environ.get("ATLAS_HOST", ""),
             "glue_region": os.environ.get("AWS_REGION", ""),
             "chroma_persist": str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
@@ -216,6 +225,24 @@ def _apply_connection_settings(settings: Dict[str, str]) -> None:
         os.environ["ATLAS_HOST"] = settings["atlas_host"]
     if settings.get("glue_region"):
         os.environ["AWS_REGION"] = settings["glue_region"]
+    if settings.get("llm_provider"):
+        os.environ["LLM_PROVIDER"] = settings["llm_provider"]
+    if settings.get("llm_model"):
+        os.environ["LLM_MODEL"] = settings["llm_model"]
+    if settings.get("gemini_api_key"):
+        os.environ["GOOGLE_API_KEY"] = settings["gemini_api_key"]
+    if settings.get("gemini_model"):
+        os.environ["GEMINI_MODEL"] = settings["gemini_model"]
+    if settings.get("deepseek_api_key"):
+        os.environ["DEEPSEEK_API_KEY"] = settings["deepseek_api_key"]
+    if settings.get("deepseek_model"):
+        os.environ["DEEPSEEK_MODEL"] = settings["deepseek_model"]
+    if settings.get("deepseek_api_url"):
+        os.environ["DEEPSEEK_API_URL"] = settings["deepseek_api_url"]
+    if settings.get("anthropic_api_key"):
+        os.environ["ANTHROPIC_API_KEY"] = settings["anthropic_api_key"]
+    if settings.get("anthropic_model"):
+        os.environ["ANTHROPIC_MODEL"] = settings["anthropic_model"]
 
     _initialize_rag_agent()
 
@@ -319,48 +346,188 @@ def _render_connection_guide() -> None:
         "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
     )
     status_labels.append(
+        "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
+    )
+    status_labels.append(
         "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
     )
     st.markdown("; ".join(status_labels))
 
-    with st.expander("Configurar IA (OpenAI) e vetorização", expanded=not settings.get("openai_api_key")):
+    with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
         st.markdown(
-            "- Defina a `OPENAI_API_KEY` para habilitar embeddings e evitar erros 401 como o exibido na indexação.\n"
-            "- Opcionalmente ajuste a `OPENAI_API_URL` para provedores compatíveis.\n"
+            "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
+            "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
             "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
                 settings.get("chroma_persist")
             )
         )
-        with st.form("openai_settings_form"):
-            openai_key = st.text_input(
-                "OPENAI_API_KEY",
-                value=settings.get("openai_api_key", ""),
-                type="password",
-                help="Copie a chave exata do painel da OpenAI para evitar erros de autenticação.",
-            )
-            openai_url = st.text_input(
-                "OPENAI_API_URL",
-                value=settings.get("openai_api_url", "https://api.openai.com/v1"),
-                help="Use o endpoint padrão ou um compatível (Azure/OpenAI compatível).",
-            )
-            apply_credentials = st.form_submit_button("Salvar e reiniciar o agente RAG")
 
-        if apply_credentials:
-            _apply_connection_settings(
-                {
-                    "openai_api_key": openai_key.strip(),
-                    "openai_api_url": openai_url.strip(),
-                    "atlas_host": settings.get("atlas_host", ""),
-                    "glue_region": settings.get("glue_region", ""),
-                }
-            )
-            if st.session_state.get("rag_agent"):
-                st.success("Credenciais aplicadas. O agente RAG foi reiniciado com a nova configuração.")
-            else:
-                st.error(
-                    "Atualizamos as credenciais, mas o agente ainda não inicializou. "
-                    "Revise os valores e tente novamente."
+        openai_models = [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4.1",
+            "gpt-3.5-turbo",
+        ]
+        gemini_models = [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.0-pro",
+        ]
+        deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
+        claude_models = [
+            "claude-3-5-sonnet-20240620",
+            "claude-3-opus-20240229",
+            "claude-3-haiku-20240307",
+        ]
+
+        openai_tab, gemini_tab, deepseek_tab, claude_tab = st.tabs(
+            ["OpenAI", "Gemini", "DeepSeek", "Claude"]
+        )
+
+        with openai_tab:
+            with st.form("openai_settings_form"):
+                openai_key = st.text_input(
+                    "OPENAI_API_KEY",
+                    value=settings.get("openai_api_key", ""),
+                    type="password",
+                    help="Copie a chave exata do painel da OpenAI para evitar erros de autenticação.",
                 )
+                openai_url = st.text_input(
+                    "OPENAI_API_URL",
+                    value=settings.get("openai_api_url", "https://api.openai.com/v1"),
+                    help="Use o endpoint padrão ou um compatível (Azure/OpenAI compatível).",
+                )
+                openai_model = st.selectbox(
+                    "Modelo OpenAI",
+                    options=openai_models,
+                    index=openai_models.index(settings.get("llm_model", "gpt-4o-mini"))
+                    if settings.get("llm_model") in openai_models
+                    else 0,
+                )
+                set_default = st.checkbox(
+                    "Usar OpenAI como provedor padrão", value=settings.get("llm_provider") == "openai"
+                )
+                apply_credentials = st.form_submit_button("Salvar configuração OpenAI")
+
+            if apply_credentials:
+                _apply_connection_settings(
+                    {
+                        "openai_api_key": openai_key.strip(),
+                        "openai_api_url": openai_url.strip(),
+                        "llm_model": openai_model,
+                        "llm_provider": "openai" if set_default else settings.get("llm_provider", "openai"),
+                    }
+                )
+                st.success("Configuração OpenAI salva.")
+
+        with gemini_tab:
+            with st.form("gemini_settings_form"):
+                gemini_key = st.text_input(
+                    "GOOGLE_API_KEY",
+                    value=settings.get("gemini_api_key", ""),
+                    type="password",
+                    help="Chave da API Gemini (Google AI/Vertex).",
+                )
+                gemini_model = st.selectbox(
+                    "Modelo Gemini",
+                    options=gemini_models,
+                    index=gemini_models.index(settings.get("gemini_model", "gemini-1.5-flash"))
+                    if settings.get("gemini_model") in gemini_models
+                    else 0,
+                )
+                set_default_gemini = st.checkbox(
+                    "Usar Gemini como provedor padrão", value=settings.get("llm_provider") == "gemini"
+                )
+                apply_gemini = st.form_submit_button("Salvar configuração Gemini")
+
+            if apply_gemini:
+                _apply_connection_settings(
+                    {
+                        "gemini_api_key": gemini_key.strip(),
+                        "gemini_model": gemini_model,
+                        "llm_provider": "gemini" if set_default_gemini else settings.get("llm_provider", "openai"),
+                        "llm_model": gemini_model if set_default_gemini else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração Gemini salva.")
+
+        with deepseek_tab:
+            with st.form("deepseek_settings_form"):
+                deepseek_key = st.text_input(
+                    "DEEPSEEK_API_KEY",
+                    value=settings.get("deepseek_api_key", ""),
+                    type="password",
+                    help="Chave da API DeepSeek (compatível com OpenAI).",
+                )
+                deepseek_url = st.text_input(
+                    "DEEPSEEK_API_URL",
+                    value=settings.get("deepseek_api_url", "https://api.deepseek.com"),
+                    help="Endpoint compatível com OpenAI para DeepSeek.",
+                )
+                deepseek_model = st.selectbox(
+                    "Modelo DeepSeek",
+                    options=deepseek_models,
+                    index=deepseek_models.index(settings.get("deepseek_model", "deepseek-chat"))
+                    if settings.get("deepseek_model") in deepseek_models
+                    else 0,
+                )
+                set_default_deepseek = st.checkbox(
+                    "Usar DeepSeek como provedor padrão", value=settings.get("llm_provider") == "deepseek"
+                )
+                apply_deepseek = st.form_submit_button("Salvar configuração DeepSeek")
+
+            if apply_deepseek:
+                _apply_connection_settings(
+                    {
+                        "deepseek_api_key": deepseek_key.strip(),
+                        "deepseek_api_url": deepseek_url.strip(),
+                        "deepseek_model": deepseek_model,
+                        "llm_provider": "deepseek"
+                        if set_default_deepseek
+                        else settings.get("llm_provider", "openai"),
+                        "llm_model": deepseek_model if set_default_deepseek else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração DeepSeek salva.")
+
+        with claude_tab:
+            with st.form("claude_settings_form"):
+                claude_key = st.text_input(
+                    "ANTHROPIC_API_KEY",
+                    value=settings.get("anthropic_api_key", ""),
+                    type="password",
+                    help="Chave da API Anthropic Claude.",
+                )
+                claude_model = st.selectbox(
+                    "Modelo Claude",
+                    options=claude_models,
+                    index=claude_models.index(settings.get("anthropic_model", "claude-3-5-sonnet-20240620"))
+                    if settings.get("anthropic_model") in claude_models
+                    else 0,
+                )
+                set_default_claude = st.checkbox(
+                    "Usar Claude como provedor padrão", value=settings.get("llm_provider") == "claude"
+                )
+                apply_claude = st.form_submit_button("Salvar configuração Claude")
+
+            if apply_claude:
+                _apply_connection_settings(
+                    {
+                        "anthropic_api_key": claude_key.strip(),
+                        "anthropic_model": claude_model,
+                        "llm_provider": "claude"
+                        if set_default_claude
+                        else settings.get("llm_provider", "openai"),
+                        "llm_model": claude_model if set_default_claude else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração Claude salva.")
 
     with st.expander("Conexões de catálogos corporativos"):
         st.markdown(
