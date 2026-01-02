@@ -1,0 +1,116 @@
+{
+  "customers": {
+    "criticality": "high",
+    "risk_level": "high",
+    "has_pii": true,
+    "sla_count": 4,
+    "estimated_cost_impact": "high",
+    "data_owner": "customer_data_team",
+    "retention_policy": "7_years",
+    "compliance_requirements": ["LGPD", "GDPR"]
+  },
+  "orders": {
+    "criticality": "high",
+    "risk_level": "medium",
+    "has_pii": false,
+    "sla_count": 5,
+    "estimated_cost_impact": "high",
+    "data_owner": "sales_operations",
+    "retention_policy": "5_years",
+    "compliance_requirements": ["SOX"]
+  },
+  "order_items": {
+    "criticality": "medium",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 3,
+    "estimated_cost_impact": "medium",
+    "data_owner": "sales_operations",
+    "retention_policy": "5_years"
+  },
+  "products": {
+    "criticality": "medium",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 4,
+    "estimated_cost_impact": "medium",
+    "data_owner": "product_team",
+    "retention_policy": "indefinite"
+  },
+  "suppliers": {
+    "criticality": "medium",
+    "risk_level": "medium",
+    "has_pii": true,
+    "sla_count": 2,
+    "estimated_cost_impact": "medium",
+    "data_owner": "procurement_team",
+    "retention_policy": "10_years",
+    "compliance_requirements": ["contract_retention"]
+  },
+  "inventory": {
+    "criticality": "high",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 2,
+    "estimated_cost_impact": "high",
+    "data_owner": "supply_chain_team",
+    "retention_policy": "3_years"
+  },
+  "addresses": {
+    "criticality": "medium",
+    "risk_level": "high",
+    "has_pii": true,
+    "sla_count": 2,
+    "estimated_cost_impact": "low",
+    "data_owner": "customer_data_team",
+    "retention_policy": "7_years",
+    "compliance_requirements": ["LGPD", "GDPR"]
+  },
+  "employees": {
+    "criticality": "high",
+    "risk_level": "high",
+    "has_pii": true,
+    "sla_count": 1,
+    "estimated_cost_impact": "medium",
+    "data_owner": "hr_team",
+    "retention_policy": "personnel_policy",
+    "compliance_requirements": ["LGPD", "labor_laws"]
+  },
+  "regions": {
+    "criticality": "low",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 2,
+    "estimated_cost_impact": "low",
+    "data_owner": "bi_team",
+    "retention_policy": "indefinite"
+  },
+  "categories": {
+    "criticality": "low",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 1,
+    "estimated_cost_impact": "low",
+    "data_owner": "product_team",
+    "retention_policy": "indefinite"
+  },
+  "daily_sales_summary": {
+    "criticality": "high",
+    "risk_level": "low",
+    "has_pii": false,
+    "sla_count": 3,
+    "estimated_cost_impact": "high",
+    "data_owner": "bi_team",
+    "retention_policy": "5_years"
+  },
+  "purchase_orders": {
+    "criticality": "medium",
+    "risk_level": "medium",
+    "has_pii": false,
+    "sla_count": 1,
+    "estimated_cost_impact": "medium",
+    "data_owner": "procurement_team",
+    "retention_policy": "7_years",
+    "compliance_requirements": ["SOX"]
+  }
+}

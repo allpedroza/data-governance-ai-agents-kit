@@ -1,0 +1,86 @@
+[
+  {
+    "name": "customer_360",
+    "description": "Comprehensive customer view combining transactions, behavior, and demographics",
+    "domain": "Customer Intelligence",
+    "assets": ["customers", "orders", "order_items", "products", "addresses"],
+    "critical_assets": ["customers", "orders"],
+    "consumers": 15,
+    "user_count": 45,
+    "sla_hours": 4,
+    "revenue_impact": "high",
+    "owner": "customer_analytics_team"
+  },
+  {
+    "name": "sales_analytics",
+    "description": "Sales performance metrics and trends",
+    "domain": "Sales",
+    "assets": ["orders", "order_items", "products", "daily_sales_summary"],
+    "critical_assets": ["orders", "daily_sales_summary"],
+    "consumers": 25,
+    "user_count": 120,
+    "sla_hours": 2,
+    "revenue_impact": "high",
+    "owner": "sales_operations"
+  },
+  {
+    "name": "inventory_management",
+    "description": "Real-time inventory tracking and reorder management",
+    "domain": "Operations",
+    "assets": ["inventory", "products", "suppliers", "purchase_orders"],
+    "critical_assets": ["inventory"],
+    "consumers": 8,
+    "user_count": 30,
+    "sla_hours": 1,
+    "revenue_impact": "medium",
+    "owner": "supply_chain_team"
+  },
+  {
+    "name": "supply_chain",
+    "description": "Supplier performance and procurement analytics",
+    "domain": "Procurement",
+    "assets": ["suppliers", "products", "purchase_orders", "inventory"],
+    "critical_assets": ["suppliers", "purchase_orders"],
+    "consumers": 5,
+    "user_count": 15,
+    "sla_hours": 24,
+    "revenue_impact": "medium",
+    "owner": "procurement_team"
+  },
+  {
+    "name": "marketing_campaigns",
+    "description": "Customer targeting and campaign effectiveness",
+    "domain": "Marketing",
+    "assets": ["customers", "addresses", "orders", "regions"],
+    "critical_assets": ["customers"],
+    "consumers": 10,
+    "user_count": 25,
+    "sla_hours": 12,
+    "revenue_impact": "medium",
+    "owner": "marketing_team"
+  },
+  {
+    "name": "executive_dashboard",
+    "description": "High-level business KPIs for leadership",
+    "domain": "Executive",
+    "assets": ["regions", "customers", "orders", "products", "daily_sales_summary"],
+    "critical_assets": ["orders", "daily_sales_summary", "regions"],
+    "consumers": 3,
+    "user_count": 12,
+    "sla_hours": 6,
+    "revenue_impact": "high",
+    "owner": "bi_team"
+  },
+  {
+    "name": "product_analytics",
+    "description": "Product performance and category insights",
+    "domain": "Product",
+    "assets": ["products", "categories", "order_items", "inventory"],
+    "critical_assets": ["products"],
+    "consumers": 7,
+    "user_count": 20,
+    "sla_hours": 8,
+    "revenue_impact": "medium",
+    "owner": "product_team"
+  }
+]

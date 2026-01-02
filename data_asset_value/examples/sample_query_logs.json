@@ -1,0 +1,157 @@
+[
+  {
+    "query": "SELECT c.customer_id, c.name, c.email, o.order_id, o.total_amount FROM customers c INNER JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_date >= '2024-01-01'",
+    "timestamp": "2024-12-15T10:30:00Z",
+    "user": "analyst_maria",
+    "duration_ms": 1250,
+    "rows_scanned": 150000,
+    "data_product": "customer_360"
+  },
+  {
+    "query": "SELECT p.product_id, p.name, p.category, SUM(oi.quantity) as total_sold, SUM(oi.quantity * oi.unit_price) as revenue FROM products p JOIN order_items oi ON p.product_id = oi.product_id GROUP BY p.product_id, p.name, p.category",
+    "timestamp": "2024-12-15T11:00:00Z",
+    "user": "analyst_joao",
+    "duration_ms": 3500,
+    "rows_scanned": 500000,
+    "data_product": "sales_analytics"
+  },
+  {
+    "query": "SELECT * FROM customers WHERE customer_id = 12345",
+    "timestamp": "2024-12-15T11:15:00Z",
+    "user": "support_carlos",
+    "duration_ms": 45,
+    "rows_scanned": 1
+  },
+  {
+    "query": "SELECT c.customer_id, c.name, c.segment, SUM(o.total_amount) as lifetime_value, COUNT(o.order_id) as total_orders FROM customers c LEFT JOIN orders o ON c.customer_id = o.customer_id GROUP BY c.customer_id, c.name, c.segment HAVING SUM(o.total_amount) > 10000",
+    "timestamp": "2024-12-15T12:00:00Z",
+    "user": "analyst_maria",
+    "duration_ms": 8500,
+    "rows_scanned": 750000,
+    "data_product": "customer_360"
+  },
+  {
+    "query": "SELECT s.supplier_id, s.name, s.country, COUNT(p.product_id) as products_supplied FROM suppliers s LEFT JOIN products p ON s.supplier_id = p.supplier_id GROUP BY s.supplier_id, s.name, s.country",
+    "timestamp": "2024-12-15T13:00:00Z",
+    "user": "analyst_pedro",
+    "duration_ms": 2100,
+    "rows_scanned": 25000,
+    "data_product": "supply_chain"
+  },
+  {
+    "query": "INSERT INTO daily_sales_summary (date, total_orders, total_revenue, avg_order_value) SELECT DATE(order_date), COUNT(*), SUM(total_amount), AVG(total_amount) FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '1 day' GROUP BY DATE(order_date)",
+    "timestamp": "2024-12-15T06:00:00Z",
+    "user": "etl_service",
+    "duration_ms": 12500,
+    "rows_scanned": 50000,
+    "data_product": "sales_analytics",
+    "context": "daily_etl_job"
+  },
+  {
+    "query": "SELECT c.customer_id, c.name, c.email, c.phone, a.street, a.city, a.state, a.zip_code FROM customers c INNER JOIN addresses a ON c.customer_id = a.customer_id WHERE c.segment = 'premium'",
+    "timestamp": "2024-12-15T14:30:00Z",
+    "user": "marketing_ana",
+    "duration_ms": 950,
+    "rows_scanned": 15000,
+    "data_product": "marketing_campaigns"
+  },
+  {
+    "query": "SELECT o.order_id, o.order_date, o.total_amount, o.status, c.name as customer_name, c.email, p.name as product_name, oi.quantity, oi.unit_price FROM orders o JOIN customers c ON o.customer_id = c.customer_id JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.product_id WHERE o.status = 'pending'",
+    "timestamp": "2024-12-15T15:00:00Z",
+    "user": "ops_manager",
+    "duration_ms": 5600,
+    "rows_scanned": 200000
+  },
+  {
+    "query": "SELECT product_id, name, stock_quantity, reorder_level FROM inventory WHERE stock_quantity < reorder_level",
+    "timestamp": "2024-12-15T08:00:00Z",
+    "user": "inventory_system",
+    "duration_ms": 320,
+    "rows_scanned": 5000,
+    "data_product": "inventory_management"
+  },
+  {
+    "query": "SELECT e.employee_id, e.name, e.department, e.hire_date, m.name as manager_name FROM employees e LEFT JOIN employees m ON e.manager_id = m.employee_id WHERE e.department = 'Sales'",
+    "timestamp": "2024-12-15T09:30:00Z",
+    "user": "hr_system",
+    "duration_ms": 180,
+    "rows_scanned": 500
+  },
+  {
+    "query": "SELECT c.customer_id, c.name, COUNT(DISTINCT o.order_id) as order_count, SUM(o.total_amount) as total_spent, MAX(o.order_date) as last_order FROM customers c JOIN orders o ON c.customer_id = o.customer_id JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.product_id WHERE p.category = 'Electronics' GROUP BY c.customer_id, c.name",
+    "timestamp": "2024-12-15T16:00:00Z",
+    "user": "analyst_joao",
+    "duration_ms": 15000,
+    "rows_scanned": 1200000,
+    "data_product": "customer_360"
+  },
+  {
+    "query": "SELECT r.region_id, r.name as region_name, COUNT(DISTINCT c.customer_id) as customer_count, SUM(o.total_amount) as regional_revenue FROM regions r LEFT JOIN customers c ON r.region_id = c.region_id LEFT JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_date >= '2024-01-01' GROUP BY r.region_id, r.name",
+    "timestamp": "2024-12-15T17:00:00Z",
+    "user": "exec_dashboard",
+    "duration_ms": 8900,
+    "rows_scanned": 800000,
+    "data_product": "executive_dashboard"
+  },
+  {
+    "query": "SELECT * FROM customers",
+    "timestamp": "2024-12-14T10:00:00Z",
+    "user": "analyst_maria",
+    "duration_ms": 25000,
+    "rows_scanned": 100000
+  },
+  {
+    "query": "SELECT * FROM orders WHERE order_date = CURRENT_DATE",
+    "timestamp": "2024-12-14T11:00:00Z",
+    "user": "ops_manager",
+    "duration_ms": 450,
+    "rows_scanned": 2500
+  },
+  {
+    "query": "SELECT p.product_id, p.name, p.category, i.stock_quantity, i.warehouse_id FROM products p JOIN inventory i ON p.product_id = i.product_id WHERE i.stock_quantity > 0",
+    "timestamp": "2024-12-14T12:00:00Z",
+    "user": "inventory_system",
+    "duration_ms": 1200,
+    "rows_scanned": 45000,
+    "data_product": "inventory_management"
+  },
+  {
+    "query": "SELECT customer_id, name, email, created_at FROM customers WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'",
+    "timestamp": "2024-12-14T14:00:00Z",
+    "user": "marketing_ana",
+    "duration_ms": 380,
+    "rows_scanned": 1500,
+    "data_product": "marketing_campaigns"
+  },
+  {
+    "query": "UPDATE customers SET last_activity_date = CURRENT_TIMESTAMP WHERE customer_id IN (SELECT DISTINCT customer_id FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '1 day')",
+    "timestamp": "2024-12-14T06:30:00Z",
+    "user": "etl_service",
+    "duration_ms": 4500,
+    "rows_scanned": 25000,
+    "context": "daily_update_job"
+  },
+  {
+    "query": "SELECT s.supplier_id, s.name, s.rating, COUNT(po.purchase_order_id) as total_orders, AVG(po.delivery_days) as avg_delivery_time FROM suppliers s LEFT JOIN purchase_orders po ON s.supplier_id = po.supplier_id GROUP BY s.supplier_id, s.name, s.rating HAVING COUNT(po.purchase_order_id) > 10",
+    "timestamp": "2024-12-14T15:00:00Z",
+    "user": "procurement_team",
+    "duration_ms": 3200,
+    "rows_scanned": 75000,
+    "data_product": "supply_chain"
+  },
+  {
+    "query": "SELECT order_id, order_date, customer_id, total_amount, status FROM orders WHERE status = 'shipped' AND order_date >= '2024-12-01'",
+    "timestamp": "2024-12-14T16:00:00Z",
+    "user": "logistics_system",
+    "duration_ms": 890,
+    "rows_scanned": 12000
+  },
+  {
+    "query": "SELECT c.category, COUNT(p.product_id) as product_count, AVG(p.price) as avg_price, SUM(oi.quantity) as units_sold FROM categories c LEFT JOIN products p ON c.category_id = p.category_id LEFT JOIN order_items oi ON p.product_id = oi.product_id GROUP BY c.category",
+    "timestamp": "2024-12-14T17:30:00Z",
+    "user": "analyst_pedro",
+    "duration_ms": 6700,
+    "rows_scanned": 350000,
+    "data_product": "product_analytics"
+  }
+]

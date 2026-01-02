@@ -59,6 +59,14 @@ try:
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
 
+# Data Asset Value Agent imports
+sys.path.append(str(BASE_DIR / "data_asset_value"))
+VALUE_AVAILABLE = True
+try:
+    from data_asset_value.agent import DataAssetValueAgent, AssetValueReport
+except ImportError:
+    VALUE_AVAILABLE = False
+
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -1151,9 +1159,349 @@ def render_classification_tab() -> None:
             )
 
 
+def _initialize_value_agent():
+    """Initialize the Data Asset Value Agent."""
+    if not VALUE_AVAILABLE:
+        return None
+
+    try:
+        return DataAssetValueAgent(
+            weights={
+                'usage': 0.30,
+                'joins': 0.25,
+                'lineage': 0.25,
+                'data_product': 0.20
+            },
+            time_range_days=30,
+            persist_dir=str(BASE_DIR / "data_asset_value" / ".value_data")
+        )
+    except Exception:
+        return None
+
+
+def render_value_tab() -> None:
+    """UI for the Data Asset Value Agent."""
+    st.subheader("💎 Data Asset Value Scanner")
+    st.markdown(
+        "Analise o valor dos ativos de dados baseado em uso, JOINs, linhagem e impacto em data products. "
+        "Identifique ativos críticos, hubs de dados e ativos subutilizados."
+    )
+
+    if not VALUE_AVAILABLE:
+        st.error(
+            "⚠️ Data Asset Value Agent não disponível. "
+            "Verifique se as dependências estão instaladas."
+        )
+        return
+
+    # Initialize agent in session state
+    if "value_agent" not in st.session_state:
+        with st.spinner("Inicializando agente de valor..."):
+            st.session_state.value_agent = _initialize_value_agent()
+
+    agent = st.session_state.get("value_agent")
+    if not agent:
+        st.error("Não foi possível inicializar o agente.")
+        return
+
+    # File upload
+    st.markdown("### Analisar Valor dos Ativos")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        query_logs_file = st.file_uploader(
+            "📋 Logs de Queries (JSON)",
+            type=["json"],
+            help="Arquivo JSON com logs de queries SQL executadas",
+            key="value_query_logs"
+        )
+
+    with col2:
+        data_products_file = st.file_uploader(
+            "📦 Config Data Products (JSON, opcional)",
+            type=["json"],
+            help="Configuração de data products com impacto de negócio",
+            key="value_data_products"
+        )
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+        asset_metadata_file = st.file_uploader(
+            "📊 Metadados de Ativos (JSON, opcional)",
+            type=["json"],
+            help="Metadados adicionais: criticidade, custo, risco",
+            key="value_asset_metadata"
+        )
+
+    with col4:
+        lineage_output_file = st.file_uploader(
+            "🔗 Saída do Lineage Agent (JSON, opcional)",
+            type=["json"],
+            help="Output do Data Lineage Agent para análise de impacto",
+            key="value_lineage_output"
+        )
+
+    time_range = st.slider(
+        "Período de análise (dias)",
+        min_value=7,
+        max_value=90,
+        value=30,
+        key="value_time_range"
+    )
+
+    # Load sample data button
+    use_sample = st.checkbox("Usar dados de exemplo", key="use_sample_data")
+
+    if st.button("🚀 Analisar Valor", type="primary", key="run_value_analysis"):
+        if not query_logs_file and not use_sample:
+            st.warning("Envie um arquivo de logs de queries ou use os dados de exemplo.")
+            return
+
+        with st.spinner("Analisando valor dos ativos..."):
+            try:
+                # Load query logs
+                if use_sample:
+                    sample_path = BASE_DIR / "data_asset_value" / "examples" / "sample_query_logs.json"
+                    with open(sample_path, 'r', encoding='utf-8') as f:
+                        query_logs = json.load(f)
+
+                    dp_path = BASE_DIR / "data_asset_value" / "examples" / "data_products_config.json"
+                    with open(dp_path, 'r', encoding='utf-8') as f:
+                        data_product_config = json.load(f)
+
+                    meta_path = BASE_DIR / "data_asset_value" / "examples" / "asset_metadata.json"
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        asset_metadata = json.load(f)
+
+                    lineage_data = None
+                else:
+                    query_logs = json.load(query_logs_file)
+
+                    data_product_config = None
+                    if data_products_file:
+                        data_product_config = json.load(data_products_file)
+
+                    asset_metadata = None
+                    if asset_metadata_file:
+                        asset_metadata = json.load(asset_metadata_file)
+
+                    lineage_data = None
+                    if lineage_output_file:
+                        lineage_data = json.load(lineage_output_file)
+
+                # Run analysis
+                report = agent.analyze_from_query_logs(
+                    query_logs=query_logs,
+                    lineage_data=lineage_data,
+                    data_product_config=data_product_config,
+                    asset_metadata=asset_metadata,
+                    time_range_days=time_range
+                )
+
+                st.session_state.value_report = report
+                st.success(f"✅ Análise concluída: {report.assets_analyzed} ativos analisados")
+
+            except Exception as exc:
+                st.error(f"Erro ao analisar: {exc}")
+
+    # Display results
+    if "value_report" in st.session_state:
+        report = st.session_state.value_report
+        st.divider()
+
+        # Summary metrics
+        summary = report.summary
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Ativos Analisados", summary.get("total_assets", 0))
+        with col2:
+            st.metric("Ativos Críticos", summary.get("critical_assets_count", 0))
+        with col3:
+            st.metric("Alto Valor", summary.get("high_value_assets_count", 0))
+        with col4:
+            st.metric("Score Médio", f"{summary.get('average_value_score', 0):.1f}")
+
+        # Second row of metrics
+        col5, col6, col7, col8 = st.columns(4)
+
+        with col5:
+            st.metric("Órfãos", summary.get("orphan_assets_count", 0))
+        with col6:
+            st.metric("Em Declínio", summary.get("declining_assets_count", 0))
+        with col7:
+            st.metric("JOINs", summary.get("total_join_relationships", 0))
+        with col8:
+            st.metric("Data Products", summary.get("data_products_analyzed", 0))
+
+        # Top Value Assets
+        st.markdown("### 🏆 Top 10 Ativos por Valor")
+
+        top_assets = []
+        for score in report.asset_scores[:10]:
+            category_icons = {
+                "critical": "🔴",
+                "high": "🟠",
+                "medium": "🟡",
+                "low": "🟢",
+                "unknown": "⚪"
+            }
+            icon = category_icons.get(score.value_category, "⚪")
+
+            trend_icons = {
+                "increasing": "📈",
+                "stable": "➡️",
+                "decreasing": "📉"
+            }
+            trend = trend_icons.get(score.access_trend, "➡️")
+
+            top_assets.append({
+                "Ativo": score.asset_name,
+                "Valor": f"{score.overall_value_score:.1f}",
+                "Categoria": f"{icon} {score.value_category}",
+                "Uso": f"{score.usage_score:.1f}",
+                "JOINs": f"{score.join_score:.1f}",
+                "Linhagem": f"{score.lineage_score:.1f}",
+                "Data Products": f"{score.data_product_score:.1f}",
+                "Impacto": f"{score.business_impact_score:.1f}",
+                "Tendência": trend,
+                "Queries": score.total_queries,
+                "Usuários": score.unique_users
+            })
+
+        st.dataframe(top_assets, use_container_width=True, hide_index=True)
+
+        # Tabs for different views
+        insights_tab, hub_tab, orphan_tab, recommendations_tab = st.tabs([
+            "📊 Insights",
+            "🔗 Hub Assets",
+            "⚠️ Órfãos/Declínio",
+            "💡 Recomendações"
+        ])
+
+        with insights_tab:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### Ativos Críticos")
+                if report.critical_assets:
+                    for asset in report.critical_assets[:10]:
+                        st.markdown(f"- `{asset}`")
+                else:
+                    st.info("Nenhum ativo crítico identificado")
+
+            with col2:
+                st.markdown("#### Top Value por Data Product")
+                if report.data_product_impacts:
+                    dp_assets = {}
+                    for impact in report.data_product_impacts:
+                        if impact.data_product_name not in dp_assets:
+                            dp_assets[impact.data_product_name] = []
+                        dp_assets[impact.data_product_name].append(impact.asset_name)
+
+                    for dp, assets in list(dp_assets.items())[:5]:
+                        st.markdown(f"**{dp}**: {', '.join(assets[:3])}")
+                else:
+                    st.info("Sem data products configurados")
+
+        with hub_tab:
+            st.markdown("#### Hub Assets (Alta Conectividade)")
+            st.markdown("Ativos com muitos relacionamentos de JOIN - pontos críticos de integração.")
+
+            if report.hub_assets:
+                for asset in report.hub_assets:
+                    score = agent.get_asset_value(asset, report)
+                    if score:
+                        st.markdown(
+                            f"- **{asset}**: {score.join_count} JOINs, "
+                            f"conectado a {len([j for j in report.join_relationships if j.left_asset == asset or j.right_asset == asset])} ativos"
+                        )
+            else:
+                st.info("Nenhum hub asset identificado")
+
+            # Join relationships visualization
+            if report.join_relationships:
+                st.markdown("#### Relacionamentos de JOIN Frequentes")
+                join_data = []
+                for j in sorted(report.join_relationships, key=lambda x: x.frequency, reverse=True)[:15]:
+                    join_data.append({
+                        "Esquerda": j.left_asset,
+                        "Direita": j.right_asset,
+                        "Tipo": j.join_type,
+                        "Frequência": j.frequency,
+                        "Data Products": ", ".join(j.data_products[:2]) if j.data_products else "-"
+                    })
+                st.dataframe(join_data, use_container_width=True, hide_index=True)
+
+        with orphan_tab:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### Ativos Órfãos (Sem Uso)")
+                if report.orphan_assets:
+                    st.warning(f"{len(report.orphan_assets)} ativos sem uso detectado")
+                    for asset in report.orphan_assets[:10]:
+                        st.markdown(f"- `{asset}`")
+                else:
+                    st.success("Todos os ativos têm uso registrado")
+
+            with col2:
+                st.markdown("#### Ativos em Declínio")
+                if report.declining_assets:
+                    st.warning(f"{len(report.declining_assets)} ativos com uso em queda")
+                    for asset in report.declining_assets[:10]:
+                        score = agent.get_asset_value(asset, report)
+                        if score:
+                            st.markdown(f"- `{asset}` (score: {score.overall_value_score:.1f})")
+                else:
+                    st.success("Nenhum ativo com uso em declínio")
+
+        with recommendations_tab:
+            st.markdown("#### Recomendações de Governança")
+            if report.recommendations:
+                for i, rec in enumerate(report.recommendations, 1):
+                    st.info(f"**{i}.** {rec}")
+            else:
+                st.success("Nenhuma recomendação específica no momento")
+
+            # Asset-level recommendations
+            st.markdown("#### Recomendações por Ativo")
+            assets_with_recs = [s for s in report.asset_scores if s.recommendations]
+            if assets_with_recs:
+                for score in assets_with_recs[:5]:
+                    with st.expander(f"{score.asset_name} ({score.value_category})"):
+                        for rec in score.recommendations:
+                            st.markdown(f"- {rec}")
+            else:
+                st.info("Sem recomendações específicas por ativo")
+
+        # Export
+        st.divider()
+        st.markdown("### Exportar Relatório")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.download_button(
+                "📥 JSON",
+                report.to_json(),
+                file_name="asset_value_report.json",
+                mime="application/json"
+            )
+
+        with col2:
+            st.download_button(
+                "📥 Markdown",
+                report.to_markdown(),
+                file_name="asset_value_report.md",
+                mime="text/markdown"
+            )
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Lineage", "Discovery", "Enrichment", "Classification", "Quality"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value"])
 with tab1:
     render_lineage_tab()
 with tab2:
@@ -1164,4 +1512,6 @@ with tab4:
     render_classification_tab()
 with tab5:
     render_quality_tab()
+with tab6:
+    render_value_tab()
 
