@@ -3,6 +3,7 @@
 from .data_classification_agent import (
     ColumnMetadata,
     DataClassificationAgent,
+    LLMAssessment,
     SensitiveDataRule,
     TableClassification,
     TableSchema,
@@ -11,6 +12,7 @@ from .data_classification_agent import (
 __all__ = [
     "ColumnMetadata",
     "DataClassificationAgent",
+    "LLMAssessment",
     "SensitiveDataRule",
     "TableClassification",
     "TableSchema",

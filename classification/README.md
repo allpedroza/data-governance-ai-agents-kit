@@ -14,6 +14,7 @@ O **Data Classification Agent** avalia nomes de colunas, tipos, descrições e t
 
 ## ✨ Características
 - 🔒 **Classificação sem dados brutos**: funciona apenas com schemas, descrições e tags.
+- 🧠 **Validação opcional com LLM**: peça para o modelo revisar os metadados e confirmar se a tabela é sensível.
 - 🩺 **Detecção de PII/PHI/Financeiro** com regras ponderadas por palavras-chave, tipos e tags.
 - ✅ **Compliance LGPD/GDPR**: sugere ações como DPIA, minimização e mascaramento.
 - 🧩 **Extensível**: adicione regras customizadas sem alterar o núcleo do agente.
@@ -48,6 +49,22 @@ print(result.sensitivity_level)          # HIGH
 print(result.detected_categories)        # ['PII']
 for column in result.columns:
     print(column.column.name, column.categories, column.suggested_controls)
+```
+
+### 🔍 Validação com LLM
+Se quiser uma confirmação baseada em modelo generativo (usando apenas metadados), inicialize o agente com um `LLMProvider` (por exemplo, `OpenAILLM`) e chame `classify_table_with_llm`:
+
+```python
+from classification import DataClassificationAgent
+from rag_discovery.providers.llm import OpenAILLM
+
+llm = OpenAILLM(model="gpt-4o-mini")
+agent = DataClassificationAgent(llm_provider=llm)
+classification = agent.classify_table_with_llm(table)
+
+print(classification.llm_assessment.is_sensitive)  # True / False
+print(classification.detected_categories)          # Regras + categorias sugeridas pelo LLM
+print(classification.rationale)                    # Inclui explicação do LLM
 ```
 
 ## 🧱 Arquitetura Lógica

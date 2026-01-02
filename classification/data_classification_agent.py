@@ -3,12 +3,16 @@
 The DataClassificationAgent evaluates table and column metadata to flag
 PII (Personally Identifiable Information), PHI (Protected Health Information)
 and financial data, providing LGPD/GDPR-oriented recommendations without
-accessing raw data.
+accessing raw data. An optional LLM step can review the same metadata to
+validate the sensitivity decision when the user provides an :class:`LLMProvider`.
 """
 
+import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-import re
+
+from rag_discovery.providers.base import LLMProvider
 
 
 @dataclass
@@ -111,6 +115,20 @@ class TableClassification:
     compliance_flags: Dict[str, Any]
     recommended_actions: List[str]
     rationale: str
+    llm_assessment: Optional["LLMAssessment"] = None
+
+
+@dataclass
+class LLMAssessment:
+    """Result of an LLM review using only metadata/schema context."""
+
+    is_sensitive: bool
+    categories: List[str]
+    confidence: float
+    explanation: str
+    raw_response: str
+    prompt: str
+    model: str
 
 
 class DataClassificationAgent:
@@ -198,6 +216,7 @@ class DataClassificationAgent:
         rules: Optional[Sequence[SensitiveDataRule]] = None,
         lgpd_requirements: Optional[Sequence[str]] = None,
         gdpr_requirements: Optional[Sequence[str]] = None,
+        llm_provider: Optional[LLMProvider] = None,
     ) -> None:
         self.rules = rules or list(self.DEFAULT_RULES)
         self.lgpd_requirements = lgpd_requirements or [
@@ -212,6 +231,7 @@ class DataClassificationAgent:
             "Retenção limitada e auditoria",
             "Pseudonimização para processamento analítico"
         ]
+        self.llm_provider = llm_provider
 
     @staticmethod
     def _normalize_text(text: str) -> str:
@@ -255,6 +275,37 @@ class DataClassificationAgent:
             rationale="; ".join(table_reasons) if table_reasons else "Metadados analisados sem achados críticos.",
         )
 
+    def classify_table_with_llm(self, table: TableSchema) -> TableClassification:
+        """Classify a table and optionally validate sensitivity with an LLM.
+
+        The method first runs the heuristic classification and, when a configured
+        LLM provider is available, asks the model to decide if the table contains
+        PII ou dados sensíveis com base apenas em metadados/schema. The final
+        sensitivity level merges both signals.
+        """
+
+        classification = self.classify_table(table)
+        if not self.llm_provider:
+            return classification
+
+        assessment = self._run_llm_assessment(table, classification)
+        classification.llm_assessment = assessment
+
+        merged_categories = sorted(
+            set(classification.detected_categories + assessment.categories)
+        )
+        classification.detected_categories = merged_categories
+        classification.sensitivity_level = self._derive_sensitivity_level(merged_categories)
+        classification.compliance_flags["llm_sensitive"] = assessment.is_sensitive
+        classification.recommended_actions = self._recommended_actions(
+            classification.sensitivity_level
+        )
+        rationale_parts = [classification.rationale]
+        if assessment.explanation:
+            rationale_parts.append(f"LLM: {assessment.explanation}")
+        classification.rationale = " | ".join(rationale_parts)
+        return classification
+
     def classify_catalog(self, tables: Iterable[TableSchema]) -> List[TableClassification]:
         """Run classification across multiple tables."""
         return [self.classify_table(table) for table in tables]
@@ -281,6 +332,30 @@ class DataClassificationAgent:
         if "FINANCIAL" in categories:
             return "HIGH"
         return "MEDIUM"
+
+    def _format_table_metadata(self, table: TableSchema, categories: Sequence[str]) -> str:
+        """Serialize table metadata into a prompt-friendly text block."""
+
+        lines = [f"Tabela: {table.full_name()}"]
+        if table.description:
+            lines.append(f"Descrição: {table.description}")
+        if table.tags:
+            lines.append(f"Tags: {', '.join(table.tags)}")
+        if categories:
+            lines.append(f"Categorias heurísticas: {', '.join(categories)}")
+
+        lines.append("Colunas:")
+        for column in table.columns:
+            details = [f"nome={column.name}"]
+            if column.type:
+                details.append(f"tipo={column.type}")
+            if column.description:
+                details.append(f"descrição={column.description}")
+            if column.tags:
+                details.append(f"tags={', '.join(column.tags)}")
+            lines.append("- " + "; ".join(details))
+
+        return "\n".join(lines)
 
     def _table_level_reasons(self, table: TableSchema, categories: Sequence[str]) -> List[str]:
         reasons: List[str] = []
@@ -338,3 +413,73 @@ class DataClassificationAgent:
             *self.lgpd_requirements,
             *self.gdpr_requirements,
         ]
+
+    def _run_llm_assessment(
+        self, table: TableSchema, classification: TableClassification
+    ) -> "LLMAssessment":
+        """Ask the configured LLM to validate if the table is sensível/PII."""
+
+        if not self.llm_provider:
+            raise ValueError("Nenhum LLM provider configurado para avaliação.")
+
+        prompt = self._build_llm_prompt(table, classification)
+        system_prompt = (
+            "Você é um assistente de governança de dados. Analise apenas metadados "
+            "(nomes, descrições, tipos e tags) e responda se a tabela envolve PII "
+            "ou dados sensíveis conforme LGPD/GDPR. Não invente colunas ou dados."
+        )
+
+        response = self.llm_provider.generate(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.0,
+            max_tokens=320,
+        )
+
+        return self._parse_llm_response(prompt, response)
+
+    def _build_llm_prompt(
+        self, table: TableSchema, classification: TableClassification
+    ) -> str:
+        metadata_block = self._format_table_metadata(
+            table, classification.detected_categories
+        )
+
+        return (
+            "Avalie se a tabela abaixo contém PII ou dados sensíveis a partir "
+            "dos metadados (sem ver dados brutos). Responda apenas em JSON com "
+            "as chaves: sensitive_table (true/false), main_categories (lista "
+            "como ['PII','PHI','FINANCIAL'] quando aplicável), confidence (0-1) "
+            "e explanation (frase curta).\n\n"
+            f"Metadados:\n{metadata_block}"
+        )
+
+    def _parse_llm_response(self, prompt: str, response: Any) -> "LLMAssessment":
+        content = response.content if hasattr(response, "content") else str(response)
+        parsed: Dict[str, Any]
+        try:
+            json_start = content.find("{")
+            json_end = content.rfind("}")
+            parsed = json.loads(content[json_start : json_end + 1])
+        except Exception:
+            parsed = {}
+
+        is_sensitive = bool(parsed.get("sensitive_table"))
+        raw_categories = parsed.get("main_categories") or []
+        categories = [str(cat).upper() for cat in raw_categories if str(cat).strip()]
+        confidence = (
+            float(parsed.get("confidence"))
+            if parsed.get("confidence") is not None
+            else 0.5
+        )
+        explanation = str(parsed.get("explanation") or content).strip()
+
+        return LLMAssessment(
+            is_sensitive=is_sensitive,
+            categories=categories,
+            confidence=max(0.0, min(confidence, 1.0)),
+            explanation=explanation,
+            raw_response=content,
+            prompt=prompt,
+            model=getattr(response, "model", "unknown"),
+        )
