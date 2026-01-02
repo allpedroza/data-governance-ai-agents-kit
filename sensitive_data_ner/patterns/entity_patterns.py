@@ -25,6 +25,7 @@ class EntityCategory(Enum):
     PCI = "pci"
     FINANCIAL = "financial"
     BUSINESS = "business"
+    CREDENTIALS = "credentials"
 
 
 @dataclass
@@ -483,6 +484,353 @@ FINANCIAL_PATTERNS: Dict[str, EntityPatternConfig] = {
 
 
 # =============================================================================
+# CREDENTIALS PATTERNS - API Keys, Tokens, Secrets, Passwords
+# =============================================================================
+
+CREDENTIALS_PATTERNS: Dict[str, EntityPatternConfig] = {
+    # OpenAI API Keys
+    "openai_api_key": EntityPatternConfig(
+        name="openai_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bsk-[a-zA-Z0-9]{20,}T3BlbkFJ[a-zA-Z0-9]{20,}\b",
+        description="OpenAI API Key",
+        priority=3
+    ),
+    "openai_api_key_v2": EntityPatternConfig(
+        name="openai_api_key_v2",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bsk-proj-[a-zA-Z0-9_-]{80,}\b",
+        description="OpenAI Project API Key",
+        priority=3
+    ),
+
+    # Anthropic API Keys
+    "anthropic_api_key": EntityPatternConfig(
+        name="anthropic_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bsk-ant-api[a-zA-Z0-9_-]{80,}\b",
+        description="Anthropic API Key",
+        priority=3
+    ),
+
+    # AWS Credentials
+    "aws_access_key": EntityPatternConfig(
+        name="aws_access_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b",
+        description="AWS Access Key ID",
+        priority=3
+    ),
+    "aws_secret_key": EntityPatternConfig(
+        name="aws_secret_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[A-Za-z0-9/+=]{40}\b",
+        description="AWS Secret Access Key",
+        context_boost=0.4
+    ),
+
+    # Azure Credentials
+    "azure_storage_key": EntityPatternConfig(
+        name="azure_storage_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[A-Za-z0-9+/]{86}==\b",
+        description="Azure Storage Account Key",
+        priority=3
+    ),
+    "azure_connection_string": EntityPatternConfig(
+        name="azure_connection_string",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"DefaultEndpointsProtocol=https?;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]+;?",
+        description="Azure Storage Connection String",
+        priority=3
+    ),
+    "azure_sas_token": EntityPatternConfig(
+        name="azure_sas_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[?&]sig=[A-Za-z0-9%]+(&[a-z]+=[\w%-]+)+\b",
+        description="Azure SAS Token",
+        priority=2
+    ),
+
+    # Google Cloud
+    "gcp_api_key": EntityPatternConfig(
+        name="gcp_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bAIza[0-9A-Za-z_-]{35}\b",
+        description="Google Cloud API Key",
+        priority=3
+    ),
+    "gcp_service_account": EntityPatternConfig(
+        name="gcp_service_account",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r'"type"\s*:\s*"service_account".*"private_key"\s*:\s*"-----BEGIN',
+        description="GCP Service Account JSON",
+        priority=3
+    ),
+
+    # GitHub Tokens
+    "github_token_classic": EntityPatternConfig(
+        name="github_token_classic",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bghp_[a-zA-Z0-9]{36}\b",
+        description="GitHub Personal Access Token (Classic)",
+        priority=3
+    ),
+    "github_token_fine": EntityPatternConfig(
+        name="github_token_fine",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bgithub_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}\b",
+        description="GitHub Fine-Grained Token",
+        priority=3
+    ),
+    "github_oauth": EntityPatternConfig(
+        name="github_oauth",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bgho_[a-zA-Z0-9]{36}\b",
+        description="GitHub OAuth Access Token",
+        priority=3
+    ),
+    "github_app_token": EntityPatternConfig(
+        name="github_app_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:ghu|ghs)_[a-zA-Z0-9]{36}\b",
+        description="GitHub App Token",
+        priority=3
+    ),
+
+    # GitLab Tokens
+    "gitlab_token": EntityPatternConfig(
+        name="gitlab_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bglpat-[a-zA-Z0-9_-]{20,}\b",
+        description="GitLab Personal Access Token",
+        priority=3
+    ),
+
+    # Stripe
+    "stripe_secret_key": EntityPatternConfig(
+        name="stripe_secret_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bsk_(?:live|test)_[a-zA-Z0-9]{24,}\b",
+        description="Stripe Secret Key",
+        priority=3
+    ),
+    "stripe_publishable_key": EntityPatternConfig(
+        name="stripe_publishable_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bpk_(?:live|test)_[a-zA-Z0-9]{24,}\b",
+        description="Stripe Publishable Key",
+        priority=2
+    ),
+
+    # Slack
+    "slack_token": EntityPatternConfig(
+        name="slack_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bxox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*\b",
+        description="Slack Token",
+        priority=3
+    ),
+    "slack_webhook": EntityPatternConfig(
+        name="slack_webhook",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[a-zA-Z0-9]+",
+        description="Slack Webhook URL",
+        priority=3
+    ),
+
+    # Twilio
+    "twilio_api_key": EntityPatternConfig(
+        name="twilio_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bSK[a-f0-9]{32}\b",
+        description="Twilio API Key",
+        priority=3
+    ),
+
+    # SendGrid
+    "sendgrid_api_key": EntityPatternConfig(
+        name="sendgrid_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bSG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}\b",
+        description="SendGrid API Key",
+        priority=3
+    ),
+
+    # Mailchimp
+    "mailchimp_api_key": EntityPatternConfig(
+        name="mailchimp_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[a-f0-9]{32}-us\d{1,2}\b",
+        description="Mailchimp API Key",
+        priority=3
+    ),
+
+    # NPM Token
+    "npm_token": EntityPatternConfig(
+        name="npm_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bnpm_[a-zA-Z0-9]{36}\b",
+        description="NPM Access Token",
+        priority=3
+    ),
+
+    # PyPI Token
+    "pypi_token": EntityPatternConfig(
+        name="pypi_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bpypi-AgEIcHlwaS5vcmc[a-zA-Z0-9_-]{50,}\b",
+        description="PyPI API Token",
+        priority=3
+    ),
+
+    # Docker Hub Token
+    "docker_hub_token": EntityPatternConfig(
+        name="docker_hub_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bdckr_pat_[a-zA-Z0-9_-]{27}\b",
+        description="Docker Hub Personal Access Token",
+        priority=3
+    ),
+
+    # Hugging Face Token
+    "huggingface_token": EntityPatternConfig(
+        name="huggingface_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bhf_[a-zA-Z0-9]{34}\b",
+        description="Hugging Face API Token",
+        priority=3
+    ),
+
+    # Generic API Keys (context-dependent)
+    "generic_api_key": EntityPatternConfig(
+        name="generic_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:api[_-]?key|apikey|api[_-]?token|access[_-]?token|auth[_-]?token|secret[_-]?key|private[_-]?key)[\s:=]+['\"]?[a-zA-Z0-9_-]{20,}['\"]?\b",
+        description="Generic API Key",
+        priority=2,
+        context_boost=0.3
+    ),
+
+    # JWT Tokens
+    "jwt_token": EntityPatternConfig(
+        name="jwt_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\beyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b",
+        description="JWT Token",
+        priority=3
+    ),
+
+    # Bearer Tokens
+    "bearer_token": EntityPatternConfig(
+        name="bearer_token",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[Bb]earer\s+[a-zA-Z0-9_-]{20,}\b",
+        description="Bearer Token",
+        priority=2
+    ),
+
+    # Basic Auth (base64)
+    "basic_auth": EntityPatternConfig(
+        name="basic_auth",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[Bb]asic\s+[A-Za-z0-9+/=]{20,}\b",
+        description="Basic Auth Credentials",
+        priority=2
+    ),
+
+    # Private Keys
+    "private_key_rsa": EntityPatternConfig(
+        name="private_key_rsa",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+        description="Private Key (RSA/EC/DSA)",
+        priority=3
+    ),
+    "private_key_pgp": EntityPatternConfig(
+        name="private_key_pgp",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        description="PGP Private Key",
+        priority=3
+    ),
+
+    # Database Connection Strings
+    "database_url": EntityPatternConfig(
+        name="database_url",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|mssql)://[^\s]+:[^\s]+@[^\s]+\b",
+        description="Database Connection URL with Credentials",
+        priority=3
+    ),
+
+    # Password Patterns (in config files)
+    "password_config": EntityPatternConfig(
+        name="password_config",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:password|passwd|pwd|secret|senha)[\s:=]+['\"]?[^\s'\"]{8,}['\"]?\b",
+        description="Password in Configuration",
+        priority=2,
+        context_boost=0.3
+    ),
+
+    # Encryption Keys (hex)
+    "encryption_key_hex": EntityPatternConfig(
+        name="encryption_key_hex",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b(?:encryption[_-]?key|aes[_-]?key|secret[_-]?key)[\s:=]+['\"]?[a-fA-F0-9]{32,64}['\"]?\b",
+        description="Encryption Key (Hex)",
+        priority=3
+    ),
+
+    # Webhook URLs (generic)
+    "webhook_url": EntityPatternConfig(
+        name="webhook_url",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"https?://[^\s]+/webhook[s]?/[a-zA-Z0-9_/-]+",
+        description="Webhook URL",
+        priority=2
+    ),
+
+    # Datadog API Key
+    "datadog_api_key": EntityPatternConfig(
+        name="datadog_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[a-f0-9]{32}\b",
+        description="Datadog API Key",
+        context_boost=0.4
+    ),
+
+    # Heroku API Key
+    "heroku_api_key": EntityPatternConfig(
+        name="heroku_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b",
+        description="Heroku API Key (UUID format)",
+        context_boost=0.3
+    ),
+
+    # Firebase
+    "firebase_api_key": EntityPatternConfig(
+        name="firebase_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\bAIza[0-9A-Za-z_-]{35}\b",
+        description="Firebase API Key",
+        priority=3
+    ),
+
+    # Algolia
+    "algolia_api_key": EntityPatternConfig(
+        name="algolia_api_key",
+        category=EntityCategory.CREDENTIALS,
+        pattern=r"\b[a-f0-9]{32}\b",
+        description="Algolia API Key",
+        context_boost=0.4
+    ),
+}
+
+
+# =============================================================================
 # CONTEXT KEYWORDS - For Predictive Detection
 # =============================================================================
 
@@ -574,6 +922,26 @@ CONTEXT_KEYWORDS: Dict[EntityCategory, Dict[str, Set[str]]] = {
             "meta", "goal", "objetivo", "objective", "plano", "plan",
             "orçamento", "budget", "resultado", "result"
         }
+    },
+    EntityCategory.CREDENTIALS: {
+        "high_confidence": {
+            "api_key", "api key", "apikey", "secret", "token",
+            "password", "senha", "credential", "credencial",
+            "private key", "chave privada", "access key", "secret key",
+            "auth token", "bearer", "jwt", "oauth",
+            "aws_access", "aws_secret", "openai", "anthropic",
+            "github_token", "gitlab", "stripe", "twilio"
+        },
+        "medium_confidence": {
+            "authorization", "autenticação", "authentication",
+            "connection string", "database url", "redis url",
+            "mongodb", "postgres", "mysql", "webhook",
+            "slack", "discord", "sendgrid", "mailchimp"
+        },
+        "low_confidence": {
+            "config", "configuração", "environment", "env",
+            "settings", ".env", "secrets", "vault"
+        }
     }
 }
 
@@ -585,4 +953,5 @@ def get_all_patterns() -> Dict[str, EntityPatternConfig]:
     all_patterns.update(PHI_PATTERNS)
     all_patterns.update(PCI_PATTERNS)
     all_patterns.update(FINANCIAL_PATTERNS)
+    all_patterns.update(CREDENTIALS_PATTERNS)
     return all_patterns
