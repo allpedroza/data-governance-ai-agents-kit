@@ -11,7 +11,7 @@ Este projeto fornece **5 agentes de IA especializados** que trabalham de forma i
 | **Data Lineage Agent** | Mapear dependências e analisar impacto de mudanças |
 | **Data Discovery RAG Agent** | Descoberta semântica de dados com busca em linguagem natural |
 | **Metadata Enrichment Agent** | Geração automática de descrições, tags e classificações |
-| **Data Classification Agent** | Classificação de PII/PHI/Financeiro/ sensíveis à estratégia dos negócios a partir de metadados |
+| **Data Classification Agent** | Classificação de PII/PHI/Financeiro/ e termos sensíveis à estratégia dos negócios a partir de metadados |
 | **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
 
 ## Início Rápido
@@ -147,13 +147,14 @@ print(f"Colunas PII: {result.pii_columns}")
 
 ### 4. Data Classification Agent
 
-Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI e dados financeiros.
+Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI, dados financeiros e termos estratégicos proprietários.
 
 **Características**:
 - Detecção de PII (CPF, CNPJ, SSN, email, telefone, IP, etc.)
 - Detecção de PHI (CID-10, CNS, CRM, prontuário médico)
 - Detecção de PCI (cartão de crédito, CVV, IBAN, SWIFT)
 - Detecção de dados financeiros (contas, transações, valores)
+- Detecção de termos estratégicos proprietários via **dicionário customizável** (nomes de projetos, iniciativas, roadmaps)
 - Níveis de sensibilidade: public, internal, confidential, restricted
 - Flags de compliance: LGPD, GDPR, HIPAA, PCI-DSS, SOX
 - Suporte a CSV, Parquet, SQL, Delta Lake
@@ -172,6 +173,7 @@ report = agent.classify_from_csv("customers.csv")
 print(f"Sensibilidade: {report.overall_sensitivity}")
 print(f"PII: {report.pii_columns}")
 print(f"PHI: {report.phi_columns}")
+print(f"Proprietário: {report.proprietary_columns}")
 print(f"Compliance: {report.compliance_flags}")
 ```
 

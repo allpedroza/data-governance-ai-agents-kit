@@ -1,6 +1,6 @@
 # Data Classification Agent
 
-Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI e dados financeiros.
+Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI, dados financeiros e termos estratégicos do negócio via dicionário proprietário.
 
 ## Características
 
@@ -25,6 +25,10 @@ Sistema de IA para **classificação automática de dados** por níveis de sensi
   - Contas bancárias, agências
   - Valores, transações
   - Boletos, PIX
+- **Termos estratégicos do negócio**
+  - Dicionário customizável com nomes de projetos e iniciativas
+  - Classificação como dado proprietário/confidencial
+  - Indicadores de cobertura em relatórios (colunas e contagens)
 
 - **Compliance automático**
   - LGPD / GDPR
@@ -51,7 +55,31 @@ report = agent.classify_from_csv("customers.csv")
 print(f"Sensibilidade: {report.overall_sensitivity}")
 print(f"Colunas PII: {report.pii_columns}")
 print(f"Colunas PHI: {report.phi_columns}")
+print(f"Termos estratégicos: {report.proprietary_columns}")
 print(f"Compliance: {report.compliance_flags}")
+```
+
+## Dicionário de termos estratégicos
+
+Use o dicionário embutido para proteger informações sensíveis à estratégia do negócio (roadmaps, iniciativas e nomes de projetos). O agente usa esses termos tanto em metadados quanto em amostras de valores para classificar colunas como **proprietary/confidential**.
+
+```python
+from data_classification import DataClassificationAgent
+
+agent = DataClassificationAgent()
+
+# Popular o vocabulário proprietário
+agent.add_business_terms([
+    "Projeto Arara Azul",
+    "Mercado LATAM",
+    "Aquisição Orion",
+])
+
+# Classificar com termos estratégicos
+report = agent.classify_from_csv("roadmap.csv")
+
+print(report.proprietary_columns)           # Colunas que contém termos estratégicos
+print(report.metrics["proprietary_count"]) # Quantidade de colunas proprietárias
 ```
 
 ## Níveis de Sensibilidade
@@ -107,6 +135,21 @@ agent.add_custom_pattern(
 
 # Classificar com o novo padrão
 report = agent.classify_from_csv("protocolos.csv")
+```
+
+### Adicionar termos estratégicos de negócio
+
+```python
+# Popular o dicionário de termos críticos da estratégia
+agent.add_business_terms([
+    "Projeto Arara Azul",
+    "Mercado LATAM",
+    "Aquisição Orion"
+])
+
+# Classificar usando o vocabulário proprietário
+report = agent.classify_from_csv("roadmap.csv")
+print(report.proprietary_columns)
 ```
 
 ### Exportar relatório
