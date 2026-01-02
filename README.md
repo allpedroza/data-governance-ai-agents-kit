@@ -8,6 +8,7 @@ Este projeto fornece **agentes de IA especializados** para resolver desafios com
 
 1. **🔗 Data Lineage Agent**: Análise automática de linhagem de dados
 2. **🔍 Data Discovery RAG Agent**: Descoberta de dados usando RAG com banco vetorizado
+3. **🛡️ Data Classification Agent**: Classificação de PII/PHI/Financeiro a partir de metadados
 
 ## 🚀 Agentes Disponíveis
 
@@ -138,6 +139,45 @@ response = rag_agent.ask(
 - 📊 Análise de impacto enriquecida com IA
 - 🔍 Busca semântica considerando dependências
 - 📝 Documentação automática de pipelines completos
+
+---
+
+### 3. Data Classification Agent
+
+Agente para **classificar automaticamente dados sensíveis (PII, PHI e financeiros)** usando apenas schemas e metadados, garantindo alinhamento com **LGPD/GDPR** sem acessar os dados brutos.
+
+**Características**:
+- ✅ Identificação de PII/PHI/Financeiro via nomes, tipos, descrições e tags
+- ✅ Níveis de severidade (LOW, MEDIUM, HIGH, CRITICAL)
+- ✅ Recomendações de compliance (DPIA, minimização, mascaramento/tokenização)
+- ✅ Extensível com regras customizadas (`SensitiveDataRule`)
+
+**Documentação**: [classification/README.md](classification/README.md)
+
+**Exemplo Rápido**:
+```python
+from classification import (
+    ColumnMetadata,
+    DataClassificationAgent,
+    TableSchema,
+)
+
+table = TableSchema(
+    name="payments",
+    schema="finance",
+    description="Transações com cartão e CPF do pagador",
+    columns=[
+        ColumnMetadata(name="payment_id", type="bigint"),
+        ColumnMetadata(name="cpf", type="varchar", tags=["pii"]),
+        ColumnMetadata(name="credit_card_number", type="varchar"),
+    ],
+)
+
+agent = DataClassificationAgent()
+classification = agent.classify_table(table)
+print(classification.sensitivity_level)  # HIGH
+print(classification.detected_categories)  # ['FINANCIAL', 'PII']
+```
 
 ---
 
