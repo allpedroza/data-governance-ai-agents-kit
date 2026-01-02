@@ -1,12 +1,13 @@
 """
-Example demonstrating integration of all four Data Governance AI Agents.
+Example demonstrating integration of all five Data Governance AI Agents.
 
 This example shows how to use all agents together for a complete
 data governance workflow:
 1. Lineage Agent - Analyze pipeline code and map data flow
 2. Discovery Agent - Catalog and search data assets
 3. Enrichment Agent - Generate metadata descriptions and classifications
-4. Quality Agent - Monitor data quality metrics
+4. Classification Agent - Classify data by sensitivity (PII/PHI/PCI)
+5. Quality Agent - Monitor data quality metrics
 
 Usage:
     python examples/integration_example.py
@@ -29,6 +30,7 @@ sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / "lineage"))
 sys.path.insert(0, str(BASE_DIR / "rag_discovery"))
 sys.path.insert(0, str(BASE_DIR / "metadata_enrichment"))
+sys.path.insert(0, str(BASE_DIR / "data_classification"))
 sys.path.insert(0, str(BASE_DIR / "data_quality"))
 
 # Import agents
@@ -45,6 +47,13 @@ try:
 except ImportError:
     ENRICHMENT_AVAILABLE = False
     print("Note: Metadata Enrichment Agent not available. Install dependencies.")
+
+try:
+    from data_classification.agent import DataClassificationAgent, ClassificationReport
+    CLASSIFICATION_AVAILABLE = True
+except ImportError:
+    CLASSIFICATION_AVAILABLE = False
+    print("Note: Data Classification Agent not available. Install dependencies.")
 
 try:
     from data_quality.agent import DataQualityAgent, QualityReport
@@ -247,10 +256,51 @@ def demo_enrichment_agent(data_path: str):
         return None
 
 
+def demo_classification_agent(data_path: str):
+    """Demonstrate the Data Classification Agent."""
+    print("\n" + "="*60)
+    print("4. DATA CLASSIFICATION AGENT")
+    print("="*60)
+
+    if not CLASSIFICATION_AVAILABLE:
+        print("Skipped: Classification Agent not available")
+        return None
+
+    try:
+        agent = DataClassificationAgent()
+
+        print(f"\nAnalyzing: {data_path}")
+        report = agent.classify_from_csv(data_path, sample_size=1000)
+
+        print(f"\nOverall Sensitivity: {report.overall_sensitivity.upper()}")
+        print(f"Columns analyzed: {report.columns_analyzed}")
+        print(f"High-risk columns: {report.high_risk_count}")
+
+        if report.pii_columns:
+            print(f"\nPII Detected: {report.pii_columns}")
+        if report.phi_columns:
+            print(f"PHI Detected: {report.phi_columns}")
+        if report.pci_columns:
+            print(f"PCI Detected: {report.pci_columns}")
+        if report.financial_columns:
+            print(f"Financial: {report.financial_columns}")
+
+        if report.compliance_flags:
+            print(f"\nCompliance Flags:")
+            for flag in report.compliance_flags:
+                print(f"  - {flag}")
+
+        return report
+
+    except Exception as e:
+        print(f"Classification agent error: {e}")
+        return None
+
+
 def demo_quality_agent(data_path: str):
     """Demonstrate the Data Quality Agent."""
     print("\n" + "="*60)
-    print("4. DATA QUALITY AGENT")
+    print("5. DATA QUALITY AGENT")
     print("="*60)
 
     if not QUALITY_AVAILABLE:
@@ -305,12 +355,12 @@ def demo_quality_agent(data_path: str):
 def demo_integrated_workflow():
     """
     Demonstrate complete integrated workflow:
-    Lineage -> Discovery -> Enrichment -> Quality
+    Lineage -> Discovery -> Enrichment -> Classification -> Quality
     """
     print("\n" + "="*60)
     print("INTEGRATED DATA GOVERNANCE WORKFLOW")
     print("="*60)
-    print("This demo shows all 4 agents working together.\n")
+    print("This demo shows all 5 agents working together.\n")
 
     # Create sample data
     data_path = create_sample_data()
@@ -326,7 +376,10 @@ def demo_integrated_workflow():
         # Step 3: Enrich metadata (if available)
         enrichment_result = demo_enrichment_agent(data_path)
 
-        # Step 4: Evaluate quality
+        # Step 4: Classify data by sensitivity
+        classification_report = demo_classification_agent(data_path)
+
+        # Step 5: Evaluate quality
         quality_report = demo_quality_agent(data_path)
 
         # Summary
@@ -341,6 +394,12 @@ def demo_integrated_workflow():
             print(f"✓ Enrichment: {enrichment_result.classification} ({pii_status})")
         else:
             print("- Enrichment: Skipped (check OPENAI_API_KEY)")
+
+        if classification_report:
+            compliance = ", ".join(classification_report.compliance_flags[:2]) if classification_report.compliance_flags else "None"
+            print(f"✓ Classification: {classification_report.overall_sensitivity} (Compliance: {compliance})")
+        else:
+            print("- Classification: Skipped")
 
         if quality_report:
             print(f"✓ Quality: {quality_report.overall_score:.0%} ({quality_report.overall_status})")

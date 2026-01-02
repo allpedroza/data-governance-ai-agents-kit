@@ -1,4 +1,4 @@
-"""Unified Streamlit UI to orchestrate the four available agents."""
+"""Unified Streamlit UI to orchestrate the five available agents."""
 import csv
 import json
 import os
@@ -50,6 +50,14 @@ try:
     from data_quality.rules import QualityRule, AlertLevel
 except ImportError:
     QUALITY_AVAILABLE = False
+
+# Data Classification Agent imports
+sys.path.append(str(BASE_DIR / "data_classification"))
+CLASSIFICATION_AVAILABLE = True
+try:
+    from data_classification.agent import DataClassificationAgent, ClassificationReport
+except ImportError:
+    CLASSIFICATION_AVAILABLE = False
 
 
 st.set_page_config(
@@ -936,9 +944,216 @@ def render_quality_tab() -> None:
             )
 
 
+def _initialize_classification_agent():
+    """Initialize the Data Classification Agent."""
+    if not CLASSIFICATION_AVAILABLE:
+        return None
+
+    try:
+        return DataClassificationAgent()
+    except Exception:
+        return None
+
+
+def render_classification_tab() -> None:
+    """UI for the Data Classification Agent."""
+    st.subheader("🛡️ Data Classification Agent")
+    st.markdown(
+        "Classifique dados automaticamente por níveis de sensibilidade: "
+        "PII (dados pessoais), PHI (dados de saúde), PCI (dados de pagamento) e dados financeiros."
+    )
+
+    if not CLASSIFICATION_AVAILABLE:
+        st.error(
+            "⚠️ Data Classification Agent não disponível. "
+            "Verifique se as dependências estão instaladas: `pip install -r data_classification/requirements.txt`"
+        )
+        return
+
+    # Initialize agent in session state
+    if "classification_agent" not in st.session_state:
+        with st.spinner("Inicializando agente de classificação..."):
+            st.session_state.classification_agent = _initialize_classification_agent()
+
+    agent = st.session_state.get("classification_agent")
+    if not agent:
+        st.error("Não foi possível inicializar o agente.")
+        return
+
+    # File upload
+    st.markdown("### Classificar Dados")
+
+    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="classification_file_type")
+
+    uploaded_file = st.file_uploader(
+        f"Selecione o arquivo {file_type}",
+        type=["csv"] if file_type == "CSV" else ["parquet"],
+        key="classification_file"
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        sample_size = st.number_input(
+            "Tamanho da amostra",
+            min_value=100,
+            max_value=100000,
+            value=1000,
+            key="classification_sample_size"
+        )
+
+    if file_type == "CSV":
+        with col2:
+            encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "cp1252"], key="class_encoding")
+            separator = st.selectbox("Separador", [",", ";", "|"], key="class_sep")
+
+    if uploaded_file and st.button("🔍 Classificar Dados", type="primary", key="run_classification"):
+        with st.spinner("Analisando dados e detectando padrões sensíveis..."):
+            suffix = ".csv" if file_type == "CSV" else ".parquet"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(uploaded_file.read())
+                temp_path = f.name
+
+            try:
+                if file_type == "CSV":
+                    report = agent.classify_from_csv(
+                        temp_path,
+                        encoding=encoding,
+                        separator=separator,
+                        sample_size=sample_size
+                    )
+                else:
+                    report = agent.classify_from_parquet(temp_path, sample_size=sample_size)
+
+                st.session_state.classification_report = report
+                st.success("✅ Classificação concluída!")
+
+            except Exception as exc:
+                st.error(f"Erro ao classificar: {exc}")
+            finally:
+                os.unlink(temp_path)
+
+    # Display results
+    if "classification_report" in st.session_state:
+        report = st.session_state.classification_report
+        st.divider()
+
+        # Header metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            sensitivity_colors = {
+                "public": "🟢",
+                "internal": "🔵",
+                "confidential": "🟡",
+                "restricted": "🔴"
+            }
+            icon = sensitivity_colors.get(report.overall_sensitivity, "⚪")
+            st.metric("Sensibilidade", f"{icon} {report.overall_sensitivity.upper()}")
+
+        with col2:
+            st.metric("Colunas Analisadas", report.columns_analyzed)
+
+        with col3:
+            st.metric("Alto Risco", report.high_risk_count)
+
+        with col4:
+            st.metric("Linhas", f"{report.row_count:,}")
+
+        # Categories found
+        st.markdown("### Categorias Detectadas")
+
+        cat_cols = st.columns(4)
+        with cat_cols[0]:
+            if report.pii_columns:
+                st.error(f"**PII**: {len(report.pii_columns)} colunas")
+                for col in report.pii_columns[:5]:
+                    st.caption(f"  • {col}")
+            else:
+                st.success("**PII**: Não detectado")
+
+        with cat_cols[1]:
+            if report.phi_columns:
+                st.error(f"**PHI**: {len(report.phi_columns)} colunas")
+                for col in report.phi_columns[:5]:
+                    st.caption(f"  • {col}")
+            else:
+                st.success("**PHI**: Não detectado")
+
+        with cat_cols[2]:
+            if report.pci_columns:
+                st.error(f"**PCI**: {len(report.pci_columns)} colunas")
+                for col in report.pci_columns[:5]:
+                    st.caption(f"  • {col}")
+            else:
+                st.success("**PCI**: Não detectado")
+
+        with cat_cols[3]:
+            if report.financial_columns:
+                st.warning(f"**Financeiro**: {len(report.financial_columns)} colunas")
+                for col in report.financial_columns[:5]:
+                    st.caption(f"  • {col}")
+            else:
+                st.success("**Financeiro**: Não detectado")
+
+        # Column details
+        st.markdown("### Detalhes por Coluna")
+
+        columns_data = []
+        for col in report.columns:
+            sensitivity_icon = {
+                "public": "🟢",
+                "internal": "🔵",
+                "confidential": "🟡",
+                "restricted": "🔴"
+            }.get(col.sensitivity_level, "⚪")
+
+            columns_data.append({
+                "Coluna": col.name,
+                "Sensibilidade": f"{sensitivity_icon} {col.sensitivity_level}",
+                "Categorias": ", ".join(col.categories) if col.categories else "-",
+                "Tipo PII": col.pii_type or "-",
+                "Confiança": f"{col.confidence:.0%}",
+                "Padrões": ", ".join(col.detected_patterns[:2]) if col.detected_patterns else "-"
+            })
+
+        st.dataframe(columns_data, use_container_width=True, hide_index=True)
+
+        # Compliance flags
+        if report.compliance_flags:
+            st.markdown("### Conformidade Regulatória")
+            for flag in report.compliance_flags:
+                st.info(f"📋 {flag}")
+
+        # Recommendations
+        if report.recommendations:
+            st.markdown("### Recomendações")
+            for rec in report.recommendations:
+                st.warning(f"💡 {rec}")
+
+        # Export
+        st.markdown("### Exportar Relatório")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.download_button(
+                "📥 JSON",
+                report.to_json(),
+                file_name=f"{report.source_name}_classification.json",
+                mime="application/json"
+            )
+
+        with col2:
+            st.download_button(
+                "📥 Markdown",
+                report.to_markdown(),
+                file_name=f"{report.source_name}_classification.md",
+                mime="text/markdown"
+            )
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4 = st.tabs(["Lineage", "Discovery", "Enrichment", "Quality"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Lineage", "Discovery", "Enrichment", "Classification", "Quality"])
 with tab1:
     render_lineage_tab()
 with tab2:
@@ -946,5 +1161,7 @@ with tab2:
 with tab3:
     render_enrichment_tab()
 with tab4:
+    render_classification_tab()
+with tab5:
     render_quality_tab()
 

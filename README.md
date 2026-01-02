@@ -1,16 +1,17 @@
 # Data Governance AI Agents Kit
 
-**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados e monitoramento de qualidade.
+**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados e monitoramento de qualidade.
 
 ## Visão Geral
 
-Este projeto fornece **4 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
+Este projeto fornece **5 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
 
 | Agente | Propósito |
 |--------|-----------|
 | **Data Lineage Agent** | Mapear dependências e analisar impacto de mudanças |
 | **Data Discovery RAG Agent** | Descoberta semântica de dados com busca em linguagem natural |
 | **Metadata Enrichment Agent** | Geração automática de descrições, tags e classificações |
+| **Data Classification Agent** | Classificação de PII/PHI/Financeiro a partir de metadados |
 | **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
 
 ## Início Rápido
@@ -144,7 +145,39 @@ print(f"Colunas PII: {result.pii_columns}")
 
 ---
 
-### 4. Data Quality Agent
+### 4. Data Classification Agent
+
+Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI e dados financeiros.
+
+**Características**:
+- Detecção de PII (CPF, CNPJ, SSN, email, telefone, IP, etc.)
+- Detecção de PHI (CID-10, CNS, CRM, prontuário médico)
+- Detecção de PCI (cartão de crédito, CVV, IBAN, SWIFT)
+- Detecção de dados financeiros (contas, transações, valores)
+- Níveis de sensibilidade: public, internal, confidential, restricted
+- Flags de compliance: LGPD, GDPR, HIPAA, PCI-DSS, SOX
+- Suporte a CSV, Parquet, SQL, Delta Lake
+
+**Documentação**: [data_classification/README.md](data_classification/README.md)
+
+**Exemplo**:
+```python
+from data_classification import DataClassificationAgent
+
+agent = DataClassificationAgent()
+
+# Classificar dados
+report = agent.classify_from_csv("customers.csv")
+
+print(f"Sensibilidade: {report.overall_sensitivity}")
+print(f"PII: {report.pii_columns}")
+print(f"PHI: {report.phi_columns}")
+print(f"Compliance: {report.compliance_flags}")
+```
+
+---
+
+### 5. Data Quality Agent
 
 Sistema de IA para **monitoramento de qualidade de dados** com métricas multi-dimensionais, SLA e detecção de schema drift.
 
@@ -188,12 +221,13 @@ print(f"Schema Drift: {report.schema_drift}")
 
 ## Integração entre Agentes
 
-Os 4 agentes podem ser **integrados** para um framework completo de governança:
+Os 5 agentes podem ser **integrados** para um framework completo de governança:
 
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
 from rag_discovery.agent import DataDiscoveryAgent
 from metadata_enrichment.agent import MetadataEnrichmentAgent
+from data_classification import DataClassificationAgent
 from data_quality.agent import DataQualityAgent
 from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
 from rag_discovery.providers.llm import OpenAILLM
@@ -204,7 +238,14 @@ lineage_agent = DataLineageAgent()
 lineage_result = lineage_agent.analyze_pipeline(["etl/*.sql", "etl/*.py"])
 print(f"Assets mapeados: {lineage_result['metrics']['total_assets']}")
 
-# 2. QUALITY: Avaliar qualidade dos dados
+# 2. CLASSIFICATION: Classificar dados por sensibilidade
+classification_agent = DataClassificationAgent()
+classification_report = classification_agent.classify_from_csv("data/customers.csv")
+print(f"Sensibilidade: {classification_report.overall_sensitivity}")
+print(f"PII detectado: {classification_report.pii_columns}")
+print(f"Compliance: {classification_report.compliance_flags}")
+
+# 3. QUALITY: Avaliar qualidade dos dados
 quality_agent = DataQualityAgent()
 quality_report = quality_agent.evaluate_file(
     "data/customers.csv",
@@ -212,30 +253,33 @@ quality_report = quality_agent.evaluate_file(
 )
 print(f"Qualidade: {quality_report.overall_score:.0%}")
 
-# 3. ENRICHMENT: Gerar metadados automaticamente
+# 4. ENRICHMENT: Gerar metadados automaticamente
 enrichment_agent = MetadataEnrichmentAgent(
     embedding_provider=SentenceTransformerEmbeddings(),
     llm_provider=OpenAILLM(model="gpt-4o-mini"),
     vector_store=ChromaStore(collection_name="standards")
 )
 enrichment_result = enrichment_agent.enrich_from_csv("data/customers.csv")
-print(f"PII detectado: {enrichment_result.has_pii}")
+print(f"Descrição: {enrichment_result.description}")
 
-# 4. DISCOVERY: Indexar para busca semântica
+# 5. DISCOVERY: Indexar para busca semântica
 discovery_agent = DataDiscoveryAgent(
     embedding_provider=SentenceTransformerEmbeddings(),
     llm_provider=OpenAILLM(),
     vector_store=ChromaStore(collection_name="catalog")
 )
 
-# Criar metadados enriquecidos com qualidade e linhagem
+# Criar metadados enriquecidos com classificação e qualidade
 from rag_discovery.agent import TableMetadata
 table = TableMetadata(
     name=enrichment_result.table_name,
     description=enrichment_result.description,
     columns=[{"name": c.name, "type": c.original_type, "description": c.description}
              for c in enrichment_result.columns],
-    tags=enrichment_result.tags + [f"quality:{quality_report.overall_status}"]
+    tags=enrichment_result.tags + [
+        f"quality:{quality_report.overall_status}",
+        f"sensitivity:{classification_report.overall_sensitivity}"
+    ]
 )
 discovery_agent.index_metadata([table])
 
@@ -250,7 +294,8 @@ print(result.answer)
 |----------|---------|-------------|
 | **Catalogação Automática** | Enrichment → Discovery | Documentar data lake automaticamente |
 | **Análise de Impacto** | Lineage + Discovery | Avaliar mudanças antes de deploy |
-| **Compliance LGPD** | Enrichment + Lineage | Rastrear dados pessoais |
+| **Compliance LGPD/GDPR** | Classification + Lineage | Rastrear e classificar dados pessoais |
+| **Detecção de PII/PHI** | Classification | Identificar dados sensíveis automaticamente |
 | **Monitoramento Contínuo** | Quality + Discovery | Alertas de qualidade no catálogo |
 | **Onboarding** | Discovery + Lineage | Entender o data lake rapidamente |
 
@@ -258,7 +303,7 @@ print(result.answer)
 
 ## Interface Unificada (Streamlit)
 
-O projeto inclui uma interface web unificada com todos os 4 agentes:
+O projeto inclui uma interface web unificada com todos os 5 agentes:
 
 ```bash
 streamlit run app.py
@@ -268,6 +313,7 @@ streamlit run app.py
 - **Lineage**: Upload de arquivos e visualização de grafos
 - **Discovery**: Chat com o catálogo de dados
 - **Enrichment**: Geração automática de metadados
+- **Classification**: Detecção de PII/PHI/Financeiro
 - **Quality**: Avaliação de qualidade e alertas
 
 Cada agente também possui interface standalone:
@@ -275,6 +321,7 @@ Cada agente também possui interface standalone:
 streamlit run lineage/app.py          # Apenas Lineage
 streamlit run rag_discovery/app.py    # Apenas Discovery (se disponível)
 streamlit run metadata_enrichment/streamlit_app.py  # Apenas Enrichment
+streamlit run data_classification/streamlit_app.py  # Apenas Classification
 streamlit run data_quality/streamlit_app.py         # Apenas Quality
 ```
 
@@ -313,6 +360,9 @@ pip install -r rag_discovery/requirements.txt
 # Apenas Metadata Enrichment Agent
 pip install -r metadata_enrichment/requirements.txt
 
+# Apenas Data Classification Agent (sem LLM)
+pip install -r data_classification/requirements.txt
+
 # Apenas Data Quality Agent (sem LLM)
 pip install -r data_quality/requirements.txt
 ```
@@ -324,7 +374,7 @@ pip install -r data_quality/requirements.txt
 ```
 data-governance-ai-agents-kit/
 │
-├── app.py                           # Interface Streamlit unificada (4 tabs)
+├── app.py                           # Interface Streamlit unificada (5 tabs)
 ├── requirements.txt                 # Dependências globais
 ├── README.md                        # Este arquivo
 │
@@ -354,6 +404,14 @@ data-governance-ai-agents-kit/
 │   ├── sampling/                    # Conectores de sampling
 │   │   └── data_sampler.py
 │   ├── providers/                   # Reusa rag_discovery/providers
+│   ├── examples/
+│   ├── streamlit_app.py
+│   └── README.md
+│
+├── data_classification/             # Data Classification Agent
+│   ├── agent.py                     # Agente principal
+│   ├── classifiers/                 # Classificadores por categoria
+│   ├── rules/                       # Regras de classificação
 │   ├── examples/
 │   ├── streamlit_app.py
 │   └── README.md
@@ -396,14 +454,14 @@ export ATLAS_PASSWORD="admin"
 
 ## Comparação de Agentes
 
-| Característica | Lineage | Discovery | Enrichment | Quality |
-|---------------|---------|-----------|------------|---------|
-| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Monitorar qualidade |
-| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) |
-| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | Score + Alertas |
-| **LLM** | Opcional | Requerido | Requerido | Não |
-| **Embeddings** | Não | Sim | Sim | Não |
-| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | PII detection, Standards | SLA, Schema drift |
+| Característica | Lineage | Discovery | Enrichment | Classification | Quality |
+|---------------|---------|-----------|------------|----------------|---------|
+| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade |
+| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) |
+| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas |
+| **LLM** | Opcional | Requerido | Requerido | Não | Não |
+| **Embeddings** | Não | Sim | Sim | Não | Não |
+| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift |
 
 ---
 
@@ -431,20 +489,31 @@ print("Catálogo criado com metadados enriquecidos e scores de qualidade!")
 ### 2. Compliance LGPD/GDPR
 
 ```python
-# Identificar e rastrear dados pessoais
+# Identificar e rastrear dados pessoais com Classification Agent
+from data_classification import DataClassificationAgent
+
+classifier = DataClassificationAgent()
 results = []
+
 for file in data_files:
-    enriched = enrichment_agent.enrich_from_csv(file)
-    if enriched.has_pii:
-        # Rastrear linhagem dos dados PII
+    # Classificar dados por sensibilidade
+    classification = classifier.classify_from_csv(file)
+
+    if classification.pii_columns or classification.phi_columns:
+        # Rastrear linhagem dos dados sensíveis
         lineage = lineage_agent.analyze_pipeline([file])
         results.append({
             "file": file,
-            "pii_columns": enriched.pii_columns,
+            "sensitivity": classification.overall_sensitivity,
+            "pii_columns": classification.pii_columns,
+            "phi_columns": classification.phi_columns,
+            "compliance_flags": classification.compliance_flags,
             "downstream_impact": lineage["metrics"]["total_assets"]
         })
 
-print(f"Encontrados {len(results)} arquivos com dados pessoais")
+print(f"Encontrados {len(results)} arquivos com dados sensíveis")
+for r in results:
+    print(f"  {r['file']}: {r['sensitivity']} - {r['compliance_flags']}")
 ```
 
 ### 3. Monitoramento de SLA
@@ -479,8 +548,9 @@ for alert in agent.get_active_alerts():
 - [x] Data Lineage Agent com múltiplos parsers
 - [x] Data Discovery RAG Agent com busca híbrida
 - [x] Metadata Enrichment Agent com PII detection
+- [x] Data Classification Agent com LGPD/HIPAA/PCI-DSS
 - [x] Data Quality Agent com SLA monitoring
-- [x] Interface Streamlit unificada
+- [x] Interface Streamlit unificada (5 agentes)
 - [x] Integração com Apache Atlas
 - [x] Providers plugáveis (embeddings, LLM, vectorstore)
 
