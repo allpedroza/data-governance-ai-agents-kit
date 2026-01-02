@@ -1,4 +1,4 @@
-# 🤖 Data Governance AI Agents Kit
+# Data Governance AI Agents Kit
 
 **Kit completo de agentes de IA para governança de dados**, incluindo análise de linhagem e descoberta de dados com RAG.
 
