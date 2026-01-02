@@ -56,6 +56,13 @@ from .anonymizers import (
     anonymize_text,
 )
 
+# Optional vault import
+try:
+    from .vault import SecureVault, VaultConfig, VaultSession, AccessLevel
+    HAS_VAULT = True
+except ImportError:
+    HAS_VAULT = False
+
 
 class FilterAction(Enum):
     """Actions when sensitive data is detected."""
@@ -187,6 +194,8 @@ class SensitiveDataNERAgent:
         filter_policy: Optional[FilterPolicy] = None,
         strict_mode: bool = False,
         locales: Optional[List[str]] = None,
+        vault_config: Optional[Any] = None,
+        enable_vault: bool = False,
     ):
         """
         Initialize the NER agent.
@@ -197,6 +206,8 @@ class SensitiveDataNERAgent:
             filter_policy: Policy for filtering LLM requests
             strict_mode: If True, require validation when available
             locales: List of locales to enable (e.g., ["br", "us"])
+            vault_config: Configuration for secure vault (VaultConfig)
+            enable_vault: Enable vault for storing original/anonymized mappings
         """
         self.filter_policy = filter_policy or FilterPolicy()
         self.strict_mode = strict_mode
@@ -223,6 +234,22 @@ class SensitiveDataNERAgent:
             min_confidence_override=self.filter_policy.min_confidence
         )
         self._context_analyzer = ContextAnalyzer()
+
+        # Vault for secure storage
+        self._vault: Optional[Any] = None
+        self._vault_token: Optional[str] = None
+        self._enable_vault = enable_vault
+
+        if enable_vault:
+            if not HAS_VAULT:
+                raise ImportError(
+                    "Vault dependencies not available. "
+                    "Install cryptography: pip install cryptography"
+                )
+            self._vault = SecureVault(vault_config)
+            self._vault_initialized = False
+        else:
+            self._vault_initialized = False
 
     def _load_default_patterns(self) -> None:
         """Load default entity patterns filtered by locale."""
@@ -709,12 +736,304 @@ class SensitiveDataNERAgent:
             }
         }
 
+    # =========================================================================
+    # Vault Integration Methods
+    # =========================================================================
+
+    def initialize_vault(
+        self,
+        master_password: Optional[str] = None,
+        admin_username: str = "admin",
+        admin_password: str = "",
+    ) -> str:
+        """
+        Initialize the secure vault for storing original/anonymized mappings.
+
+        Args:
+            master_password: Master password for encryption key derivation.
+                           If None, uses VAULT_MASTER_KEY env var.
+            admin_username: Username for vault admin user
+            admin_password: Password for vault admin user
+
+        Returns:
+            Active encryption key ID
+        """
+        if not self._enable_vault or not self._vault:
+            raise RuntimeError(
+                "Vault not enabled. Initialize agent with enable_vault=True"
+            )
+
+        key_id = self._vault.initialize(master_password)
+
+        # Create admin user if password provided
+        if admin_password:
+            try:
+                self._vault.create_user(
+                    admin_username,
+                    admin_password,
+                    AccessLevel.SUPER_ADMIN
+                )
+            except ValueError:
+                # User already exists
+                pass
+
+            # Authenticate
+            self._vault_token = self._vault.authenticate(
+                admin_username, admin_password
+            )
+
+        self._vault_initialized = True
+        return key_id
+
+    def vault_authenticate(self, username: str, password: str) -> str:
+        """
+        Authenticate with the vault.
+
+        Args:
+            username: Vault username
+            password: Vault password
+
+        Returns:
+            Access token
+        """
+        if not self._vault:
+            raise RuntimeError("Vault not initialized")
+
+        self._vault_token = self._vault.authenticate(username, password)
+        return self._vault_token
+
+    def vault_logout(self) -> None:
+        """Logout from the vault."""
+        if self._vault and self._vault_token:
+            self._vault.logout(self._vault_token)
+            self._vault_token = None
+
+    def filter_and_store(
+        self,
+        prompt: str,
+        auto_anonymize: bool = True,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[str, NERResult, Optional[str]]:
+        """
+        Filter an LLM request and store the mapping in the vault.
+
+        This is the main entry point for secure LLM filtering with
+        the ability to later decrypt and recover the original message.
+
+        Args:
+            prompt: The prompt to send to LLM
+            auto_anonymize: Automatically anonymize if action is ANONYMIZE
+            metadata: Additional metadata to store with the session
+
+        Returns:
+            Tuple of (safe_prompt, analysis_result, session_id)
+            session_id is None if vault is not enabled or no entities found
+
+        Raises:
+            ValueError: If the request is blocked by policy
+        """
+        # First, analyze and filter
+        safe_prompt, result = self.filter_llm_request(prompt, auto_anonymize)
+
+        session_id = None
+
+        # Store in vault if enabled and entities were found
+        if (
+            self._enable_vault
+            and self._vault
+            and self._vault_token
+            and result.entities
+        ):
+            # Prepare entities for vault storage
+            entity_dicts = [
+                {
+                    "value": e.value,
+                    "anonymized": self._get_anonymized_value(e, result),
+                    "entity_type": e.entity_type,
+                    "category": e.category.value,
+                    "start": e.start,
+                    "end": e.end,
+                    "confidence": e.confidence,
+                    "pattern": e.entity_type,
+                }
+                for e in result.entities
+            ]
+
+            # Store session
+            vault_session = self._vault.store_session(
+                token=self._vault_token,
+                original_text=prompt,
+                anonymized_text=result.anonymized_text or prompt,
+                entities=entity_dicts,
+                risk_score=result.risk_score,
+                metadata=metadata or {},
+            )
+            session_id = vault_session.session_id
+
+        return safe_prompt, result, session_id
+
+    def _get_anonymized_value(
+        self,
+        entity: DetectedEntity,
+        result: NERResult
+    ) -> str:
+        """Get the anonymized value for an entity from the result."""
+        if not result.anonymized_text:
+            return entity.value
+
+        # The anonymized text has replaced values, we need to extract the label
+        # For now, return a generic label based on entity type
+        from .anonymizers import AnonymizationConfig
+        config = AnonymizationConfig()
+
+        if entity.entity_type in config.entity_labels:
+            return config.entity_labels[entity.entity_type]
+        elif entity.category.value in config.category_labels:
+            return config.category_labels[entity.category.value]
+        else:
+            return f"[{entity.category.value.upper()}]"
+
+    def decrypt_session(
+        self,
+        session_id: str
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Decrypt a stored session and recover original data.
+
+        Args:
+            session_id: Session ID from filter_and_store
+
+        Returns:
+            Tuple of (original_text, list of original entities)
+
+        Raises:
+            RuntimeError: If vault not initialized
+            PermissionError: If access denied
+            ValueError: If session not found
+        """
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.decrypt_session(self._vault_token, session_id)
+
+    def get_session_anonymized(
+        self,
+        session_id: str
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Get anonymized data for a session (without decryption).
+
+        This can be used by users with lower access levels who
+        only need to see the anonymized version.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Tuple of (anonymized_text, anonymized entities)
+        """
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.get_anonymized_session(self._vault_token, session_id)
+
+    def list_vault_sessions(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        List stored sessions from the vault.
+
+        Args:
+            limit: Maximum sessions to return
+            offset: Pagination offset
+            start_date: Filter by start date
+            end_date: Filter by end date
+
+        Returns:
+            List of session metadata
+        """
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.list_sessions(
+            self._vault_token, limit, offset, start_date, end_date
+        )
+
+    def delete_vault_session(self, session_id: str) -> bool:
+        """
+        Delete a session from the vault.
+
+        Requires ADMIN access level.
+
+        Args:
+            session_id: Session to delete
+
+        Returns:
+            True if deleted
+        """
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.delete_session(self._vault_token, session_id)
+
+    def get_vault_stats(self) -> Dict[str, Any]:
+        """Get vault statistics."""
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.get_stats(self._vault_token)
+
+    def get_vault_audit_logs(
+        self,
+        limit: int = 100,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get vault audit logs."""
+        if not self._vault or not self._vault_token:
+            raise RuntimeError(
+                "Vault not initialized or not authenticated"
+            )
+
+        return self._vault.get_audit_logs(
+            self._vault_token,
+            user_id=user_id,
+            session_id=session_id,
+            limit=limit
+        )
+
+    @property
+    def vault_enabled(self) -> bool:
+        """Check if vault is enabled."""
+        return self._enable_vault
+
+    @property
+    def vault_initialized(self) -> bool:
+        """Check if vault is initialized and authenticated."""
+        return self._vault_initialized and self._vault_token is not None
+
     def __repr__(self) -> str:
+        vault_status = "enabled" if self._enable_vault else "disabled"
         return (
             f"SensitiveDataNERAgent("
             f"patterns={len(self._patterns)}, "
             f"business_terms={len(self._business_terms)}, "
-            f"strict_mode={self.strict_mode})"
+            f"strict_mode={self.strict_mode}, "
+            f"vault={vault_status})"
         )
 
 

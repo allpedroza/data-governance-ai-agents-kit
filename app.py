@@ -70,6 +70,7 @@ except ImportError:
 # Sensitive Data NER Agent imports
 sys.path.append(str(BASE_DIR / "sensitive_data_ner"))
 NER_AVAILABLE = True
+VAULT_AVAILABLE = False
 try:
     from sensitive_data_ner.agent import (
         SensitiveDataNERAgent,
@@ -79,6 +80,17 @@ try:
         EntityCategory,
     )
     from sensitive_data_ner.anonymizers import AnonymizationStrategy
+    # Vault imports (optional - requires cryptography)
+    try:
+        from sensitive_data_ner.vault import (
+            SecureVault,
+            VaultConfig,
+            AccessLevel,
+            AuditEventType,
+        )
+        VAULT_AVAILABLE = True
+    except ImportError:
+        VAULT_AVAILABLE = False
 except ImportError:
     NER_AVAILABLE = False
 
@@ -1784,10 +1796,389 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
             )
 
 
+def render_vault_tab() -> None:
+    """UI for the Secure Vault management."""
+    st.subheader("🔐 Secure Vault")
+    st.markdown(
+        "Gerencie o cofre seguro para armazenamento criptografado de dados sensíveis. "
+        "Permite armazenar mapeamentos originais/anonimizados e recuperar dados posteriormente."
+    )
+
+    if not VAULT_AVAILABLE:
+        st.error(
+            "⚠️ Secure Vault não disponível. "
+            "Instale o pacote cryptography: `pip install cryptography`"
+        )
+        return
+
+    # Initialize vault in session state
+    if "vault" not in st.session_state:
+        st.session_state.vault = None
+        st.session_state.vault_token = None
+        st.session_state.vault_user = None
+
+    # Vault initialization section
+    with st.expander("🔧 Configuração do Vault", expanded=st.session_state.vault is None):
+        if st.session_state.vault is None:
+            st.markdown("### Inicializar Vault")
+            st.warning(
+                "⚠️ **Importante**: A senha mestra é usada para derivar as chaves de criptografia. "
+                "**Guarde-a em local seguro** - sem ela, os dados não podem ser recuperados."
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                master_password = st.text_input(
+                    "Senha Mestra",
+                    type="password",
+                    key="vault_master_password",
+                    help="Senha para derivar chaves de criptografia"
+                )
+            with col2:
+                admin_password = st.text_input(
+                    "Senha do Admin",
+                    type="password",
+                    key="vault_admin_password",
+                    help="Senha do usuário administrador"
+                )
+
+            if st.button("🚀 Inicializar Vault", type="primary"):
+                if not master_password or not admin_password:
+                    st.error("Preencha ambas as senhas para inicializar o vault.")
+                else:
+                    try:
+                        vault_config = VaultConfig(
+                            storage_path=str(BASE_DIR / ".vault_data"),
+                            require_authentication=True,
+                        )
+                        vault = SecureVault(vault_config)
+                        vault.initialize(master_password)
+
+                        # Create admin user and authenticate
+                        try:
+                            vault.create_user("admin", admin_password, AccessLevel.SUPER_ADMIN)
+                        except ValueError:
+                            pass  # User already exists
+
+                        token = vault.authenticate("admin", admin_password)
+
+                        st.session_state.vault = vault
+                        st.session_state.vault_token = token
+                        st.session_state.vault_user = "admin"
+
+                        st.success("✅ Vault inicializado e autenticado com sucesso!")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro ao inicializar vault: {exc}")
+
+        else:
+            st.success(f"✅ Vault ativo | Usuário: **{st.session_state.vault_user}**")
+
+            if st.button("🚪 Logout"):
+                if st.session_state.vault and st.session_state.vault_token:
+                    st.session_state.vault.logout(st.session_state.vault_token)
+                st.session_state.vault = None
+                st.session_state.vault_token = None
+                st.session_state.vault_user = None
+                st.rerun()
+
+    if st.session_state.vault is None:
+        st.info("Inicialize o vault para acessar as funcionalidades.")
+        return
+
+    vault = st.session_state.vault
+    token = st.session_state.vault_token
+
+    # Main vault features
+    sessions_tab, decrypt_tab, stats_tab, audit_tab, users_tab = st.tabs([
+        "📁 Sessões",
+        "🔓 Decriptografar",
+        "📊 Estatísticas",
+        "📋 Auditoria",
+        "👥 Usuários"
+    ])
+
+    with sessions_tab:
+        st.markdown("### Sessões Armazenadas")
+
+        try:
+            sessions = vault.list_sessions(token, limit=50)
+
+            if sessions:
+                session_data = []
+                for s in sessions:
+                    session_data.append({
+                        "ID": s["session_id"][:20] + "...",
+                        "Entidades": s["entity_count"],
+                        "Risco": f"{s['risk_score']:.0%}",
+                        "Criado": s["created_at"][:19],
+                        "Acessos": s["access_count"],
+                        "Preview": s.get("anonymized_preview", "")[:50]
+                    })
+
+                st.dataframe(session_data, use_container_width=True, hide_index=True)
+
+                # Session selection for operations
+                selected_id = st.selectbox(
+                    "Selecione uma sessão",
+                    options=[s["session_id"] for s in sessions],
+                    format_func=lambda x: x[:40] + "..."
+                )
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔍 Ver Anonimizado"):
+                        try:
+                            anon_text, anon_entities = vault.get_anonymized_session(
+                                token, selected_id
+                            )
+                            st.markdown("#### Texto Anonimizado")
+                            st.code(anon_text)
+
+                            if anon_entities:
+                                st.markdown("#### Entidades")
+                                st.json(anon_entities)
+                        except Exception as exc:
+                            st.error(f"Erro: {exc}")
+
+                with col2:
+                    if st.button("🗑️ Excluir Sessão", type="secondary"):
+                        try:
+                            if vault.delete_session(token, selected_id):
+                                st.success("Sessão excluída!")
+                                st.rerun()
+                            else:
+                                st.warning("Sessão não encontrada")
+                        except PermissionError:
+                            st.error("Sem permissão para excluir")
+            else:
+                st.info("Nenhuma sessão armazenada ainda.")
+                st.markdown(
+                    "Use o **NER Filter** com vault habilitado para armazenar sessões automaticamente."
+                )
+
+        except Exception as exc:
+            st.error(f"Erro ao listar sessões: {exc}")
+
+    with decrypt_tab:
+        st.markdown("### Decriptografar Sessão")
+        st.warning(
+            "⚠️ Esta operação revela os dados originais. "
+            "Apenas usuários autorizados devem ter acesso."
+        )
+
+        session_id_input = st.text_input(
+            "ID da Sessão",
+            placeholder="sess_...",
+            key="decrypt_session_id"
+        )
+
+        if st.button("🔓 Decriptografar", type="primary", key="decrypt_btn"):
+            if not session_id_input:
+                st.warning("Digite o ID da sessão")
+            else:
+                try:
+                    original_text, entities = vault.decrypt_session(
+                        token, session_id_input
+                    )
+
+                    st.markdown("#### Texto Original")
+                    st.text_area(
+                        "Conteúdo decriptografado",
+                        value=original_text,
+                        height=200,
+                        disabled=True
+                    )
+
+                    if entities:
+                        st.markdown("#### Entidades Originais")
+                        entity_data = []
+                        for e in entities:
+                            entity_data.append({
+                                "Valor Original": e.get("value", "")[:40],
+                                "Anonimizado": e.get("anonymized", ""),
+                                "Tipo": e.get("entity_type", ""),
+                                "Categoria": e.get("category", ""),
+                            })
+                        st.dataframe(entity_data, use_container_width=True, hide_index=True)
+
+                    st.download_button(
+                        "📥 Baixar Original",
+                        original_text,
+                        file_name="original_decrypted.txt",
+                        mime="text/plain"
+                    )
+
+                except PermissionError:
+                    st.error("Sem permissão para decriptografar esta sessão")
+                except ValueError as ve:
+                    st.error(f"Sessão não encontrada: {ve}")
+                except Exception as exc:
+                    st.error(f"Erro ao decriptografar: {exc}")
+
+    with stats_tab:
+        st.markdown("### Estatísticas do Vault")
+
+        try:
+            stats = vault.get_stats(token)
+
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Sessões", stats.get("total_sessions", 0))
+            with col2:
+                st.metric("Mapeamentos", stats.get("total_mappings", 0))
+            with col3:
+                st.metric("Chaves", stats.get("key_count", 0))
+            with col4:
+                size_mb = stats.get("storage_size_bytes", 0) / (1024 * 1024)
+                st.metric("Tamanho", f"{size_mb:.2f} MB")
+
+            st.markdown("#### Entidades por Tipo")
+            entities_by_type = stats.get("entities_by_type", {})
+            if entities_by_type:
+                st.bar_chart(entities_by_type)
+
+            st.markdown("#### Entidades por Categoria")
+            entities_by_cat = stats.get("entities_by_category", {})
+            if entities_by_cat:
+                cat_cols = st.columns(len(entities_by_cat))
+                for i, (cat, count) in enumerate(entities_by_cat.items()):
+                    with cat_cols[i]:
+                        st.metric(cat.upper(), count)
+
+            st.markdown("#### Versões de Chave")
+            key_versions = stats.get("key_versions", [])
+            if key_versions:
+                key_data = []
+                for k in key_versions:
+                    key_data.append({
+                        "ID": k["key_id"][:20] + "...",
+                        "Versão": k["version"],
+                        "Ativa": "✅" if k["is_active"] else "❌",
+                        "Criada": k["created_at"][:19],
+                        "Expira": k["expires_at"][:19] if k.get("expires_at") else "Nunca"
+                    })
+                st.dataframe(key_data, use_container_width=True, hide_index=True)
+
+        except Exception as exc:
+            st.error(f"Erro ao obter estatísticas: {exc}")
+
+    with audit_tab:
+        st.markdown("### Logs de Auditoria")
+        st.markdown("Registro imutável de todas as operações no vault.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            audit_limit = st.number_input(
+                "Limite de registros",
+                min_value=10,
+                max_value=500,
+                value=50,
+                key="audit_limit"
+            )
+        with col2:
+            filter_user = st.text_input(
+                "Filtrar por usuário (opcional)",
+                key="audit_filter_user"
+            )
+
+        if st.button("🔄 Carregar Logs"):
+            try:
+                logs = vault.get_audit_logs(
+                    token,
+                    limit=audit_limit,
+                    user_id=filter_user if filter_user else None
+                )
+
+                if logs:
+                    log_data = []
+                    for log in logs:
+                        event_icons = {
+                            "auth.login.success": "🔑",
+                            "auth.login.failure": "🚫",
+                            "data.stored": "💾",
+                            "data.decrypted": "🔓",
+                            "session.deleted": "🗑️",
+                            "key.rotated": "🔄",
+                            "security.access.denied": "⛔",
+                        }
+                        icon = event_icons.get(log["event_type"], "📝")
+
+                        log_data.append({
+                            "": icon,
+                            "Evento": log["event_type"],
+                            "Usuário": log.get("username") or log.get("user_id", "-")[:10],
+                            "Sessão": (log.get("session_id") or "")[:15],
+                            "Timestamp": log["timestamp"][:19],
+                        })
+
+                    st.dataframe(log_data, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhum log encontrado")
+
+            except PermissionError:
+                st.error("Sem permissão para acessar logs de auditoria")
+            except Exception as exc:
+                st.error(f"Erro ao carregar logs: {exc}")
+
+    with users_tab:
+        st.markdown("### Gerenciamento de Usuários")
+
+        st.markdown("#### Criar Novo Usuário")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            new_username = st.text_input("Nome de usuário", key="new_user_name")
+            new_password = st.text_input("Senha", type="password", key="new_user_pass")
+        with col2:
+            new_level = st.selectbox(
+                "Nível de Acesso",
+                options=[
+                    ("Somente Leitura", AccessLevel.READ_ONLY),
+                    ("Decriptografar", AccessLevel.DECRYPT),
+                    ("Decriptografar Tudo", AccessLevel.FULL_DECRYPT),
+                    ("Administrador", AccessLevel.ADMIN),
+                    ("Super Admin", AccessLevel.SUPER_ADMIN),
+                ],
+                format_func=lambda x: x[0],
+                key="new_user_level"
+            )
+
+        if st.button("➕ Criar Usuário"):
+            if not new_username or not new_password:
+                st.warning("Preencha nome de usuário e senha")
+            else:
+                try:
+                    vault.create_user(
+                        new_username,
+                        new_password,
+                        new_level[1],
+                        token
+                    )
+                    st.success(f"Usuário '{new_username}' criado com sucesso!")
+                except PermissionError:
+                    st.error("Sem permissão para criar usuários")
+                except ValueError as ve:
+                    st.error(f"Erro: {ve}")
+                except Exception as exc:
+                    st.error(f"Erro ao criar usuário: {exc}")
+
+        st.markdown("#### Níveis de Acesso")
+        st.markdown("""
+        | Nível | Permissões |
+        |-------|------------|
+        | **Somente Leitura** | Ver dados anonimizados |
+        | **Decriptografar** | Decriptografar sessões específicas |
+        | **Decriptografar Tudo** | Decriptografar todas as sessões |
+        | **Administrador** | Gerenciar sessões e chaves |
+        | **Super Admin** | Gerenciar usuários e auditoria |
+        """)
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Filter"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Filter", "Vault"
 ])
 with tab1:
     render_lineage_tab()
@@ -1803,4 +2194,6 @@ with tab6:
     render_value_tab()
 with tab7:
     render_ner_tab()
+with tab8:
+    render_vault_tab()
 
