@@ -67,6 +67,21 @@ try:
 except ImportError:
     VALUE_AVAILABLE = False
 
+# Sensitive Data NER Agent imports
+sys.path.append(str(BASE_DIR / "sensitive_data_ner"))
+NER_AVAILABLE = True
+try:
+    from sensitive_data_ner.agent import (
+        SensitiveDataNERAgent,
+        NERResult,
+        FilterPolicy,
+        FilterAction,
+        EntityCategory,
+    )
+    from sensitive_data_ner.anonymizers import AnonymizationStrategy
+except ImportError:
+    NER_AVAILABLE = False
+
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -1499,9 +1514,272 @@ def render_value_tab() -> None:
             )
 
 
+def render_ner_tab() -> None:
+    """UI for the Sensitive Data NER Agent."""
+    st.subheader("🔒 Sensitive Data NER Agent")
+    st.markdown(
+        "Detecte e anonimize dados sensíveis em texto livre antes de enviar para LLMs. "
+        "Proteja PII, PHI, PCI, dados financeiros e informações estratégicas de negócio."
+    )
+
+    if not NER_AVAILABLE:
+        st.error(
+            "⚠️ Sensitive Data NER Agent não disponível. "
+            "Verifique se as dependências estão instaladas."
+        )
+        return
+
+    # Sidebar-like configuration in expander
+    with st.expander("⚙️ Configurações de Política", expanded=False):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Ações por Categoria**")
+            pii_action = st.selectbox(
+                "PII",
+                options=["anonymize", "block", "warn", "allow"],
+                index=0,
+                key="ner_pii_action"
+            )
+            phi_action = st.selectbox(
+                "PHI (Saúde)",
+                options=["block", "anonymize", "warn", "allow"],
+                index=0,
+                key="ner_phi_action"
+            )
+            pci_action = st.selectbox(
+                "PCI (Cartões)",
+                options=["block", "anonymize", "warn", "allow"],
+                index=0,
+                key="ner_pci_action"
+            )
+            financial_action = st.selectbox(
+                "Financeiro",
+                options=["anonymize", "block", "warn", "allow"],
+                index=0,
+                key="ner_financial_action"
+            )
+            business_action = st.selectbox(
+                "Negócios",
+                options=["block", "anonymize", "warn", "allow"],
+                index=0,
+                key="ner_business_action"
+            )
+
+        with col2:
+            st.markdown("**Configurações Gerais**")
+            anon_strategy = st.selectbox(
+                "Estratégia de Anonimização",
+                options=["redact", "mask", "hash", "partial", "pseudonymize"],
+                index=0,
+                key="ner_anon_strategy"
+            )
+            min_confidence = st.slider(
+                "Confiança Mínima",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                key="ner_min_confidence"
+            )
+            strict_mode = st.checkbox(
+                "Modo Estrito",
+                value=False,
+                help="Requer validação de checksum quando disponível",
+                key="ner_strict_mode"
+            )
+
+        st.markdown("**Termos de Negócio Sensíveis**")
+        business_terms_input = st.text_area(
+            "Termos sensíveis (um por linha)",
+            placeholder="Projeto Confidencial\nAquisição XYZ\nParceria ABC",
+            height=80,
+            key="ner_business_terms"
+        )
+
+    # Main input area
+    st.markdown("### 📝 Texto para Análise")
+
+    input_text = st.text_area(
+        "Cole o texto que deseja analisar",
+        height=200,
+        placeholder="""Exemplo:
+O cliente João da Silva, CPF 123.456.789-09, solicitou atualização.
+Email: joao.silva@email.com, telefone (11) 98765-4321.
+
+Diagnóstico: CID-10 J45.0 - Asma predominantemente alérgica.
+
+Pagamento via cartão 4532 1234 5678 9010.
+
+Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
+        key="ner_input_text"
+    )
+
+    if st.button("🔍 Analisar e Proteger", type="primary", key="run_ner"):
+        if not input_text:
+            st.warning("Digite ou cole o texto para análise.")
+            return
+
+        with st.spinner("Analisando dados sensíveis..."):
+            try:
+                # Parse business terms
+                business_terms = [
+                    t.strip() for t in business_terms_input.split("\n")
+                    if t.strip()
+                ] if business_terms_input else None
+
+                # Create policy
+                policy = FilterPolicy(
+                    pii_action=FilterAction(pii_action),
+                    phi_action=FilterAction(phi_action),
+                    pci_action=FilterAction(pci_action),
+                    financial_action=FilterAction(financial_action),
+                    business_action=FilterAction(business_action),
+                    min_confidence=min_confidence,
+                    anonymization_strategy=AnonymizationStrategy(anon_strategy),
+                )
+
+                # Create agent and analyze
+                agent = SensitiveDataNERAgent(
+                    business_terms=business_terms,
+                    filter_policy=policy,
+                    strict_mode=strict_mode,
+                )
+
+                result = agent.analyze(input_text, anonymize=True)
+                st.session_state.ner_result = result
+                st.success("✅ Análise concluída!")
+
+            except Exception as exc:
+                st.error(f"Erro na análise: {exc}")
+
+    # Display results
+    if "ner_result" in st.session_state:
+        result = st.session_state.ner_result
+        st.divider()
+
+        # Action badge
+        action_colors = {
+            FilterAction.ALLOW: ("🟢", "success"),
+            FilterAction.WARN: ("🟡", "warning"),
+            FilterAction.ANONYMIZE: ("🟠", "info"),
+            FilterAction.BLOCK: ("🔴", "error"),
+        }
+        icon, _ = action_colors.get(result.filter_action, ("⚪", "info"))
+
+        # Metrics row
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Ação", f"{icon} {result.filter_action.value.upper()}")
+        with col2:
+            st.metric("Entidades", result.statistics["total"])
+        with col3:
+            st.metric("Score de Risco", f"{result.risk_score:.0%}")
+        with col4:
+            st.metric("Tempo", f"{result.processing_time_ms:.1f}ms")
+
+        if result.blocked_reason:
+            st.error(f"🚫 Motivo do bloqueio: {result.blocked_reason}")
+
+        for warning in result.warnings:
+            st.warning(warning)
+
+        # Tabs for results
+        entities_tab, anon_tab, stats_tab, json_tab = st.tabs([
+            "📊 Entidades",
+            "🔐 Texto Anonimizado",
+            "📈 Estatísticas",
+            "📋 JSON"
+        ])
+
+        with entities_tab:
+            if result.entities:
+                st.markdown("### Entidades Detectadas")
+
+                entity_data = []
+                for e in result.entities:
+                    category_icons = {
+                        EntityCategory.PII: "🔵",
+                        EntityCategory.PHI: "🟢",
+                        EntityCategory.PCI: "🟡",
+                        EntityCategory.FINANCIAL: "🟠",
+                        EntityCategory.BUSINESS: "🟣",
+                    }
+                    icon = category_icons.get(e.category, "⚪")
+
+                    entity_data.append({
+                        "Valor": e.value[:40] + "..." if len(e.value) > 40 else e.value,
+                        "Tipo": e.entity_type,
+                        "Categoria": f"{icon} {e.category.value.upper()}",
+                        "Confiança": f"{e.confidence:.0%}",
+                        "Validado": "✓" if e.is_validated else "✗",
+                        "Linha": e.line_number,
+                    })
+
+                st.dataframe(entity_data, use_container_width=True, hide_index=True)
+            else:
+                st.success("✅ Nenhuma entidade sensível detectada!")
+
+        with anon_tab:
+            if result.anonymized_text:
+                st.markdown("### Texto Seguro para LLM")
+                st.code(result.anonymized_text, language=None)
+
+                st.download_button(
+                    "📋 Baixar texto anonimizado",
+                    result.anonymized_text,
+                    file_name="texto_anonimizado.txt",
+                    mime="text/plain"
+                )
+            else:
+                st.info("Nenhuma anonimização necessária")
+
+        with stats_tab:
+            st.markdown("### Estatísticas por Categoria")
+
+            cat_cols = st.columns(5)
+            categories = [
+                ("PII", result.statistics.get("pii", 0), "🔵"),
+                ("PHI", result.statistics.get("phi", 0), "🟢"),
+                ("PCI", result.statistics.get("pci", 0), "🟡"),
+                ("Financeiro", result.statistics.get("financial", 0), "🟠"),
+                ("Negócios", result.statistics.get("business", 0), "🟣"),
+            ]
+
+            for i, (name, count, icon) in enumerate(categories):
+                with cat_cols[i]:
+                    st.metric(f"{icon} {name}", count)
+
+            st.markdown("### Métricas de Qualidade")
+            qual_col1, qual_col2 = st.columns(2)
+            with qual_col1:
+                st.metric(
+                    "Entidades Validadas",
+                    f"{result.statistics.get('validated', 0)}/{result.statistics['total']}"
+                )
+            with qual_col2:
+                st.metric(
+                    "Alta Confiança (≥80%)",
+                    result.statistics.get("high_confidence", 0)
+                )
+
+        with json_tab:
+            st.markdown("### Resultado em JSON")
+            st.json(result.to_dict())
+
+            st.download_button(
+                "📥 Baixar JSON",
+                result.to_json(),
+                file_name="ner_analysis.json",
+                mime="application/json"
+            )
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Filter"
+])
 with tab1:
     render_lineage_tab()
 with tab2:
@@ -1514,4 +1792,6 @@ with tab5:
     render_quality_tab()
 with tab6:
     render_value_tab()
+with tab7:
+    render_ner_tab()
 
