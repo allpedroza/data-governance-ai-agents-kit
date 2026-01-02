@@ -1,0 +1,89 @@
+{
+  "name": "ecommerce_quality_rules",
+  "description": "Quality rules for e-commerce data tables",
+  "version": "1.0",
+  "enabled": true,
+  "tags": ["ecommerce", "production"],
+  "rules": [
+    {
+      "name": "orders_completeness",
+      "dimension": "completeness",
+      "table_name": "orders",
+      "threshold": 0.99,
+      "alert_level": "critical",
+      "description": "Orders table must be 99% complete"
+    },
+    {
+      "name": "orders_id_uniqueness",
+      "dimension": "uniqueness",
+      "table_name": "orders",
+      "column": "order_id",
+      "threshold": 1.0,
+      "alert_level": "critical",
+      "description": "Order IDs must be unique"
+    },
+    {
+      "name": "orders_freshness_sla",
+      "dimension": "freshness",
+      "table_name": "orders",
+      "column": "updated_at",
+      "threshold": 0.95,
+      "alert_level": "warning",
+      "params": {
+        "sla_hours": 4,
+        "max_age_hours": 8
+      },
+      "description": "Orders data should be updated within 4 hours"
+    },
+    {
+      "name": "customers_email_validity",
+      "dimension": "validity",
+      "table_name": "customers",
+      "column": "email",
+      "threshold": 0.95,
+      "alert_level": "warning",
+      "params": {
+        "pattern_name": "email"
+      },
+      "description": "Customer emails must be valid format"
+    },
+    {
+      "name": "customers_cpf_validity",
+      "dimension": "validity",
+      "table_name": "customers",
+      "column": "cpf",
+      "threshold": 0.99,
+      "alert_level": "critical",
+      "params": {
+        "pattern_name": "cpf"
+      },
+      "description": "Customer CPF must be valid format"
+    },
+    {
+      "name": "products_price_range",
+      "dimension": "validity",
+      "table_name": "products",
+      "column": "price",
+      "threshold": 0.99,
+      "alert_level": "warning",
+      "params": {
+        "min_value": 0.01,
+        "max_value": 1000000
+      },
+      "description": "Product prices must be between 0.01 and 1M"
+    },
+    {
+      "name": "inventory_freshness",
+      "dimension": "freshness",
+      "table_name": "inventory",
+      "column": "last_updated",
+      "threshold": 0.90,
+      "alert_level": "critical",
+      "params": {
+        "sla_hours": 1,
+        "max_age_hours": 2
+      },
+      "description": "Inventory must be updated every hour"
+    }
+  ]
+}

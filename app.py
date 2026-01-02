@@ -42,6 +42,15 @@ try:
 except ImportError:
     ENRICHMENT_AVAILABLE = False
 
+# Data Quality Agent imports
+sys.path.append(str(BASE_DIR / "data_quality"))
+QUALITY_AVAILABLE = True
+try:
+    from data_quality.agent import DataQualityAgent, QualityReport
+    from data_quality.rules import QualityRule, AlertLevel
+except ImportError:
+    QUALITY_AVAILABLE = False
+
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -762,13 +771,180 @@ def render_enrichment_tab() -> None:
             )
 
 
+def _initialize_quality_agent():
+    """Initialize the Data Quality Agent."""
+    if not QUALITY_AVAILABLE:
+        return None
+
+    try:
+        return DataQualityAgent(
+            persist_dir=str(BASE_DIR / "data_quality" / ".quality_data"),
+            enable_schema_tracking=True
+        )
+    except Exception:
+        return None
+
+
+def render_quality_tab() -> None:
+    """UI for the Data Quality Agent."""
+    st.subheader("📊 Data Quality Agent")
+    st.markdown(
+        "Monitore métricas de qualidade de dados: completude, unicidade, validade, "
+        "consistência, freshness (SLA) e detecção de schema drift."
+    )
+
+    if not QUALITY_AVAILABLE:
+        st.error(
+            "⚠️ Data Quality Agent não disponível. "
+            "Verifique se as dependências estão instaladas: `pip install -r data_quality/requirements.txt`"
+        )
+        return
+
+    # Initialize agent in session state
+    if "quality_agent" not in st.session_state:
+        with st.spinner("Inicializando agente de qualidade..."):
+            st.session_state.quality_agent = _initialize_quality_agent()
+
+    agent = st.session_state.get("quality_agent")
+    if not agent:
+        st.error("Não foi possível inicializar o agente.")
+        return
+
+    # File upload
+    st.markdown("### Avaliar Qualidade")
+
+    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="quality_file_type")
+
+    uploaded_file = st.file_uploader(
+        f"Selecione o arquivo {file_type}",
+        type=["csv"] if file_type == "CSV" else ["parquet"],
+        key="quality_file"
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        sample_size = st.number_input(
+            "Tamanho da amostra",
+            min_value=100,
+            max_value=100000,
+            value=10000,
+            key="quality_sample_size"
+        )
+
+    # Freshness config
+    with st.expander("⏱️ Configuração de Freshness/SLA"):
+        check_freshness = st.checkbox("Verificar freshness", value=False, key="check_fresh")
+        if check_freshness:
+            timestamp_col = st.text_input(
+                "Coluna de timestamp",
+                placeholder="updated_at",
+                key="ts_col"
+            )
+            sla_hours = st.number_input("SLA (horas)", min_value=1, max_value=168, value=24, key="sla_h")
+
+    if uploaded_file and st.button("🚀 Avaliar Qualidade", type="primary", key="run_quality"):
+        with st.spinner("Analisando dados..."):
+            suffix = ".csv" if file_type == "CSV" else ".parquet"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(uploaded_file.read())
+                temp_path = f.name
+
+            try:
+                kwargs = {"sample_size": sample_size}
+
+                if check_freshness and timestamp_col:
+                    kwargs["freshness_config"] = {
+                        "timestamp_column": timestamp_col,
+                        "sla_hours": sla_hours,
+                        "max_age_hours": sla_hours * 2
+                    }
+
+                report = agent.evaluate_file(temp_path, **kwargs)
+                st.session_state.quality_report = report
+                st.success(f"✓ Análise concluída em {report.processing_time_ms}ms")
+
+            except Exception as exc:
+                st.error(f"Erro: {exc}")
+            finally:
+                os.unlink(temp_path)
+
+    # Display results
+    if "quality_report" in st.session_state:
+        report = st.session_state.quality_report
+        st.divider()
+
+        # Overall metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            score_color = "#22c55e" if report.overall_status == "passed" else "#f59e0b" if report.overall_status == "warning" else "#ef4444"
+            st.metric("Score Geral", f"{report.overall_score:.0%}")
+        with col2:
+            status_emoji = "✅" if report.overall_status == "passed" else "⚠️" if report.overall_status == "warning" else "❌"
+            st.metric("Status", f"{status_emoji} {report.overall_status.upper()}")
+        with col3:
+            st.metric("Linhas", f"{report.row_count:,}")
+        with col4:
+            st.metric("Colunas", report.columns_checked)
+
+        # Dimensions
+        st.markdown("### Dimensões de Qualidade")
+        dim_cols = st.columns(len(report.dimensions))
+        for i, (dim_name, dim_data) in enumerate(report.dimensions.items()):
+            with dim_cols[i]:
+                score = dim_data.get("score", 0)
+                status = dim_data.get("status", "unknown")
+                icon = "✅" if status == "passed" else "⚠️" if status == "warning" else "❌"
+                st.metric(dim_name.capitalize(), f"{icon} {score:.0%}")
+
+        # Alerts
+        if report.alerts:
+            st.markdown("### Alertas")
+            for alert in report.alerts:
+                level = alert.get("level", "info")
+                if level == "critical":
+                    st.error(f"🔴 **{alert.get('rule_name')}**: {alert.get('message')}")
+                elif level == "warning":
+                    st.warning(f"🟡 **{alert.get('rule_name')}**: {alert.get('message')}")
+                else:
+                    st.info(f"🔵 **{alert.get('rule_name')}**: {alert.get('message')}")
+
+        # Schema drift
+        if report.schema_drift and report.schema_drift.get("has_drift"):
+            st.markdown("### Schema Drift Detectado")
+            st.warning(report.schema_drift.get("summary"))
+            for change in report.schema_drift.get("changes", [])[:5]:
+                severity = change.get("severity", "info")
+                icon = "🔴" if severity == "critical" else "🟡"
+                st.markdown(f"- {icon} {change.get('message')}")
+
+        # Export
+        st.markdown("### Exportar")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 JSON",
+                report.to_json(),
+                file_name=f"{report.source_name}_quality_report.json",
+                mime="application/json"
+            )
+        with col2:
+            st.download_button(
+                "📥 Markdown",
+                report.to_markdown(),
+                file_name=f"{report.source_name}_quality_report.md",
+                mime="text/markdown"
+            )
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3 = st.tabs(["Lineage", "Discovery", "Enrichment"])
+tab1, tab2, tab3, tab4 = st.tabs(["Lineage", "Discovery", "Enrichment", "Quality"])
 with tab1:
     render_lineage_tab()
 with tab2:
     render_rag_tab()
 with tab3:
     render_enrichment_tab()
+with tab4:
+    render_quality_tab()
 
