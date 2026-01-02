@@ -11,7 +11,7 @@ Este projeto fornece **5 agentes de IA especializados** que trabalham de forma i
 | **Data Lineage Agent** | Mapear dependências e analisar impacto de mudanças |
 | **Data Discovery RAG Agent** | Descoberta semântica de dados com busca em linguagem natural |
 | **Metadata Enrichment Agent** | Geração automática de descrições, tags e classificações |
-| **Data Classification Agent** | Classificação de PII/PHI/Financeiro a partir de metadados |
+| **Data Classification Agent** | Classificação de PII/PHI/Financeiro/ sensíveis à estratégia dos negócios a partir de metadados |
 | **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
 
 ## Início Rápido
