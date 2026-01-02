@@ -336,6 +336,29 @@ curl -u admin:admin \
   > atlas_export.json
 ```
 
+## 🔗 Integração com OpenMetadata
+
+Use o conector leve incluso no repositório para sincronizar tabelas direto do OpenMetadata.
+
+```python
+from openmetadata_connector import OpenMetadataConnector
+from data_discovery_rag_agent import DataDiscoveryRAGAgent
+
+connector = OpenMetadataConnector(
+    server_url="https://openmetadata:8585",
+    api_token="<token-servico>",
+)
+tables = connector.fetch_tables(max_tables=200, service_filter="lakehouse")
+
+agent = DataDiscoveryRAGAgent(
+    collection_name="openmetadata_catalog",
+    persist_directory="./chroma_openmetadata",
+)
+agent.index_tables_batch(tables, force_update=True)
+```
+
+Consulte também `examples/openmetadata_integration.py` para um roteiro completo que prepara o catálogo para buscas semânticas.
+
 ## 🔗 Integração com Data Lineage Agent
 
 ```python

@@ -16,6 +16,12 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR / "lineage"))
 sys.path.append(str(BASE_DIR / "rag_discovery"))
 
+# External catalog connectors
+from rag_discovery.openmetadata_connector import (  # noqa: E402
+    OpenMetadataConnector,
+    OpenMetadataConnectorError,
+)
+
 missing_core_modules = [module for module in ["openai"] if find_spec(module) is None]
 if missing_core_modules:
     missing_list = ", ".join(sorted(missing_core_modules))
@@ -201,6 +207,8 @@ def init_session_state() -> None:
             "atlas_host": os.environ.get("ATLAS_HOST", ""),
             "glue_region": os.environ.get("AWS_REGION", ""),
             "chroma_persist": str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+            "openmetadata_host": os.environ.get("OPENMETADATA_HOST", ""),
+            "openmetadata_api_token": os.environ.get("OPENMETADATA_API_TOKEN", ""),
         }
 
     if "rag_agent" not in st.session_state:
@@ -313,6 +321,10 @@ def _apply_connection_settings(settings: Dict[str, str]) -> None:
         os.environ["ANTHROPIC_API_KEY"] = settings["anthropic_api_key"]
     if settings.get("anthropic_model"):
         os.environ["ANTHROPIC_MODEL"] = settings["anthropic_model"]
+    if settings.get("openmetadata_host"):
+        os.environ["OPENMETADATA_HOST"] = settings["openmetadata_host"]
+    if settings.get("openmetadata_api_token"):
+        os.environ["OPENMETADATA_API_TOKEN"] = settings["openmetadata_api_token"]
 
     _initialize_rag_agent()
 
@@ -346,6 +358,35 @@ def _index_table_if_possible(table: TableMetadata) -> None:
         agent.index_table(table, force_update=True)
     except Exception as exc:  # noqa: BLE001
         st.warning(f"Não foi possível indexar esta tabela no ChromaDB: {exc}")
+
+
+def _sync_openmetadata_tables(
+    server_url: str,
+    api_token: str,
+    service_filter: str,
+    limit: int,
+) -> List[TableMetadata]:
+    """Fetch tables from OpenMetadata and index them for discovery."""
+
+    connector = OpenMetadataConnector(server_url=server_url, api_token=api_token)
+    with st.status("Sincronizando metadados do OpenMetadata", expanded=True) as status:
+        status.write("Chamando API do OpenMetadata...")
+        tables = connector.fetch_tables(
+            max_tables=limit,
+            service_filter=service_filter or None,
+        )
+
+        status.write(f"{len(tables)} tabelas retornadas; indexando no catálogo local...")
+        for table in tables:
+            st.session_state.rag_catalog.append(table)
+            _index_table_if_possible(table)
+
+        status.update(
+            label="Metadados sincronizados do OpenMetadata",
+            state="complete",
+        )
+
+    return tables
 
 
 def _search_with_fallback(query: str) -> List[Dict[str, str]]:
@@ -412,12 +453,35 @@ def _render_connection_guide() -> None:
         st.markdown("### Guia de conexões essenciais")
         settings: Dict[str, str] = st.session_state.connection_settings
 
-        status_labels = []
-        status_labels.append(
-            "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
-        )
-        status_labels.append(
-            "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
+    status_labels = []
+    status_labels.append(
+        "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
+    )
+    if settings.get("openmetadata_host"):
+        status_labels.append("✅ Endpoint do OpenMetadata definido")
+    else:
+        status_labels.append("⚠️ Defina a URL do OpenMetadata para sincronizar catálogos")
+    st.markdown("; ".join(status_labels))
+
+    with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
+        st.markdown(
+            "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
+            "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
+            "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
+                settings.get("chroma_persist")
+            )
         )
         status_labels.append(
             "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
@@ -605,6 +669,7 @@ def _render_connection_guide() -> None:
             "- **Apache Atlas**: informe o host em `ATLAS_HOST` (ex.: `http://atlas-host:21000`).\n"
             "- **Glue Data Catalog**: use a região em `AWS_REGION` e credenciais AWS no ambiente.\n"
             "- **BigQuery/Snowflake**: a conexão é guiada na seção de conectores; inclua o projeto/warehouse ao selecionar.\n"
+            "- **OpenMetadata**: defina `OPENMETADATA_HOST` e o token (`OPENMETADATA_API_TOKEN`) ou informe-os na conexão guiada.\n"
             "- Após salvar, volte à aba de conexão de catálogo para sincronizar metadados."
         )
 
@@ -682,42 +747,80 @@ def render_rag_tab() -> None:
 
     with connection_tab:
         st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
-        with card_container():
-            with st.form("catalog_connection_form"):
-                mode = st.radio(
-                    "Origem do catálogo",
-                    options=["Arquivo de catálogo", "Conectores disponíveis"],
-                    horizontal=True,
-                )
-                catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
-                dataset_hint = ""
+        settings = st.session_state.connection_settings
+        with st.form("catalog_connection_form"):
+            mode = st.radio(
+                "Origem do catálogo",
+                options=["Arquivo de catálogo", "Conectores disponíveis"],
+                horizontal=True,
+            )
+            catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
+            dataset_hint = ""
+            service_filter = ""
+            om_host = settings.get("openmetadata_host", "")
+            om_token = settings.get("openmetadata_api_token", "")
+            table_limit = 200
 
-                if mode == "Arquivo de catálogo":
-                    uploaded = st.file_uploader(
-                        "Envie um arquivo JSON ou CSV com as tabelas",
-                        type=["json", "csv", "txt"],
-                        accept_multiple_files=False,
+            if mode == "Arquivo de catálogo":
+                uploaded = st.file_uploader(
+                    "Envie um arquivo JSON ou CSV com as tabelas",
+                    type=["json", "csv", "txt"],
+                    accept_multiple_files=False,
+                )
+            else:
+                connector = st.selectbox(
+                    "Selecione um conector existente",
+                    [
+                        "OpenMetadata",
+                        "Apache Atlas",
+                        "Glue Data Catalog",
+                        "BigQuery",
+                        "Snowflake",
+                    ],
+                )
+                if connector == "OpenMetadata":
+                    om_host = st.text_input(
+                        "Endpoint do OpenMetadata",
+                        value=om_host,
+                        placeholder="https://openmetadata:8585",
+                        help="Use o endpoint da API (porta padrão 8585).",
                     )
+                    om_token = st.text_input(
+                        "Token de autenticação",
+                        value=om_token,
+                        type="password",
+                        help="Cole o JWT de serviço do OpenMetadata ou um token pessoal.",
+                    )
+                    service_filter = st.text_input(
+                        "Filtrar por serviço (opcional)",
+                        placeholder="ex: lakehouse_service",
+                        help="Use para sincronizar apenas tabelas de um serviço específico.",
+                    )
+                    table_limit = int(
+                        st.number_input(
+                            "Limite de tabelas a sincronizar",
+                            min_value=10,
+                            max_value=1000,
+                            value=200,
+                            step=10,
+                        )
+                    )
+                    dataset_hint = service_filter or om_host
                 else:
-                    connector = st.selectbox(
-                        "Selecione um conector existente",
-                        [
-                            "Apache Atlas",
-                            "Glue Data Catalog",
-                            "BigQuery",
-                            "Snowflake",
-                        ],
-                    )
                     dataset_hint = st.text_input(
                         "Escopo ou dataset", placeholder="ex: projeto-analytics"
                     )
-                    uploaded = None
+                uploaded = None
 
                 connect = st.form_submit_button("Conectar catálogo")
 
         if connect:
             if mode == "Arquivo de catálogo" and not uploaded:
                 st.warning("Envie um arquivo de metadados para conectar.")
+            elif mode != "Arquivo de catálogo" and connector == "OpenMetadata" and (
+                not om_host or not om_token
+            ):
+                st.warning("Informe o endpoint e o token do OpenMetadata para sincronizar.")
             else:
                 catalog_label = catalog_name or (
                     uploaded.name if uploaded else connector  # type: ignore[misc]
@@ -733,6 +836,25 @@ def render_rag_tab() -> None:
                     except Exception as exc:  # noqa: BLE001
                         st.error(f"Não foi possível processar o arquivo: {exc}")
                         tables_added = 0
+                elif mode != "Arquivo de catálogo" and connector == "OpenMetadata":
+                    try:
+                        _apply_connection_settings(
+                            {
+                                "openmetadata_host": om_host.strip(),
+                                "openmetadata_api_token": om_token.strip(),
+                            }
+                        )
+                        tables = _sync_openmetadata_tables(
+                            om_host,
+                            om_token,
+                            service_filter,
+                            table_limit,
+                        )
+                        tables_added = len(tables)
+                    except OpenMetadataConnectorError as exc:
+                        st.error(f"Falha ao sincronizar com o OpenMetadata: {exc}")
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Erro inesperado ao ler o OpenMetadata: {exc}")
 
                 st.session_state.connected_catalogs.append(
                     {
