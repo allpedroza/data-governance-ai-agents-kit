@@ -1,0 +1,9 @@
+# Data Classification Agent dependencies
+
+pandas>=1.5.0
+pyarrow>=10.0.0  # For Parquet support
+streamlit>=1.24.0
+sqlalchemy>=2.0.0  # For SQL support
+
+# Optional: Delta Lake support
+# deltalake>=0.10.0

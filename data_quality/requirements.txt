@@ -1,0 +1,13 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Data connectors
+pyarrow>=14.0.0  # Parquet support
+sqlalchemy>=2.0.0  # SQL support
+
+# Optional: Delta Lake support
+# deltalake>=0.14.0
+
+# UI
+streamlit>=1.28.0
