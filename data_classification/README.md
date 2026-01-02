@@ -35,6 +35,9 @@ Sistema de IA para **classificação automática de dados** por níveis de sensi
   - HIPAA
   - PCI-DSS
   - SOX
+- **Validação por GenAI (schema-only)**
+  - Opcional: use um LLM para revisar o schema e confirmar colunas PII/PHI/PCI
+  - Útil quando não há amostra de dados disponível
 
 ## Instalação
 
@@ -57,6 +60,31 @@ print(f"Colunas PII: {report.pii_columns}")
 print(f"Colunas PHI: {report.phi_columns}")
 print(f"Termos estratégicos: {report.proprietary_columns}")
 print(f"Compliance: {report.compliance_flags}")
+```
+
+### Revisão apenas com schema usando LLM
+
+```python
+from data_classification import DataClassificationAgent
+from rag_discovery.providers.llm import OpenAILLM
+
+llm = OpenAILLM(model="gpt-4o-mini")
+agent = DataClassificationAgent(llm_provider=llm)
+
+schema_columns = [
+    {"name": "cpf", "type": "STRING", "description": "Documento do cliente"},
+    {"name": "email", "type": "STRING"},
+    {"name": "blood_type", "type": "STRING"},
+]
+
+schema_report = agent.classify_schema_with_llm(
+    table_name="customers",
+    columns=schema_columns,
+    description="Cadastro de clientes com documentos e tipo sanguíneo",
+)
+
+print(schema_report.overall_sensitivity)
+print(schema_report.llm_analysis["parsed"].get("columns"))
 ```
 
 ## Dicionário de termos estratégicos
