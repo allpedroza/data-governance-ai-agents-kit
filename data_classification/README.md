@@ -25,6 +25,9 @@ Sistema de IA para **classificação automática de dados** por níveis de sensi
   - Contas bancárias, agências
   - Valores, transações
   - Boletos, PIX
+- **Termos estratégicos do negócio**
+  - Dicionário customizável com nomes de projetos e iniciativas
+  - Classificação como dado proprietário/confidencial
 
 - **Compliance automático**
   - LGPD / GDPR
@@ -107,6 +110,21 @@ agent.add_custom_pattern(
 
 # Classificar com o novo padrão
 report = agent.classify_from_csv("protocolos.csv")
+```
+
+### Adicionar termos estratégicos de negócio
+
+```python
+# Popular o dicionário de termos críticos da estratégia
+agent.add_business_terms([
+    "Projeto Arara Azul",
+    "Mercado LATAM",
+    "Aquisição Orion"
+])
+
+# Classificar usando o vocabulário proprietário
+report = agent.classify_from_csv("roadmap.csv")
+print(report.proprietary_columns)
 ```
 
 ### Exportar relatório
