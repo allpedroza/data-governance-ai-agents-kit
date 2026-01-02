@@ -22,8 +22,14 @@ Este projeto fornece **6 agentes de IA especializados** que trabalham de forma i
 git clone <repo-url>
 cd data-governance-ai-agents-kit
 
-# Instale as dependências
-pip install -r requirements.txt
+# Instale o uv (recomendado) e as dependências
+curl -Ls https://astral.sh/uv/install.sh | sh
+uv venv .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+
+# Alternativa com pip tradicional
+# pip install -r requirements.txt
 
 # Configure a API key (necessária para alguns agentes)
 export OPENAI_API_KEY="sua-chave-aqui"
