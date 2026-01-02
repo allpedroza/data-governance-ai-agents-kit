@@ -1,10 +1,10 @@
 # Data Governance AI Agents Kit
 
-**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados e monitoramento de qualidade.
+**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados, monitoramento de qualidade e análise de valor de ativos.
 
 ## Visão Geral
 
-Este projeto fornece **5 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
+Este projeto fornece **6 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
 
 | Agente | Propósito |
 |--------|-----------|
@@ -13,6 +13,7 @@ Este projeto fornece **5 agentes de IA especializados** que trabalham de forma i
 | **Metadata Enrichment Agent** | Geração automática de descrições, tags e classificações |
 | **Data Classification Agent** | Classificação de PII/PHI/Financeiro a partir de metadados |
 | **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
+| **Data Asset Value Agent** | Análise de valor de ativos baseado em uso, JOINs e impacto em data products |
 
 ## Início Rápido
 
@@ -217,6 +218,73 @@ print(f"Status: {report.overall_status}")
 print(f"Schema Drift: {report.schema_drift}")
 ```
 
+---
+
+### 6. Data Asset Value Agent
+
+Sistema de IA para **análise de valor de ativos de dados** baseado em padrões de uso, relacionamentos de JOIN, linhagem e impacto em data products.
+
+**Características**:
+- Análise de uso direto em queries SQL
+- Mapeamento de relacionamentos de JOIN (hub assets)
+- Integração com saída do Data Lineage Agent
+- Scoring multi-dimensional de valor (uso, JOINs, linhagem, data products)
+- Identificação de ativos críticos e órfãos
+- Detecção de tendências de uso (increasing/stable/decreasing)
+- Recomendações de governança automatizadas
+- Suporte a configuração de data products com impacto de negócio
+
+**Documentação**: [data_asset_value/README.md](data_asset_value/README.md)
+
+**Exemplo**:
+```python
+from data_asset_value import DataAssetValueAgent
+
+agent = DataAssetValueAgent(
+    weights={
+        'usage': 0.30,       # Frequência de uso
+        'joins': 0.25,       # Relacionamentos de JOIN
+        'lineage': 0.25,     # Impacto na linhagem
+        'data_product': 0.20 # Importância em data products
+    },
+    time_range_days=30
+)
+
+# Analisar a partir de logs de queries
+report = agent.analyze_from_query_logs(
+    query_logs=query_logs,
+    lineage_data=lineage_agent_output,  # Integração com Lineage Agent
+    data_product_config=data_products,
+    asset_metadata=asset_metadata
+)
+
+# Top assets por valor
+for asset in report.asset_scores[:5]:
+    print(f"{asset.asset_name}: {asset.overall_value_score:.1f} ({asset.value_category})")
+
+# Ativos críticos e hubs
+print(f"Críticos: {report.critical_assets}")
+print(f"Hubs: {report.hub_assets}")
+print(f"Órfãos: {report.orphan_assets}")
+
+# Exportar relatório
+print(report.to_markdown())
+```
+
+**Formato do Query Log**:
+```json
+[
+  {
+    "query": "SELECT c.name, o.total FROM customers c JOIN orders o ON c.id = o.customer_id",
+    "timestamp": "2024-12-15T10:30:00Z",
+    "user": "analyst_maria",
+    "duration_ms": 1250,
+    "rows_scanned": 150000,
+    "data_product": "customer_360"
+  }
+]
+```
+
 **Apenas Data Classification Agent**:
 ```bash
 pip install -r classification/requirements.txt
@@ -232,7 +300,7 @@ export OPENAI_API_KEY="sua-chave-aqui"
 
 ## Integração entre Agentes
 
-Os 5 agentes podem ser **integrados** para um framework completo de governança:
+Os 6 agentes podem ser **integrados** para um framework completo de governança:
 
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
@@ -309,12 +377,14 @@ print(result.answer)
 | **Detecção de PII/PHI** | Classification | Identificar dados sensíveis automaticamente |
 | **Monitoramento Contínuo** | Quality + Discovery | Alertas de qualidade no catálogo |
 | **Onboarding** | Discovery + Lineage | Entender o data lake rapidamente |
+| **Valor de Ativos** | Value + Lineage | Identificar ativos críticos e subutilizados |
+| **Priorização de Investimentos** | Value + Classification | Focar em ativos de alto valor e alto risco |
 
 ---
 
 ## Interface Unificada (Streamlit)
 
-O projeto inclui uma interface web unificada com todos os 5 agentes:
+O projeto inclui uma interface web unificada com todos os 6 agentes:
 
 ```bash
 streamlit run app.py
@@ -326,6 +396,7 @@ streamlit run app.py
 - **Enrichment**: Geração automática de metadados
 - **Classification**: Detecção de PII/PHI/Financeiro
 - **Quality**: Avaliação de qualidade e alertas
+- **Asset Value**: Análise de valor de ativos de dados
 
 Cada agente também possui interface standalone:
 ```bash
@@ -385,7 +456,7 @@ pip install -r data_quality/requirements.txt
 ```
 data-governance-ai-agents-kit/
 │
-├── app.py                           # Interface Streamlit unificada (5 tabs)
+├── app.py                           # Interface Streamlit unificada (6 tabs)
 ├── requirements.txt                 # Dependências globais
 ├── README.md                        # Este arquivo
 │
@@ -427,18 +498,27 @@ data-governance-ai-agents-kit/
 │   ├── streamlit_app.py
 │   └── README.md
 │
-└── data_quality/                    # Data Quality Agent
-    ├── agent.py                     # Agente principal
-    ├── metrics/                     # Métricas de qualidade
-    │   ├── quality_metrics.py       # 5 dimensões
-    │   └── schema_drift.py          # Detecção de drift
-    ├── rules/                       # Sistema de regras
-    │   └── quality_rules.py
-    ├── connectors/                  # Conectores de dados
-    │   └── data_connector.py
-    ├── examples/
-    ├── streamlit_app.py
-    └── README.md
+├── data_quality/                    # Data Quality Agent
+│   ├── agent.py                     # Agente principal
+│   ├── metrics/                     # Métricas de qualidade
+│   │   ├── quality_metrics.py       # 5 dimensões
+│   │   └── schema_drift.py          # Detecção de drift
+│   ├── rules/                       # Sistema de regras
+│   │   └── quality_rules.py
+│   ├── connectors/                  # Conectores de dados
+│   │   └── data_connector.py
+│   ├── examples/
+│   ├── streamlit_app.py
+│   └── README.md
+│
+└── data_asset_value/                # Data Asset Value Agent
+    ├── agent.py                     # Agente principal com parser e calculator
+    ├── __init__.py                  # Exports do módulo
+    └── examples/
+        ├── sample_query_logs.json   # Logs de queries de exemplo
+        ├── data_products_config.json # Config de data products
+        ├── asset_metadata.json      # Metadados de ativos (criticidade, custo, risco)
+        └── usage_example.py         # Script de exemplo de uso
 ```
 
 ---
@@ -465,14 +545,14 @@ export ATLAS_PASSWORD="admin"
 
 ## Comparação de Agentes
 
-| Característica | Lineage | Discovery | Enrichment | Classification | Quality |
-|---------------|---------|-----------|------------|----------------|---------|
-| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade |
-| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) |
-| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas |
-| **LLM** | Opcional | Requerido | Requerido | Não | Não |
-| **Embeddings** | Não | Sim | Sim | Não | Não |
-| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift |
+| Característica | Lineage | Discovery | Enrichment | Classification | Quality | Asset Value |
+|---------------|---------|-----------|------------|----------------|---------|-------------|
+| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade | Analisar valor |
+| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Query logs (JSON) |
+| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas | Value Score + Insights |
+| **LLM** | Opcional | Requerido | Requerido | Não | Não | Não |
+| **Embeddings** | Não | Sim | Sim | Não | Não | Não |
+| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift | Usage, JOINs, Hubs |
 
 ---
 
@@ -561,7 +641,8 @@ for alert in agent.get_active_alerts():
 - [x] Metadata Enrichment Agent com PII detection
 - [x] Data Classification Agent com LGPD/HIPAA/PCI-DSS
 - [x] Data Quality Agent com SLA monitoring
-- [x] Interface Streamlit unificada (5 agentes)
+- [x] Data Asset Value Agent com análise de uso e impacto
+- [x] Interface Streamlit unificada (6 agentes)
 - [x] Integração com Apache Atlas
 - [x] Providers plugáveis (embeddings, LLM, vectorstore)
 
