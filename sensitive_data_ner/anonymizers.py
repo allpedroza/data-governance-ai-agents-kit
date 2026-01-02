@@ -55,6 +55,7 @@ class AnonymizationConfig:
         "pci": "[CARTÃO]",
         "financial": "[FINANCEIRO]",
         "business": "[CONFIDENCIAL]",
+        "credentials": "[CREDENCIAL]",
     })
     entity_labels: Dict[str, str] = field(default_factory=lambda: {
         "cpf": "[CPF]",
@@ -67,6 +68,16 @@ class AnonymizationConfig:
         "address": "[ENDEREÇO]",
         "iban": "[IBAN]",
         "icd10": "[CID]",
+        "openai_api_key": "[API_KEY]",
+        "anthropic_api_key": "[API_KEY]",
+        "aws_access_key": "[AWS_KEY]",
+        "aws_secret_key": "[AWS_SECRET]",
+        "github_token": "[GITHUB_TOKEN]",
+        "jwt_token": "[JWT]",
+        "private_key_rsa": "[PRIVATE_KEY]",
+        "database_url": "[DB_URL]",
+        "password_config": "[SENHA]",
+        "generic_api_key": "[API_KEY]",
     })
 
 

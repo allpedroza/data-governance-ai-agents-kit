@@ -10,6 +10,7 @@ This agent serves as a protective filter to prevent data leakage of:
 - PCI (Payment Card Industry Data)
 - Financial Information
 - Business-sensitive/Strategic Information
+- Credentials (API Keys, Tokens, Secrets, Passwords)
 
 Features:
 - Deterministic detection (regex patterns)
@@ -145,6 +146,7 @@ class FilterPolicy:
     pci_action: FilterAction = FilterAction.BLOCK
     financial_action: FilterAction = FilterAction.ANONYMIZE
     business_action: FilterAction = FilterAction.BLOCK
+    credentials_action: FilterAction = FilterAction.BLOCK  # API keys, tokens, secrets
 
     # Thresholds
     min_confidence: float = 0.5
@@ -162,6 +164,7 @@ class FilterPolicy:
             EntityCategory.PCI: self.pci_action,
             EntityCategory.FINANCIAL: self.financial_action,
             EntityCategory.BUSINESS: self.business_action,
+            EntityCategory.CREDENTIALS: self.credentials_action,
         }
         return mapping.get(category, FilterAction.WARN)
 
@@ -438,6 +441,7 @@ class SensitiveDataNERAgent:
             "pci": 0,
             "financial": 0,
             "business": 0,
+            "credentials": 0,
             "validated": 0,
             "high_confidence": 0,
         }
@@ -512,6 +516,7 @@ class SensitiveDataNERAgent:
             EntityCategory.PCI: 0.95,
             EntityCategory.FINANCIAL: 0.7,
             EntityCategory.BUSINESS: 0.8,
+            EntityCategory.CREDENTIALS: 0.99,  # Highest risk - API keys, tokens, secrets
         }
 
         # Calculate weighted sum

@@ -1742,7 +1742,7 @@ def render_ner_tab() -> None:
     st.subheader("🔒 Sensitive Data NER Agent")
     st.markdown(
         "Detecte e anonimize dados sensíveis em texto livre antes de enviar para LLMs. "
-        "Proteja PII, PHI, PCI, dados financeiros e informações estratégicas de negócio."
+        "Proteja PII, PHI, PCI, dados financeiros, informações estratégicas e **credenciais (API keys, tokens, senhas)**."
     )
 
     if not NER_AVAILABLE:
@@ -1787,6 +1787,12 @@ def render_ner_tab() -> None:
                 options=["block", "anonymize", "warn", "allow"],
                 index=0,
                 key="ner_business_action"
+            )
+            credentials_action = st.selectbox(
+                "Credenciais (API Keys)",
+                options=["block", "anonymize", "warn", "allow"],
+                index=0,
+                key="ner_credentials_action"
             )
 
         with col2:
@@ -1858,6 +1864,7 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
                     pci_action=FilterAction(pci_action),
                     financial_action=FilterAction(financial_action),
                     business_action=FilterAction(business_action),
+                    credentials_action=FilterAction(credentials_action),
                     min_confidence=min_confidence,
                     anonymization_strategy=AnonymizationStrategy(anon_strategy),
                 )
@@ -1927,6 +1934,7 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
                         EntityCategory.PCI: "🟡",
                         EntityCategory.FINANCIAL: "🟠",
                         EntityCategory.BUSINESS: "🟣",
+                        EntityCategory.CREDENTIALS: "🔴",
                     }
                     icon = category_icons.get(e.category, "⚪")
 
@@ -1960,13 +1968,14 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
         with stats_tab:
             st.markdown("### Estatísticas por Categoria")
 
-            cat_cols = st.columns(5)
+            cat_cols = st.columns(6)
             categories = [
                 ("PII", result.statistics.get("pii", 0), "🔵"),
                 ("PHI", result.statistics.get("phi", 0), "🟢"),
                 ("PCI", result.statistics.get("pci", 0), "🟡"),
                 ("Financeiro", result.statistics.get("financial", 0), "🟠"),
                 ("Negócios", result.statistics.get("business", 0), "🟣"),
+                ("Credenciais", result.statistics.get("credentials", 0), "🔴"),
             ]
 
             for i, (name, count, icon) in enumerate(categories):
