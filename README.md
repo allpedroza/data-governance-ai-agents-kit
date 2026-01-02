@@ -9,6 +9,7 @@ Este projeto fornece **agentes de IA especializados** para resolver desafios com
 1. **🔗 Data Lineage Agent**: Análise automática de linhagem de dados
 2. **🔍 Data Discovery RAG Agent**: Descoberta de dados usando RAG com banco vetorizado
 3. **🛡️ Data Classification Agent**: Classificação de PII/PHI/Financeiro a partir de metadados
+4. **🧠 Metadata Enrichment Agent**: Geração automática de descrições, tags e classificações para ativos de dados
 
 ## 🚀 Agentes Disponíveis
 
@@ -107,11 +108,12 @@ print(response['answer'])
 
 ## 🔗 Integração entre Agentes
 
-Os dois agentes podem ser **integrados** para governança completa:
+Os agentes podem ser **integrados** para governança completa:
 
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
 from rag_discovery import DataDiscoveryRAGAgent
+from metadata_enrichment.agent import MetadataEnrichmentAgent
 from rag_discovery.examples.lineage_integration import convert_lineage_assets_to_metadata
 
 # 1. Analisa linhagem
@@ -125,20 +127,28 @@ tables = convert_lineage_assets_to_metadata(lineage_agent)
 rag_agent = DataDiscoveryRAGAgent()
 rag_agent.index_tables_batch(tables)
 
-# 4. Busca considerando impacto
-results = rag_agent.search("tabelas críticas com alto impacto downstream")
+# 4. Enriquecimento automático de metadados
+enrichment_agent = MetadataEnrichmentAgent(...)
+enriched_tables = [
+    enrichment_agent.enrich_from_sql(table.name, connection_string="...")
+    for table in tables
+]
 
-# 5. Análise de impacto enriquecida
-response = rag_agent.ask(
-    "Se eu modificar a tabela customers, qual o impacto?"
-)
+# 5. Classificação de sensibilidade (usando schemas enriquecidos)
+# ... montar TableSchema a partir dos metadados e usar DataClassificationAgent
+
+# 6. Busca considerando impacto e sensibilidade
+results = rag_agent.search("tabelas críticas com PII e alto impacto downstream")
+
+# 7. Análise de impacto enriquecida
+response = rag_agent.ask("Se eu modificar a tabela customers, qual o impacto?")
 ```
 
 **Benefícios da Integração**:
 - 🎯 Descoberta de dados com contexto de linhagem
 - 📊 Análise de impacto enriquecida com IA
-- 🔍 Busca semântica considerando dependências
-- 📝 Documentação automática de pipelines completos
+- 🔍 Busca semântica considerando dependências e sensibilidade
+- 📝 Documentação automática e enriquecimento de catálogos
 
 ---
 
@@ -181,6 +191,48 @@ print(classification.detected_categories)  # ['FINANCIAL', 'PII']
 
 ---
 
+### 4. Metadata Enrichment Agent
+
+Agente de IA para **gerar descrições, tags, classificação e detecção de PII** a partir de schemas, amostras de dados e normativos.
+
+**Características**:
+- ✅ Geração automática de descrições PT/EN para tabelas e colunas
+- ✅ Classificação de dados (public, internal, confidential, restricted) com detecção de PII
+- ✅ Sugestão de domínio e proprietário, além de tags de organização
+- ✅ RAG sobre normativos internos (nomenclatura, governança, segurança)
+- ✅ Data sampling para CSV, Parquet, SQL e Delta Lake
+- ✅ Exportação em JSON, Markdown e HTML
+
+**Documentação**: [metadata_enrichment/README.md](metadata_enrichment/README.md)
+
+**Casos de Uso**:
+- Documentação automática de tabelas de data lakes/warehouses
+- Criação rápida de catálogos de dados com sugestões consistentes
+- Enriquecimento de metadados para onboarding e descoberta
+- Padronização baseada em normativos internos
+
+**Exemplo Rápido**:
+```python
+from metadata_enrichment.agent import MetadataEnrichmentAgent
+from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+from rag_discovery.providers.llm import OpenAILLM
+from rag_discovery.providers.vectorstore import ChromaStore
+
+agent = MetadataEnrichmentAgent(
+    embedding_provider=SentenceTransformerEmbeddings(),
+    llm_provider=OpenAILLM(model="gpt-4o-mini"),
+    vector_store=ChromaStore(collection_name="standards")
+)
+
+agent.index_standards_from_json("./examples/sample_standards.json")
+result = agent.enrich_from_csv("./data/customers.csv")
+
+print(result.classification)  # ex.: confidential
+print(result.has_pii)
+```
+
+---
+
 ## 📦 Instalação
 
 ### Pré-requisitos
@@ -219,6 +271,17 @@ pip install -r rag_discovery/requirements.txt
 export OPENAI_API_KEY="sua-chave-aqui"
 ```
 
+**Apenas Data Classification Agent**:
+```bash
+pip install -r classification/requirements.txt
+```
+
+**Apenas Metadata Enrichment Agent**:
+```bash
+pip install -r metadata_enrichment/requirements.txt
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
 ---
 
 ## 🎯 Casos de Uso Combinados
@@ -229,8 +292,10 @@ export OPENAI_API_KEY="sua-chave-aqui"
 
 **Solução**:
 1. Use **Lineage Agent** para mapear dependências
-2. Use **RAG Agent** para descoberta semântica
-3. Combine para análise de impacto contextualizada
+2. Use **Metadata Enrichment Agent** para gerar descrições e classificação
+3. Use **Classification Agent** para confirmar sensibilidade
+4. Use **RAG Agent** para descoberta semântica com contexto completo
+5. Combine para análise de impacto contextualizada
 
 ### 2. Migração de Plataforma
 
@@ -246,9 +311,10 @@ export OPENAI_API_KEY="sua-chave-aqui"
 **Cenário**: Atender LGPD/GDPR
 
 **Solução**:
-1. **RAG Agent** identifica todos os dados PII
-2. **Lineage Agent** rastreia fluxo de dados sensíveis
-3. Documentação automática para auditoria
+1. **Metadata Enrichment Agent** sugere domínios, donos e detecta PII
+2. **Classification Agent** consolida níveis de sensibilidade e controles
+3. **Lineage Agent** rastreia fluxo de dados sensíveis
+4. **RAG Agent** facilita buscas contextualizadas para auditoria
 
 ### 4. Onboarding de Equipe
 
@@ -315,6 +381,19 @@ data-governance-ai-agents-kit/
 │   ├── .gitignore
 │   └── README.md
 │
+├── classification/                   # Data Classification Agent
+│   ├── data_classification_agent.py  # Agente principal
+│   ├── requirements.txt
+│   └── README.md
+│
+├── metadata_enrichment/              # Metadata Enrichment Agent
+│   ├── agent.py                      # Agente principal
+│   ├── standards/                    # RAG para normativos
+│   ├── sampling/                     # Coletores de amostras de dados
+│   ├── examples/                     # Exemplos e normativos
+│   ├── streamlit_app.py              # UI dedicada
+│   └── README.md
+│
 └── README.md                         # Este arquivo
 ```
 
@@ -342,14 +421,14 @@ export ATLAS_PASSWORD="admin"
 
 ## 📊 Comparação de Agentes
 
-| Característica | Lineage Agent | RAG Agent |
-|---------------|---------------|-----------|
-| **Objetivo** | Mapear dependências | Descobrir dados |
-| **Input** | Código (SQL, Python) | Metadados |
-| **Output** | Grafo de linhagem | Respostas em LN |
-| **Técnica** | AST parsing + Graph | Embeddings + RAG |
-| **LLM** | Opcional (fallback) | Requerido |
-| **Casos de Uso** | Análise de impacto | Busca semântica |
+| Característica | Lineage Agent | RAG Agent | Classification Agent | Metadata Enrichment Agent |
+|---------------|---------------|-----------|----------------------|---------------------------|
+| **Objetivo** | Mapear dependências | Descobrir dados | Classificar PII/PHI/Financeiro | Enriquecer descrições, tags e classificação |
+| **Input** | Código (SQL, Python) | Metadados | Schemas e metadados | Schemas, amostras e normativos |
+| **Output** | Grafo de linhagem | Respostas em LN | Nível de sensibilidade e controles | Descrições PT/EN, tags, classificação |
+| **Técnica** | AST parsing + Graph | Embeddings + RAG | Regras semânticas + (opcional) LLM | RAG sobre normativos + sampling |
+| **LLM** | Opcional (fallback) | Requerido | Opcional (validação) | Recomendado |
+| **Casos de Uso** | Análise de impacto | Busca semântica | Compliance LGPD/GDPR | Catálogo e documentação automática |
 
 ---
 
@@ -373,6 +452,19 @@ export ATLAS_PASSWORD="admin"
 - [ ] Integração com AWS Glue
 - [ ] Integração com Databricks Unity Catalog
 - [ ] Cache de embeddings
+
+### Classification Agent
+- [x] Regras de PII/PHI/Financeiro baseadas em metadados
+- [x] Níveis de severidade e recomendações LGPD/GDPR
+- [ ] Validação multilíngue com LLM
+- [ ] Biblioteca ampliada de regras setoriais
+
+### Metadata Enrichment Agent
+- [x] RAG sobre normativos internos
+- [x] Suporte a sampling (CSV, Parquet, SQL, Delta)
+- [x] Exportação em JSON/Markdown/HTML
+- [ ] Conectores adicionais (BigQuery, S3 inventories)
+- [ ] Templates personalizáveis de catálogo
 
 ---
 
