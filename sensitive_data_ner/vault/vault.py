@@ -6,7 +6,7 @@ sensitive data with encryption, access control, and audit logging.
 """
 
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -45,6 +45,10 @@ class VaultConfig:
     # Audit settings
     audit_retention_days: int = 365
     audit_all_operations: bool = True
+
+    # Decryption retention
+    delete_after_decrypt: bool = True
+    decryption_retention_days: Optional[int] = None
 
 
 @dataclass
@@ -450,8 +454,29 @@ class SecureVault:
                     "confidence": mapping.metadata.get("confidence", 0.0)
                 })
 
-        # Update access tracking
-        self._storage.update_session_access(session_id)
+        decrypted_at = datetime.utcnow()
+
+        # Update access tracking and retention metadata
+        retention_policy = {
+            "mode": "delete_after_decrypt" if self.config.delete_after_decrypt else "retain",
+            "retention_days": self.config.decryption_retention_days,
+            "expires_at": None,
+        }
+
+        if (
+            not self.config.delete_after_decrypt
+            and self.config.decryption_retention_days is not None
+        ):
+            expires_at = decrypted_at + timedelta(days=self.config.decryption_retention_days)
+            retention_policy["expires_at"] = expires_at.isoformat()
+
+        self._storage.update_session_access(
+            session_id,
+            metadata_updates={
+                "last_decrypted_at": decrypted_at.isoformat(),
+                "decryption_retention": retention_policy,
+            },
+        )
 
         # Audit log
         self._audit_logger.log(
@@ -460,6 +485,15 @@ class SecureVault:
             session_id=session_id,
             details={"entity_count": len(entities)}
         )
+
+        if self.config.delete_after_decrypt:
+            if self._storage.delete_session(session_id):
+                self._audit_logger.log(
+                    AuditEventType.DATA_DELETED,
+                    user_id=auth_token.user_id,
+                    session_id=session_id,
+                    details={"reason": "delete_after_decrypt"},
+                )
 
         return original_text, entities
 
@@ -567,6 +601,7 @@ class SecureVault:
                 "created_at": s.created_at.isoformat(),
                 "accessed_at": s.accessed_at.isoformat() if s.accessed_at else None,
                 "access_count": s.access_count,
+                "metadata": s.metadata,
                 "anonymized_preview": s.anonymized_message[:100] + "..."
                     if len(s.anonymized_message) > 100 else s.anonymized_message
             }
