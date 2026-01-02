@@ -80,6 +80,7 @@ class ClassificationReport:
     phi_columns: List[str] = field(default_factory=list)
     pci_columns: List[str] = field(default_factory=list)
     financial_columns: List[str] = field(default_factory=list)
+    proprietary_columns: List[str] = field(default_factory=list)
     row_count: int = 0
     columns_analyzed: int = 0
     high_risk_count: int = 0
@@ -100,6 +101,7 @@ class ClassificationReport:
                 "phi_columns": len(self.phi_columns),
                 "pci_columns": len(self.pci_columns),
                 "financial_columns": len(self.financial_columns),
+                "proprietary_columns": len(self.proprietary_columns),
                 "high_risk_count": self.high_risk_count
             },
             "columns": [c.to_dict() for c in self.columns],
@@ -107,6 +109,7 @@ class ClassificationReport:
             "phi_columns": self.phi_columns,
             "pci_columns": self.pci_columns,
             "financial_columns": self.financial_columns,
+            "proprietary_columns": self.proprietary_columns,
             "recommendations": self.recommendations,
             "compliance_flags": self.compliance_flags
         }
@@ -137,6 +140,8 @@ class ClassificationReport:
             lines.append(f"- **PCI:** {', '.join(self.pci_columns)}")
         if self.financial_columns:
             lines.append(f"- **Financial:** {', '.join(self.financial_columns)}")
+        if self.proprietary_columns:
+            lines.append(f"- **Proprietary/Business:** {', '.join(self.proprietary_columns)}")
 
         lines.extend(["", "## Column Details", ""])
         lines.append("| Column | Sensitivity | Categories | Confidence |")
@@ -240,7 +245,8 @@ class DataClassificationAgent:
         self,
         custom_patterns: Optional[Dict[str, str]] = None,
         sensitivity_rules: Optional[Dict[str, str]] = None,
-        sample_size: int = 1000
+        sample_size: int = 1000,
+        business_sensitive_terms: Optional[List[str]] = None
     ):
         """
         Initialize the Data Classification Agent.
@@ -252,6 +258,10 @@ class DataClassificationAgent:
         """
         self.sample_size = sample_size
         self.custom_patterns = custom_patterns or {}
+        self.business_sensitive_terms: Set[str] = {
+            term.strip().lower() for term in (business_sensitive_terms or []) if term.strip()
+        }
+        self._business_terms_list: List[str] = sorted(self.business_sensitive_terms)
         self.sensitivity_rules = sensitivity_rules or {}
 
         # Compile all patterns
@@ -263,6 +273,10 @@ class DataClassificationAgent:
             self._compiled_custom = {k: re.compile(v, re.IGNORECASE) for k, v in custom_patterns.items()}
         else:
             self._compiled_custom = {}
+
+        self._compiled_business_terms = [
+            re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE) for term in self._business_terms_list
+        ]
 
     def classify_from_csv(
         self,
@@ -351,6 +365,7 @@ class DataClassificationAgent:
         phi_columns: List[str] = []
         pci_columns: List[str] = []
         financial_columns: List[str] = []
+        proprietary_columns: List[str] = []
         all_categories: Set[str] = set()
         high_risk_count = 0
 
@@ -369,6 +384,8 @@ class DataClassificationAgent:
                     pci_columns.append(col_name)
                 elif cat == "financial":
                     financial_columns.append(col_name)
+                elif cat == "proprietary":
+                    proprietary_columns.append(col_name)
 
             # Count high-risk columns
             if col_classification.sensitivity_level in ("confidential", "restricted"):
@@ -379,12 +396,17 @@ class DataClassificationAgent:
 
         # Generate recommendations
         recommendations = self._generate_recommendations(
-            pii_columns, phi_columns, pci_columns, financial_columns, overall_sensitivity
+            pii_columns,
+            phi_columns,
+            pci_columns,
+            financial_columns,
+            proprietary_columns,
+            overall_sensitivity
         )
 
         # Check compliance flags
         compliance_flags = self._check_compliance(
-            pii_columns, phi_columns, pci_columns, financial_columns
+            pii_columns, phi_columns, pci_columns, financial_columns, proprietary_columns
         )
 
         return ClassificationReport(
@@ -398,6 +420,7 @@ class DataClassificationAgent:
             phi_columns=phi_columns,
             pci_columns=pci_columns,
             financial_columns=financial_columns,
+            proprietary_columns=proprietary_columns,
             row_count=len(df),
             columns_analyzed=len(df.columns),
             high_risk_count=high_risk_count,
@@ -429,6 +452,13 @@ class DataClassificationAgent:
             name_hint_score = max(name_hint_score, 0.3)
             if "financial" not in categories:
                 categories.append("financial")
+
+        business_hint_match = [term for term in self.business_sensitive_terms if term in col_lower]
+        if business_hint_match:
+            name_hint_score = max(name_hint_score, 0.3)
+            if "proprietary" not in categories:
+                categories.append("proprietary")
+            detected_patterns.extend([f"business:{term}" for term in business_hint_match])
 
         # Check patterns in data
         sample = col_data.head(min(100, len(col_data)))
@@ -486,6 +516,18 @@ class DataClassificationAgent:
                     detected_patterns.append(f"custom:{pattern_name}")
                     sample_matches.extend(matches.head(3).tolist())
 
+        # Business sensitive terms dictionary matching
+        for term_pattern, term in zip(self._compiled_business_terms, self._business_terms_list):
+            matches = sample[sample.str.contains(term_pattern, na=False)]
+            if len(matches) > 0:
+                match_rate = len(matches) / len(sample)
+                if match_rate > 0.05:
+                    detected_patterns.append(f"business:{term}")
+                    sample_matches.extend(matches.head(3).tolist())
+                    if "proprietary" not in categories:
+                        categories.append("proprietary")
+
+
         # Combine confidence from name hints and pattern matching
         final_confidence = max(max_confidence, name_hint_score)
         if max_confidence > 0 and name_hint_score > 0:
@@ -520,7 +562,7 @@ class DataClassificationAgent:
         if not categories:
             return "public"
 
-        if "phi" in categories or "pci" in categories:
+        if "phi" in categories or "pci" in categories or "proprietary" in categories:
             return "restricted"
         if "pii" in categories and confidence > 0.7:
             return "restricted"
@@ -567,6 +609,11 @@ class DataClassificationAgent:
             recommendations.append(f"Apply PCI-DSS controls to '{col_name}'")
             recommendations.append("Do not store CVV/CVC values")
 
+        if "proprietary" in categories:
+            recommendations.append(
+                f"Limit distribution of strategic terms found in '{col_name}' and apply NDA coverage"
+            )
+
         if sensitivity == "restricted":
             recommendations.append("Implement field-level encryption")
             recommendations.append("Enable audit logging for access")
@@ -579,6 +626,7 @@ class DataClassificationAgent:
         phi_columns: List[str],
         pci_columns: List[str],
         financial_columns: List[str],
+        proprietary_columns: List[str],
         overall_sensitivity: str
     ) -> List[str]:
         """Generate overall recommendations."""
@@ -604,6 +652,11 @@ class DataClassificationAgent:
                 f"Financial data: {len(financial_columns)} columns require financial controls"
             )
 
+        if proprietary_columns:
+            recommendations.append(
+                f"Strategic data: {len(proprietary_columns)} columns contain business-sensitive terms"
+            )
+
         if overall_sensitivity in ("confidential", "restricted"):
             recommendations.extend([
                 "Implement role-based access control (RBAC)",
@@ -619,7 +672,8 @@ class DataClassificationAgent:
         pii_columns: List[str],
         phi_columns: List[str],
         pci_columns: List[str],
-        financial_columns: List[str]
+        financial_columns: List[str],
+        proprietary_columns: List[str]
     ) -> List[str]:
         """Check and flag compliance requirements."""
         flags = []
@@ -639,12 +693,28 @@ class DataClassificationAgent:
             flags.append("SOX - Sarbanes-Oxley Act")
             flags.append("BACEN - Banco Central do Brasil regulations")
 
+        if proprietary_columns:
+            flags.append("Corporate confidentiality - Strategic project protection")
+
         return flags
 
     def add_custom_pattern(self, name: str, pattern: str) -> None:
         """Add a custom pattern for detection."""
         self.custom_patterns[name] = pattern
         self._compiled_custom[name] = re.compile(pattern, re.IGNORECASE)
+
+    def add_business_terms(self, terms: List[str]) -> None:
+        """Add business-sensitive terms to the proprietary dictionary."""
+        for term in terms:
+            cleaned = term.strip().lower()
+            if not cleaned:
+                continue
+            if cleaned not in self.business_sensitive_terms:
+                self.business_sensitive_terms.add(cleaned)
+                self._business_terms_list.append(cleaned)
+                self._compiled_business_terms.append(
+                    re.compile(rf"\b{re.escape(cleaned)}\b", re.IGNORECASE)
+                )
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get agent statistics."""
