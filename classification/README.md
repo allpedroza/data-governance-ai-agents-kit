@@ -1,34 +1,34 @@
 # 🛡️ Data Classification Agent
 
-Agente de IA para **classificar automaticamente dados sensíveis (PII, PHI, financeiros)** usando **apenas schemas e metadados**. Ideal para cenários de **LGPD/GDPR** onde o acesso ao dado bruto não é permitido.
+Agente de IA para **classificar automaticamente dados sensíveis (PII, PHI, financeiros)** usando apenas schemas e metadados.
+*AI agent to automatically classify sensitive data (PII, PHI, financial) using only schemas and metadata.*
 
-## 📋 Índice
-- [Visão Geral](#visão-geral)
-- [Características](#características)
-- [Guia Rápido](#guia-rápido)
-- [Arquitetura Lógica](#arquitetura-lógica)
-- [Como Estender](#como-estender)
+## Visão Geral
+*Overview.*
 
-## 🎯 Visão Geral
-O **Data Classification Agent** avalia nomes de colunas, tipos, descrições e tags para detectar **PII, PHI e dados financeiros**. As recomendações são alinhadas a **controles LGPD/GDPR** e o agente nunca lê os valores das tabelas.
+O agente avalia nomes, tipos, descrições e tags para detectar categorias sensíveis alinhadas a LGPD/GDPR, sem ler valores das tabelas.
+*The agent checks column names, types, descriptions, and tags to detect sensitive categories aligned with LGPD/GDPR without reading raw values.*
 
-## ✨ Características
-- 🔒 **Classificação sem dados brutos**: funciona apenas com schemas, descrições e tags.
-- 🧠 **Validação opcional com LLM**: peça para o modelo revisar os metadados e confirmar se a tabela é sensível.
-- 🩺 **Detecção de PII/PHI/Financeiro** com regras ponderadas por palavras-chave, tipos e tags.
-- ✅ **Compliance LGPD/GDPR**: sugere ações como DPIA, minimização e mascaramento.
-- 🧩 **Extensível**: adicione regras customizadas sem alterar o núcleo do agente.
-- 🧠 **Níveis de sensibilidade**: LOW, MEDIUM, HIGH e CRITICAL para priorização.
+## Características
+*Features.*
 
-## 🚀 Guia Rápido
+- **Classificação sem acessar dados brutos** (apenas metadados).
+  *Classification without touching raw data (metadata only).* 
+- **Detecção de PII/PHI/financeiro** por regras ponderadas.
+  *PII/PHI/financial detection using weighted rules.*
+- **Validação opcional com LLM** para revisão contextual.
+  *Optional LLM validation for contextual review.*
+- **Níveis de sensibilidade**: LOW, MEDIUM, HIGH, CRITICAL.
+  *Sensitivity levels: LOW, MEDIUM, HIGH, CRITICAL.*
+- **Extensível** com regras e controles adicionais.
+  *Extensible with additional rules and controls.*
+
+## Guia Rápido
+*Quickstart.*
+
 ```python
-from classification import (
-    ColumnMetadata,
-    DataClassificationAgent,
-    TableSchema,
-)
+from classification import ColumnMetadata, DataClassificationAgent, TableSchema
 
-# Define o schema de uma tabela (sem acessar os dados)
 table = TableSchema(
     name="customers",
     schema="public",
@@ -45,36 +45,35 @@ table = TableSchema(
 agent = DataClassificationAgent()
 result = agent.classify_table(table)
 
-print(result.sensitivity_level)          # HIGH
-print(result.detected_categories)        # ['PII']
+print(result.sensitivity_level)
+print(result.detected_categories)
 for column in result.columns:
     print(column.column.name, column.categories, column.suggested_controls)
 ```
 
-### 🔍 Validação com LLM
-Se quiser uma confirmação baseada em modelo generativo (usando apenas metadados), inicialize o agente com um `LLMProvider` (por exemplo, `OpenAILLM`) e chame `classify_table_with_llm`:
+Para validação generativa, inicialize com um `LLMProvider` e chame `classify_table_with_llm`.
+*For generative validation, initialize with an `LLMProvider` and call `classify_table_with_llm`.*
 
-```python
-from classification import DataClassificationAgent
-from rag_discovery.providers.llm import OpenAILLM
+## Arquitetura Lógica
+*Logical architecture.*
 
-llm = OpenAILLM(model="gpt-4o-mini")
-agent = DataClassificationAgent(llm_provider=llm)
-classification = agent.classify_table_with_llm(table)
+1. Entrada de metadados (`TableSchema`/`ColumnMetadata`).
+   *Metadata input (`TableSchema`/`ColumnMetadata`).*
+2. Regras de sensibilidade (`SensitiveDataRule`).
+   *Sensitivity rules (`SensitiveDataRule`).*
+3. Pontuação por coluna e consolidação por tabela.
+   *Column scoring and table-level aggregation.*
+4. Recomendações de controles LGPD/GDPR.
+   *LGPD/GDPR control recommendations.*
+5. Saída auditável (`TableClassification`).
+   *Auditable output (`TableClassification`).*
 
-print(classification.llm_assessment.is_sensitive)  # True / False
-print(classification.detected_categories)          # Regras + categorias sugeridas pelo LLM
-print(classification.rationale)                    # Inclui explicação do LLM
-```
+## Como Estender
+*How to extend.*
 
-## 🧱 Arquitetura Lógica
-1. **Entrada de metadados**: `TableSchema` e `ColumnMetadata` descrevem nome, tipo, descrição e tags.
-2. **Regras de sensibilidade**: `SensitiveDataRule` avalia palavras-chave, tipos e tags para PII, PHI e financeiro.
-3. **Scoring por coluna**: combina indícios (nome, descrição, tipo, tags) com pesos ajustados para metadados.
-4. **Síntese por tabela**: consolida categorias detectadas, define o nível de sensibilidade e recomendações LGPD/GDPR.
-5. **Saída estruturada**: `TableClassification` com colunas classificadas, ações sugeridas e rationale auditável.
-
-## 🛠️ Como Estender
-- **Novas regras**: passe uma lista de `SensitiveDataRule` customizada ao inicializar o agente.
-- **Controles adicionais**: acrescente requisitos LGPD/GDPR via parâmetros `lgpd_requirements` e `gdpr_requirements`.
-- **Pipelines existentes**: o agente é independente dos demais módulos, podendo ser usado junto ao Lineage e Discovery.
+- Adicione regras customizadas ao inicializar o agente.
+  *Add custom rules when initializing the agent.*
+- Inclua controles adicionais via `lgpd_requirements` e `gdpr_requirements`.
+  *Include extra controls via `lgpd_requirements` and `gdpr_requirements`.*
+- Integre com Lineage e Discovery para workflows completos.
+  *Integrate with Lineage and Discovery for end-to-end workflows.*
