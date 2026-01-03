@@ -48,6 +48,7 @@ try:
         KeyManager,
         AuditLogger,
         AuditEventType,
+        RetentionPolicy,
     )
     HAS_VAULT = True
 except ImportError:
@@ -77,7 +78,8 @@ __all__ = [
     "KeyManager",
     "AuditLogger",
     "AuditEventType",
+    "RetentionPolicy",
     "HAS_VAULT",
 ]
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"

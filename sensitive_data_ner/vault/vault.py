@@ -6,9 +6,10 @@ sensitive data with encryption, access control, and audit logging.
 """
 
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
+from enum import Enum
 
 try:
     from cryptography.fernet import Fernet
@@ -20,6 +21,19 @@ from .storage import VaultStorage, SQLiteVaultStorage, StoredMapping, StoredSess
 from .key_manager import KeyManager, KeyManagerConfig, KeyRotationPolicy
 from .access_control import AccessController, AccessLevel, AuthToken
 from .audit import AuditLogger, AuditEventType
+
+
+class RetentionPolicy(Enum):
+    """
+    Defines what happens to session data after decryption.
+
+    - DELETE_ON_DECRYPT: Delete immediately after decryption (default, most secure)
+    - RETAIN_DAYS: Keep for N days after decryption, then auto-delete
+    - RETAIN_FOREVER: Never auto-delete (requires manual deletion)
+    """
+    DELETE_ON_DECRYPT = "DELETE_ON_DECRYPT"
+    RETAIN_DAYS = "RETAIN_DAYS"
+    RETAIN_FOREVER = "RETAIN_FOREVER"
 
 
 @dataclass
@@ -45,6 +59,11 @@ class VaultConfig:
     # Audit settings
     audit_retention_days: int = 365
     audit_all_operations: bool = True
+
+    # Retention settings
+    default_retention_policy: RetentionPolicy = RetentionPolicy.DELETE_ON_DECRYPT
+    default_retention_days: int = 30  # Used when policy is RETAIN_DAYS
+    auto_cleanup_on_access: bool = True  # Cleanup expired sessions on vault access
 
 
 @dataclass
@@ -304,7 +323,9 @@ class SecureVault:
         anonymized_text: str,
         entities: List[Dict[str, Any]],
         risk_score: float = 0.0,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        retention_policy: Optional[RetentionPolicy] = None,
+        retention_days: Optional[int] = None
     ) -> VaultSession:
         """
         Store a session with encrypted original text.
@@ -316,12 +337,27 @@ class SecureVault:
             entities: List of detected entities
             risk_score: Risk score for the session
             metadata: Additional metadata
+            retention_policy: What to do after decryption:
+                - DELETE_ON_DECRYPT: Delete immediately (default)
+                - RETAIN_DAYS: Keep for N days after decryption
+                - RETAIN_FOREVER: Never auto-delete
+            retention_days: Days to retain if policy is RETAIN_DAYS
 
         Returns:
             VaultSession with session details
         """
         self._ensure_initialized()
         auth_token = self._verify_access(token, AccessLevel.READ_ONLY)
+
+        # Apply default retention policy if not specified
+        if retention_policy is None:
+            retention_policy = self.config.default_retention_policy
+        if retention_days is None and retention_policy == RetentionPolicy.RETAIN_DAYS:
+            retention_days = self.config.default_retention_days
+
+        # Auto-cleanup expired sessions
+        if self.config.auto_cleanup_on_access:
+            self._cleanup_expired_sessions_internal()
 
         # Generate session ID
         session_id = f"sess_{secrets.token_hex(16)}"
@@ -344,7 +380,11 @@ class SecureVault:
             created_at=datetime.utcnow(),
             accessed_at=None,
             access_count=0,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            retention_policy=retention_policy.value,
+            retention_days=retention_days,
+            decrypted_at=None,
+            expires_at=None
         )
 
         self._storage.store_session(stored_session)
@@ -399,20 +439,33 @@ class SecureVault:
     def decrypt_session(
         self,
         token: str,
-        session_id: str
+        session_id: str,
+        override_retention: Optional[RetentionPolicy] = None,
+        override_retention_days: Optional[int] = None
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Decrypt and retrieve original session data.
 
+        After decryption, applies the retention policy:
+        - DELETE_ON_DECRYPT: Deletes the session immediately
+        - RETAIN_DAYS: Sets expiration for N days from now
+        - RETAIN_FOREVER: Keeps the session indefinitely
+
         Args:
             token: Access token with DECRYPT level
             session_id: Session ID to decrypt
+            override_retention: Override stored retention policy for this decryption
+            override_retention_days: Override retention days
 
         Returns:
             Tuple of (original_text, list of original entities)
         """
         self._ensure_initialized()
         auth_token = self._verify_access(token, AccessLevel.DECRYPT, session_id)
+
+        # Auto-cleanup expired sessions
+        if self.config.auto_cleanup_on_access:
+            self._cleanup_expired_sessions_internal()
 
         # Get session
         session = self._storage.get_session(session_id)
@@ -453,13 +506,52 @@ class SecureVault:
         # Update access tracking
         self._storage.update_session_access(session_id)
 
-        # Audit log
+        # Determine retention policy to apply
+        retention_policy_str = session.retention_policy or "DELETE_ON_DECRYPT"
+        if override_retention:
+            retention_policy = override_retention
+        else:
+            retention_policy = RetentionPolicy(retention_policy_str)
+
+        retention_days = override_retention_days or session.retention_days
+
+        # Apply retention policy
+        delete_now = False
+        expires_at = None
+
+        if retention_policy == RetentionPolicy.DELETE_ON_DECRYPT:
+            delete_now = True
+        elif retention_policy == RetentionPolicy.RETAIN_DAYS:
+            days = retention_days or self.config.default_retention_days
+            expires_at = datetime.utcnow() + timedelta(days=days)
+        # RETAIN_FOREVER: no expiration, no deletion
+
+        # Audit log (before potential deletion)
         self._audit_logger.log(
             AuditEventType.DATA_DECRYPTED,
             user_id=auth_token.user_id,
             session_id=session_id,
-            details={"entity_count": len(entities)}
+            details={
+                "entity_count": len(entities),
+                "retention_policy": retention_policy.value,
+                "delete_immediately": delete_now,
+                "expires_at": expires_at.isoformat() if expires_at else None
+            }
         )
+
+        # Execute retention action
+        if delete_now:
+            # Delete immediately after returning data
+            self._storage.delete_session(session_id)
+            self._audit_logger.log(
+                AuditEventType.SESSION_DELETED,
+                user_id=auth_token.user_id,
+                session_id=session_id,
+                details={"reason": "DELETE_ON_DECRYPT policy"}
+            )
+        else:
+            # Update decryption timestamp and expiration
+            self._storage.update_session_decrypted(session_id, expires_at)
 
         return original_text, entities
 
@@ -692,6 +784,103 @@ class SecureVault:
         self._verify_access(token, AccessLevel.SUPER_ADMIN)
 
         return self._audit_logger.verify_chain_integrity()
+
+    # Retention and Cleanup
+
+    def _cleanup_expired_sessions_internal(self) -> int:
+        """Internal cleanup without access verification."""
+        if not self._storage:
+            return 0
+        return self._storage.delete_expired_sessions()
+
+    def cleanup_expired_sessions(self, token: str) -> int:
+        """
+        Delete all sessions that have passed their expiration date.
+
+        Args:
+            token: Access token with ADMIN level
+
+        Returns:
+            Number of sessions deleted
+        """
+        self._ensure_initialized()
+        auth_token = self._verify_access(token, AccessLevel.ADMIN)
+
+        deleted_count = self._storage.delete_expired_sessions()
+
+        if deleted_count > 0:
+            self._audit_logger.log(
+                AuditEventType.SESSION_DELETED,
+                user_id=auth_token.user_id,
+                details={
+                    "reason": "cleanup_expired_sessions",
+                    "count": deleted_count
+                }
+            )
+
+        return deleted_count
+
+    def get_expired_sessions(self, token: str) -> List[str]:
+        """
+        Get list of expired session IDs.
+
+        Args:
+            token: Access token with ADMIN level
+
+        Returns:
+            List of expired session IDs
+        """
+        self._ensure_initialized()
+        self._verify_access(token, AccessLevel.ADMIN)
+
+        return self._storage.get_expired_sessions()
+
+    def update_session_retention(
+        self,
+        token: str,
+        session_id: str,
+        retention_policy: RetentionPolicy,
+        retention_days: Optional[int] = None
+    ) -> None:
+        """
+        Update retention policy for an existing session.
+
+        Args:
+            token: Access token with ADMIN level
+            session_id: Session to update
+            retention_policy: New retention policy
+            retention_days: Days to retain (for RETAIN_DAYS policy)
+        """
+        self._ensure_initialized()
+        auth_token = self._verify_access(token, AccessLevel.ADMIN)
+
+        # Calculate expires_at if needed
+        expires_at = None
+        if retention_policy == RetentionPolicy.RETAIN_DAYS:
+            days = retention_days or self.config.default_retention_days
+            # If session was already decrypted, calculate from now
+            # Otherwise, expiration will be set on decryption
+            session = self._storage.get_session(session_id)
+            if session and session.decrypted_at:
+                expires_at = datetime.utcnow() + timedelta(days=days)
+
+        self._storage.update_session_retention(
+            session_id,
+            retention_policy.value,
+            retention_days,
+            expires_at
+        )
+
+        self._audit_logger.log(
+            AuditEventType.SESSION_ACCESSED,
+            user_id=auth_token.user_id,
+            session_id=session_id,
+            details={
+                "action": "update_retention",
+                "retention_policy": retention_policy.value,
+                "retention_days": retention_days
+            }
+        )
 
     def close(self) -> None:
         """Close vault and release resources."""

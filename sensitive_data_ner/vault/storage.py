@@ -51,6 +51,11 @@ class StoredSession:
     accessed_at: Optional[datetime]
     access_count: int
     metadata: Dict[str, Any]
+    # Retention policy fields
+    retention_policy: str = "DELETE_ON_DECRYPT"  # DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER
+    retention_days: Optional[int] = None
+    decrypted_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
 
 
 class VaultStorage(ABC):
@@ -107,6 +112,36 @@ class VaultStorage(ABC):
         """Get storage statistics."""
         pass
 
+    @abstractmethod
+    def update_session_decrypted(
+        self,
+        session_id: str,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session with decryption timestamp and expiration."""
+        pass
+
+    @abstractmethod
+    def get_expired_sessions(self) -> List[str]:
+        """Get list of expired session IDs."""
+        pass
+
+    @abstractmethod
+    def delete_expired_sessions(self) -> int:
+        """Delete all expired sessions. Returns count deleted."""
+        pass
+
+    @abstractmethod
+    def update_session_retention(
+        self,
+        session_id: str,
+        retention_policy: str,
+        retention_days: Optional[int] = None,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session retention policy."""
+        pass
+
 
 class SQLiteVaultStorage(VaultStorage):
     """
@@ -157,7 +192,11 @@ class SQLiteVaultStorage(VaultStorage):
                 created_at TEXT NOT NULL,
                 accessed_at TEXT,
                 access_count INTEGER DEFAULT 0,
-                metadata TEXT
+                metadata TEXT,
+                retention_policy TEXT DEFAULT 'DELETE_ON_DECRYPT',
+                retention_days INTEGER,
+                decrypted_at TEXT,
+                expires_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS mappings (
@@ -178,11 +217,34 @@ class SQLiteVaultStorage(VaultStorage):
 
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at
                 ON sessions(created_at);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at
+                ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS idx_mappings_session_id
                 ON mappings(session_id);
             CREATE INDEX IF NOT EXISTS idx_mappings_entity_type
                 ON mappings(entity_type);
         """)
+
+        # Add new columns if they don't exist (for migration)
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN retention_policy TEXT DEFAULT 'DELETE_ON_DECRYPT'")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN retention_days INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN decrypted_at TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN expires_at TEXT")
+        except sqlite3.OperationalError:
+            pass
 
         conn.commit()
 
@@ -197,8 +259,9 @@ class SQLiteVaultStorage(VaultStorage):
             INSERT INTO sessions (
                 session_id, original_message_encrypted, anonymized_message,
                 entity_count, risk_score, key_id, created_at, accessed_at,
-                access_count, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                access_count, metadata, retention_policy, retention_days,
+                decrypted_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             session.session_id,
             session.original_message_encrypted,
@@ -209,7 +272,11 @@ class SQLiteVaultStorage(VaultStorage):
             session.created_at.isoformat(),
             session.accessed_at.isoformat() if session.accessed_at else None,
             session.access_count,
-            json.dumps(session.metadata)
+            json.dumps(session.metadata),
+            session.retention_policy,
+            session.retention_days,
+            session.decrypted_at.isoformat() if session.decrypted_at else None,
+            session.expires_at.isoformat() if session.expires_at else None
         ))
 
         conn.commit()
@@ -264,7 +331,13 @@ class SQLiteVaultStorage(VaultStorage):
             accessed_at=datetime.fromisoformat(row["accessed_at"])
                 if row["accessed_at"] else None,
             access_count=row["access_count"],
-            metadata=json.loads(row["metadata"]) if row["metadata"] else {}
+            metadata=json.loads(row["metadata"]) if row["metadata"] else {},
+            retention_policy=row["retention_policy"] if "retention_policy" in row.keys() else "DELETE_ON_DECRYPT",
+            retention_days=row["retention_days"] if "retention_days" in row.keys() else None,
+            decrypted_at=datetime.fromisoformat(row["decrypted_at"])
+                if row.get("decrypted_at") else None,
+            expires_at=datetime.fromisoformat(row["expires_at"])
+                if row.get("expires_at") else None
         )
 
     def get_mappings_for_session(self, session_id: str) -> List[StoredMapping]:
@@ -395,6 +468,74 @@ class SQLiteVaultStorage(VaultStorage):
                 if self._db_path.exists() else 0
         }
 
+    def update_session_decrypted(
+        self,
+        session_id: str,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session with decryption timestamp and expiration."""
+        conn = self._get_connection()
+
+        conn.execute("""
+            UPDATE sessions
+            SET decrypted_at = ?, expires_at = ?
+            WHERE session_id = ?
+        """, (
+            datetime.utcnow().isoformat(),
+            expires_at.isoformat() if expires_at else None,
+            session_id
+        ))
+
+        conn.commit()
+
+    def get_expired_sessions(self) -> List[str]:
+        """Get list of expired session IDs."""
+        conn = self._get_connection()
+
+        now = datetime.utcnow().isoformat()
+        rows = conn.execute("""
+            SELECT session_id FROM sessions
+            WHERE expires_at IS NOT NULL AND expires_at <= ?
+        """, (now,)).fetchall()
+
+        return [row["session_id"] for row in rows]
+
+    def delete_expired_sessions(self) -> int:
+        """Delete all expired sessions. Returns count deleted."""
+        conn = self._get_connection()
+
+        now = datetime.utcnow().isoformat()
+        cursor = conn.execute("""
+            DELETE FROM sessions
+            WHERE expires_at IS NOT NULL AND expires_at <= ?
+        """, (now,))
+
+        conn.commit()
+        return cursor.rowcount
+
+    def update_session_retention(
+        self,
+        session_id: str,
+        retention_policy: str,
+        retention_days: Optional[int] = None,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session retention policy."""
+        conn = self._get_connection()
+
+        conn.execute("""
+            UPDATE sessions
+            SET retention_policy = ?, retention_days = ?, expires_at = ?
+            WHERE session_id = ?
+        """, (
+            retention_policy,
+            retention_days,
+            expires_at.isoformat() if expires_at else None,
+            session_id
+        ))
+
+        conn.commit()
+
     def close(self) -> None:
         """Close database connection."""
         if self._conn:
@@ -460,7 +601,11 @@ class PostgreSQLVaultStorage(VaultStorage):
                 created_at TIMESTAMP NOT NULL,
                 accessed_at TIMESTAMP,
                 access_count INTEGER DEFAULT 0,
-                metadata JSONB
+                metadata JSONB,
+                retention_policy TEXT DEFAULT 'DELETE_ON_DECRYPT',
+                retention_days INTEGER,
+                decrypted_at TIMESTAMP,
+                expires_at TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS {self._schema}.mappings (
@@ -480,11 +625,28 @@ class PostgreSQLVaultStorage(VaultStorage):
 
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at
                 ON {self._schema}.sessions(created_at);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at
+                ON {self._schema}.sessions(expires_at);
             CREATE INDEX IF NOT EXISTS idx_mappings_session_id
                 ON {self._schema}.mappings(session_id);
             CREATE INDEX IF NOT EXISTS idx_mappings_entity_type
                 ON {self._schema}.mappings(entity_type);
         """)
+
+        # Add new columns if they don't exist (for migration)
+        for col, col_type, default in [
+            ("retention_policy", "TEXT", "'DELETE_ON_DECRYPT'"),
+            ("retention_days", "INTEGER", "NULL"),
+            ("decrypted_at", "TIMESTAMP", "NULL"),
+            ("expires_at", "TIMESTAMP", "NULL"),
+        ]:
+            try:
+                cur.execute(f"""
+                    ALTER TABLE {self._schema}.sessions
+                    ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default}
+                """)
+            except Exception:
+                pass
 
         conn.commit()
 
@@ -497,8 +659,9 @@ class PostgreSQLVaultStorage(VaultStorage):
             INSERT INTO {self._schema}.sessions (
                 session_id, original_message_encrypted, anonymized_message,
                 entity_count, risk_score, key_id, created_at, accessed_at,
-                access_count, metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                access_count, metadata, retention_policy, retention_days,
+                decrypted_at, expires_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             session.session_id,
             session.original_message_encrypted,
@@ -509,7 +672,11 @@ class PostgreSQLVaultStorage(VaultStorage):
             session.created_at,
             session.accessed_at,
             session.access_count,
-            Json(session.metadata)
+            Json(session.metadata),
+            session.retention_policy,
+            session.retention_days,
+            session.decrypted_at,
+            session.expires_at
         ))
 
         conn.commit()
@@ -566,7 +733,11 @@ class PostgreSQLVaultStorage(VaultStorage):
             created_at=row[6],
             accessed_at=row[7],
             access_count=row[8],
-            metadata=row[9] or {}
+            metadata=row[9] or {},
+            retention_policy=row[10] if len(row) > 10 else "DELETE_ON_DECRYPT",
+            retention_days=row[11] if len(row) > 11 else None,
+            decrypted_at=row[12] if len(row) > 12 else None,
+            expires_at=row[13] if len(row) > 13 else None
         )
 
     def get_mappings_for_session(self, session_id: str) -> List[StoredMapping]:
@@ -700,6 +871,68 @@ class PostgreSQLVaultStorage(VaultStorage):
             "entities_by_category": {row[0]: row[1] for row in category_stats},
             "backend": "postgresql"
         }
+
+    def update_session_decrypted(
+        self,
+        session_id: str,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session with decryption timestamp and expiration."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+
+        cur.execute(f"""
+            UPDATE {self._schema}.sessions
+            SET decrypted_at = %s, expires_at = %s
+            WHERE session_id = %s
+        """, (datetime.utcnow(), expires_at, session_id))
+
+        conn.commit()
+
+    def get_expired_sessions(self) -> List[str]:
+        """Get list of expired session IDs."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+
+        cur.execute(f"""
+            SELECT session_id FROM {self._schema}.sessions
+            WHERE expires_at IS NOT NULL AND expires_at <= %s
+        """, (datetime.utcnow(),))
+
+        return [row[0] for row in cur.fetchall()]
+
+    def delete_expired_sessions(self) -> int:
+        """Delete all expired sessions. Returns count deleted."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+
+        cur.execute(f"""
+            DELETE FROM {self._schema}.sessions
+            WHERE expires_at IS NOT NULL AND expires_at <= %s
+        """, (datetime.utcnow(),))
+
+        deleted = cur.rowcount
+        conn.commit()
+        return deleted
+
+    def update_session_retention(
+        self,
+        session_id: str,
+        retention_policy: str,
+        retention_days: Optional[int] = None,
+        expires_at: Optional[datetime] = None
+    ) -> None:
+        """Update session retention policy."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+
+        cur.execute(f"""
+            UPDATE {self._schema}.sessions
+            SET retention_policy = %s, retention_days = %s, expires_at = %s
+            WHERE session_id = %s
+        """, (retention_policy, retention_days, expires_at, session_id))
+
+        conn.commit()
 
     def close(self) -> None:
         """Close database connection."""
