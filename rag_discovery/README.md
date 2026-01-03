@@ -1,25 +1,21 @@
 # Data Discovery RAG Agent
 
-Agente de IA para **descoberta semântica de dados** com RAG híbrido (semântico + lexical), validação de catálogo e ranking contextual.
-*AI agent for **semantic data discovery** with hybrid RAG (semantic + lexical), catalog validation, and contextual ranking.*
+## Resumo
+Agente de IA para descoberta semântica de dados com RAG híbrido (semântico + lexical), validação de catálogo e ranking contextual.
+
+## Summary
+AI agent for semantic data discovery with hybrid RAG (semantic + lexical), catalog validation, and contextual ranking.
+
+*English details available at the end of the file.*
 
 ## Características
-*Features.*
-
 - **Busca em linguagem natural** sobre tabelas e colunas.
-  *Natural language search across tables and columns.*
 - **Dartboard ranking** combinando semântica, correspondência lexical e importância.
-  *Dartboard ranking blending semantic, lexical, and importance scores.*
 - **Providers plugáveis** para embeddings, LLM e vector stores (ChromaDB, FAISS, etc.).
-  *Pluggable providers for embeddings, LLMs, and vector stores (ChromaDB, FAISS, etc.).*
 - **Validação de tabelas** contra catálogos existentes.
-  *Table validation against existing catalogs.*
 - **Integração** com Lineage, Enrichment e Classification para enriquecer respostas.
-  *Integration with Lineage, Enrichment, and Classification to enrich answers.*
 
 ## Uso Rápido
-*Quickstart.*
-
 ```python
 from rag_discovery.agent import DataDiscoveryAgent
 from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
@@ -38,4 +34,35 @@ print(result.answer)
 ```
 
 Combine com metadados enriquecidos para melhorar contexto e relevância.
-*Combine with enriched metadata to improve context and relevance.*
+
+---
+
+## Summary
+AI agent for semantic data discovery with hybrid RAG (semantic + lexical), catalog validation, and contextual ranking.
+
+## Features
+- **Natural language search** across tables and columns.
+- **Dartboard ranking** blending semantic, lexical, and importance scores.
+- **Pluggable providers** for embeddings, LLMs, and vector stores (ChromaDB, FAISS, etc.).
+- **Table validation** against existing catalogs.
+- **Integration** with Lineage, Enrichment, and Classification to enrich answers.
+
+## Quickstart
+```python
+from rag_discovery.agent import DataDiscoveryAgent
+from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+from rag_discovery.providers.llm import OpenAILLM
+from rag_discovery.providers.vectorstore import ChromaStore
+
+agent = DataDiscoveryAgent(
+    embedding_provider=SentenceTransformerEmbeddings(),
+    llm_provider=OpenAILLM(),
+    vector_store=ChromaStore(collection_name="catalog"),
+)
+
+agent.index_from_json("catalog.json")
+result = agent.discover("Onde estão os dados de clientes?")
+print(result.answer)
+```
+
+Combine with enriched metadata to improve context and relevance.
