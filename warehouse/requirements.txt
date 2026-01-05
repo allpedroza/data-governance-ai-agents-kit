@@ -1,0 +1,25 @@
+# Warehouse Module Requirements
+
+# Core dependencies
+sqlalchemy>=2.0.0
+
+# Snowflake
+snowflake-connector-python>=3.0.0
+snowflake-sqlalchemy>=1.5.0
+
+# Amazon Redshift
+psycopg2-binary>=2.9.0
+redshift-connector>=2.0.0
+sqlalchemy-redshift>=0.8.0
+
+# Google BigQuery
+google-cloud-bigquery>=3.0.0
+google-cloud-bigquery-storage>=2.0.0
+sqlalchemy-bigquery>=1.6.0
+
+# Azure Synapse
+pyodbc>=4.0.0
+azure-identity>=1.12.0
+
+# Optional: For key-pair authentication (Snowflake)
+cryptography>=40.0.0
