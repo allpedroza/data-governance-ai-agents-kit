@@ -234,7 +234,7 @@ def hero_section() -> None:
         with col1:
             st.title("Data Governance AI Agents")
             st.markdown(
-                "Uma interface enxuta inspirada no OpenMetadata para orquestrar linhagem, catalogação e qualidade de dados."
+                "Uma interface simples para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de dados."
             )
             st.markdown(
                 "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
