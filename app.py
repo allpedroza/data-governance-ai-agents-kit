@@ -2558,10 +2558,469 @@ def render_vault_tab() -> None:
         """)
 
 
+def render_settings_tab() -> None:
+    """Centralized settings tab for API keys, Data Warehouse connections, and LLM configuration."""
+    section_header(
+        "⚙️ Configurações",
+        "Gerencie conexões com Data Warehouses, chaves de API e provedores de LLM em um único lugar.",
+    )
+
+    settings = st.session_state.connection_settings
+
+    # Model lists for LLM providers
+    OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-3.5-turbo", "gpt-4-turbo"]
+    GEMINI_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-1.0-pro"]
+    DEEPSEEK_MODELS = ["deepseek-chat", "deepseek-reasoner"]
+    CLAUDE_MODELS = ["claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-haiku-20240307", "claude-sonnet-4-20250514", "claude-opus-4-20250514"]
+
+    # Store model lists in session state for other tabs to use
+    if "available_models" not in st.session_state:
+        st.session_state.available_models = {
+            "openai": OPENAI_MODELS,
+            "gemini": GEMINI_MODELS,
+            "deepseek": DEEPSEEK_MODELS,
+            "claude": CLAUDE_MODELS,
+        }
+
+    # Create sub-tabs for different configuration categories
+    llm_tab, warehouse_tab, catalog_tab = st.tabs([
+        "🤖 Provedores LLM",
+        "🏢 Data Warehouses",
+        "📚 Catálogos"
+    ])
+
+    # ==================== LLM PROVIDERS TAB ====================
+    with llm_tab:
+        st.markdown("### Configuração de Provedores de IA")
+
+        # Current provider status
+        current_provider = settings.get("llm_provider", "openai")
+        current_model = settings.get("llm_model", "gpt-4o-mini")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Provedor Ativo", current_provider.upper())
+        with col2:
+            st.metric("Modelo Padrão", current_model)
+        with col3:
+            configured_count = sum([
+                1 if settings.get("openai_api_key") else 0,
+                1 if settings.get("gemini_api_key") else 0,
+                1 if settings.get("deepseek_api_key") else 0,
+                1 if settings.get("anthropic_api_key") else 0,
+            ])
+            st.metric("Provedores Configurados", f"{configured_count}/4")
+
+        st.divider()
+
+        # Provider selection
+        openai_tab, gemini_tab, deepseek_tab, claude_tab = st.tabs(
+            ["OpenAI", "Google Gemini", "DeepSeek", "Anthropic Claude"]
+        )
+
+        with openai_tab:
+            st.markdown("##### OpenAI Configuration")
+            with st.form("settings_openai_form"):
+                openai_key = st.text_input(
+                    "API Key",
+                    value=settings.get("openai_api_key", ""),
+                    type="password",
+                    help="Sua chave da API OpenAI"
+                )
+                openai_url = st.text_input(
+                    "API URL (Base)",
+                    value=settings.get("openai_api_url", "https://api.openai.com/v1"),
+                    help="URL base da API (útil para Azure OpenAI ou proxies)"
+                )
+                openai_model = st.selectbox(
+                    "Modelo Padrão",
+                    options=OPENAI_MODELS,
+                    index=OPENAI_MODELS.index(settings.get("llm_model", "gpt-4o-mini"))
+                    if settings.get("llm_model") in OPENAI_MODELS else 0,
+                )
+                set_openai_default = st.checkbox(
+                    "Definir OpenAI como provedor padrão",
+                    value=current_provider == "openai"
+                )
+                if st.form_submit_button("💾 Salvar OpenAI", use_container_width=True):
+                    _apply_connection_settings({
+                        "openai_api_key": openai_key.strip(),
+                        "openai_api_url": openai_url.strip(),
+                        "llm_model": openai_model if set_openai_default else settings.get("llm_model"),
+                        "llm_provider": "openai" if set_openai_default else settings.get("llm_provider"),
+                    })
+                    st.success("✅ Configuração OpenAI salva!")
+                    st.rerun()
+
+        with gemini_tab:
+            st.markdown("##### Google Gemini Configuration")
+            with st.form("settings_gemini_form"):
+                gemini_key = st.text_input(
+                    "API Key",
+                    value=settings.get("gemini_api_key", ""),
+                    type="password",
+                    help="Sua chave da API Google (Gemini/Vertex AI)"
+                )
+                gemini_model = st.selectbox(
+                    "Modelo Padrão",
+                    options=GEMINI_MODELS,
+                    index=GEMINI_MODELS.index(settings.get("gemini_model", "gemini-1.5-flash"))
+                    if settings.get("gemini_model") in GEMINI_MODELS else 0,
+                )
+                set_gemini_default = st.checkbox(
+                    "Definir Gemini como provedor padrão",
+                    value=current_provider == "gemini"
+                )
+                if st.form_submit_button("💾 Salvar Gemini", use_container_width=True):
+                    _apply_connection_settings({
+                        "gemini_api_key": gemini_key.strip(),
+                        "gemini_model": gemini_model,
+                        "llm_model": gemini_model if set_gemini_default else settings.get("llm_model"),
+                        "llm_provider": "gemini" if set_gemini_default else settings.get("llm_provider"),
+                    })
+                    st.success("✅ Configuração Gemini salva!")
+                    st.rerun()
+
+        with deepseek_tab:
+            st.markdown("##### DeepSeek Configuration")
+            with st.form("settings_deepseek_form"):
+                deepseek_key = st.text_input(
+                    "API Key",
+                    value=settings.get("deepseek_api_key", ""),
+                    type="password",
+                    help="Sua chave da API DeepSeek"
+                )
+                deepseek_url = st.text_input(
+                    "API URL",
+                    value=settings.get("deepseek_api_url", "https://api.deepseek.com"),
+                    help="URL da API DeepSeek"
+                )
+                deepseek_model = st.selectbox(
+                    "Modelo Padrão",
+                    options=DEEPSEEK_MODELS,
+                    index=DEEPSEEK_MODELS.index(settings.get("deepseek_model", "deepseek-chat"))
+                    if settings.get("deepseek_model") in DEEPSEEK_MODELS else 0,
+                )
+                set_deepseek_default = st.checkbox(
+                    "Definir DeepSeek como provedor padrão",
+                    value=current_provider == "deepseek"
+                )
+                if st.form_submit_button("💾 Salvar DeepSeek", use_container_width=True):
+                    _apply_connection_settings({
+                        "deepseek_api_key": deepseek_key.strip(),
+                        "deepseek_api_url": deepseek_url.strip(),
+                        "deepseek_model": deepseek_model,
+                        "llm_model": deepseek_model if set_deepseek_default else settings.get("llm_model"),
+                        "llm_provider": "deepseek" if set_deepseek_default else settings.get("llm_provider"),
+                    })
+                    st.success("✅ Configuração DeepSeek salva!")
+                    st.rerun()
+
+        with claude_tab:
+            st.markdown("##### Anthropic Claude Configuration")
+            with st.form("settings_claude_form"):
+                claude_key = st.text_input(
+                    "API Key",
+                    value=settings.get("anthropic_api_key", ""),
+                    type="password",
+                    help="Sua chave da API Anthropic"
+                )
+                claude_model = st.selectbox(
+                    "Modelo Padrão",
+                    options=CLAUDE_MODELS,
+                    index=CLAUDE_MODELS.index(settings.get("anthropic_model", "claude-3-5-sonnet-20240620"))
+                    if settings.get("anthropic_model") in CLAUDE_MODELS else 0,
+                )
+                set_claude_default = st.checkbox(
+                    "Definir Claude como provedor padrão",
+                    value=current_provider == "claude"
+                )
+                if st.form_submit_button("💾 Salvar Claude", use_container_width=True):
+                    _apply_connection_settings({
+                        "anthropic_api_key": claude_key.strip(),
+                        "anthropic_model": claude_model,
+                        "llm_model": claude_model if set_claude_default else settings.get("llm_model"),
+                        "llm_provider": "claude" if set_claude_default else settings.get("llm_provider"),
+                    })
+                    st.success("✅ Configuração Claude salva!")
+                    st.rerun()
+
+    # ==================== DATA WAREHOUSES TAB ====================
+    with warehouse_tab:
+        st.markdown("### Conexões com Data Warehouses")
+        st.markdown("Configure conexões com seus data warehouses para uso nos módulos de governança.")
+
+        # Initialize warehouse settings in session state if not exists
+        if "warehouse_connections" not in st.session_state:
+            st.session_state.warehouse_connections = {
+                "snowflake": {
+                    "account": os.environ.get("SNOWFLAKE_ACCOUNT", ""),
+                    "username": os.environ.get("SNOWFLAKE_USERNAME", ""),
+                    "password": os.environ.get("SNOWFLAKE_PASSWORD", ""),
+                    "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", ""),
+                    "database": os.environ.get("SNOWFLAKE_DATABASE", ""),
+                    "schema": os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC"),
+                    "role": os.environ.get("SNOWFLAKE_ROLE", ""),
+                    "enabled": False,
+                },
+                "redshift": {
+                    "host": os.environ.get("REDSHIFT_HOST", ""),
+                    "port": os.environ.get("REDSHIFT_PORT", "5439"),
+                    "database": os.environ.get("REDSHIFT_DATABASE", ""),
+                    "username": os.environ.get("REDSHIFT_USERNAME", ""),
+                    "password": os.environ.get("REDSHIFT_PASSWORD", ""),
+                    "schema": os.environ.get("REDSHIFT_SCHEMA", "public"),
+                    "enabled": False,
+                },
+                "bigquery": {
+                    "project_id": os.environ.get("BIGQUERY_PROJECT_ID", ""),
+                    "dataset": os.environ.get("BIGQUERY_DATASET", ""),
+                    "credentials_path": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+                    "location": os.environ.get("BIGQUERY_LOCATION", "US"),
+                    "enabled": False,
+                },
+                "synapse": {
+                    "server": os.environ.get("SYNAPSE_SERVER", ""),
+                    "database": os.environ.get("SYNAPSE_DATABASE", ""),
+                    "username": os.environ.get("SYNAPSE_USERNAME", ""),
+                    "password": os.environ.get("SYNAPSE_PASSWORD", ""),
+                    "authentication": os.environ.get("SYNAPSE_AUTHENTICATION", "sql"),
+                    "enabled": False,
+                },
+            }
+
+        wh_connections = st.session_state.warehouse_connections
+
+        # Status overview
+        st.markdown("#### Status das Conexões")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            sf_status = "✅ Configurado" if wh_connections["snowflake"].get("account") else "⚪ Não configurado"
+            st.markdown(f"**Snowflake**: {sf_status}")
+        with col2:
+            rs_status = "✅ Configurado" if wh_connections["redshift"].get("host") else "⚪ Não configurado"
+            st.markdown(f"**Redshift**: {rs_status}")
+        with col3:
+            bq_status = "✅ Configurado" if wh_connections["bigquery"].get("project_id") else "⚪ Não configurado"
+            st.markdown(f"**BigQuery**: {bq_status}")
+        with col4:
+            sy_status = "✅ Configurado" if wh_connections["synapse"].get("server") else "⚪ Não configurado"
+            st.markdown(f"**Synapse**: {sy_status}")
+
+        st.divider()
+
+        # Warehouse configuration tabs
+        snowflake_tab, redshift_tab, bigquery_tab, synapse_tab = st.tabs([
+            "❄️ Snowflake",
+            "🔴 Amazon Redshift",
+            "🔵 Google BigQuery",
+            "🟣 Azure Synapse"
+        ])
+
+        with snowflake_tab:
+            st.markdown("##### Snowflake Connection")
+            with st.form("snowflake_config_form"):
+                sf = wh_connections["snowflake"]
+                sf_account = st.text_input("Account", value=sf.get("account", ""), help="Ex: xy12345.us-east-1")
+                sf_username = st.text_input("Username", value=sf.get("username", ""))
+                sf_password = st.text_input("Password", value=sf.get("password", ""), type="password")
+                col1, col2 = st.columns(2)
+                with col1:
+                    sf_warehouse = st.text_input("Warehouse", value=sf.get("warehouse", ""))
+                    sf_database = st.text_input("Database", value=sf.get("database", ""))
+                with col2:
+                    sf_schema = st.text_input("Schema", value=sf.get("schema", "PUBLIC"))
+                    sf_role = st.text_input("Role (opcional)", value=sf.get("role", ""))
+                sf_enabled = st.checkbox("Habilitar conexão Snowflake", value=sf.get("enabled", False))
+
+                if st.form_submit_button("💾 Salvar Snowflake", use_container_width=True):
+                    wh_connections["snowflake"] = {
+                        "account": sf_account, "username": sf_username, "password": sf_password,
+                        "warehouse": sf_warehouse, "database": sf_database, "schema": sf_schema,
+                        "role": sf_role, "enabled": sf_enabled
+                    }
+                    # Set environment variables
+                    os.environ["SNOWFLAKE_ACCOUNT"] = sf_account
+                    os.environ["SNOWFLAKE_USERNAME"] = sf_username
+                    os.environ["SNOWFLAKE_PASSWORD"] = sf_password
+                    os.environ["SNOWFLAKE_WAREHOUSE"] = sf_warehouse
+                    os.environ["SNOWFLAKE_DATABASE"] = sf_database
+                    os.environ["SNOWFLAKE_SCHEMA"] = sf_schema
+                    if sf_role:
+                        os.environ["SNOWFLAKE_ROLE"] = sf_role
+                    st.success("✅ Configuração Snowflake salva!")
+
+        with redshift_tab:
+            st.markdown("##### Amazon Redshift Connection")
+            with st.form("redshift_config_form"):
+                rs = wh_connections["redshift"]
+                rs_host = st.text_input("Host", value=rs.get("host", ""), help="Endpoint do cluster Redshift")
+                col1, col2 = st.columns(2)
+                with col1:
+                    rs_port = st.text_input("Port", value=rs.get("port", "5439"))
+                    rs_database = st.text_input("Database", value=rs.get("database", ""))
+                with col2:
+                    rs_username = st.text_input("Username", value=rs.get("username", ""))
+                    rs_password = st.text_input("Password", value=rs.get("password", ""), type="password")
+                rs_schema = st.text_input("Schema", value=rs.get("schema", "public"))
+                rs_enabled = st.checkbox("Habilitar conexão Redshift", value=rs.get("enabled", False))
+
+                if st.form_submit_button("💾 Salvar Redshift", use_container_width=True):
+                    wh_connections["redshift"] = {
+                        "host": rs_host, "port": rs_port, "database": rs_database,
+                        "username": rs_username, "password": rs_password, "schema": rs_schema,
+                        "enabled": rs_enabled
+                    }
+                    os.environ["REDSHIFT_HOST"] = rs_host
+                    os.environ["REDSHIFT_PORT"] = rs_port
+                    os.environ["REDSHIFT_DATABASE"] = rs_database
+                    os.environ["REDSHIFT_USERNAME"] = rs_username
+                    os.environ["REDSHIFT_PASSWORD"] = rs_password
+                    os.environ["REDSHIFT_SCHEMA"] = rs_schema
+                    st.success("✅ Configuração Redshift salva!")
+
+        with bigquery_tab:
+            st.markdown("##### Google BigQuery Connection")
+            with st.form("bigquery_config_form"):
+                bq = wh_connections["bigquery"]
+                bq_project = st.text_input("Project ID", value=bq.get("project_id", ""))
+                bq_dataset = st.text_input("Dataset", value=bq.get("dataset", ""))
+                bq_creds = st.text_input("Credentials Path", value=bq.get("credentials_path", ""),
+                                         help="Caminho para o arquivo JSON de credenciais de service account")
+                bq_location = st.selectbox("Location", options=["US", "EU", "asia-northeast1", "us-central1"],
+                                           index=0 if bq.get("location", "US") == "US" else 1)
+                bq_enabled = st.checkbox("Habilitar conexão BigQuery", value=bq.get("enabled", False))
+
+                if st.form_submit_button("💾 Salvar BigQuery", use_container_width=True):
+                    wh_connections["bigquery"] = {
+                        "project_id": bq_project, "dataset": bq_dataset,
+                        "credentials_path": bq_creds, "location": bq_location, "enabled": bq_enabled
+                    }
+                    os.environ["BIGQUERY_PROJECT_ID"] = bq_project
+                    os.environ["BIGQUERY_DATASET"] = bq_dataset
+                    if bq_creds:
+                        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = bq_creds
+                    os.environ["BIGQUERY_LOCATION"] = bq_location
+                    st.success("✅ Configuração BigQuery salva!")
+
+        with synapse_tab:
+            st.markdown("##### Azure Synapse Analytics Connection")
+            with st.form("synapse_config_form"):
+                sy = wh_connections["synapse"]
+                sy_server = st.text_input("Server", value=sy.get("server", ""),
+                                          help="Ex: your-workspace.sql.azuresynapse.net")
+                sy_database = st.text_input("Database", value=sy.get("database", ""))
+                col1, col2 = st.columns(2)
+                with col1:
+                    sy_username = st.text_input("Username", value=sy.get("username", ""))
+                    sy_password = st.text_input("Password", value=sy.get("password", ""), type="password")
+                with col2:
+                    sy_auth = st.selectbox("Authentication", options=["sql", "ad", "msi"],
+                                           index=["sql", "ad", "msi"].index(sy.get("authentication", "sql")))
+                sy_enabled = st.checkbox("Habilitar conexão Synapse", value=sy.get("enabled", False))
+
+                if st.form_submit_button("💾 Salvar Synapse", use_container_width=True):
+                    wh_connections["synapse"] = {
+                        "server": sy_server, "database": sy_database,
+                        "username": sy_username, "password": sy_password,
+                        "authentication": sy_auth, "enabled": sy_enabled
+                    }
+                    os.environ["SYNAPSE_SERVER"] = sy_server
+                    os.environ["SYNAPSE_DATABASE"] = sy_database
+                    os.environ["SYNAPSE_USERNAME"] = sy_username
+                    os.environ["SYNAPSE_PASSWORD"] = sy_password
+                    os.environ["SYNAPSE_AUTHENTICATION"] = sy_auth
+                    st.success("✅ Configuração Synapse salva!")
+
+    # ==================== CATALOGS TAB ====================
+    with catalog_tab:
+        st.markdown("### Conexões com Catálogos de Metadados")
+        st.markdown("Configure conexões com catálogos corporativos de metadados.")
+
+        # OpenMetadata
+        st.markdown("#### OpenMetadata")
+        with st.form("openmetadata_config_form"):
+            om_host = st.text_input(
+                "Host URL",
+                value=settings.get("openmetadata_host", ""),
+                help="Ex: http://localhost:8585/api"
+            )
+            om_token = st.text_input(
+                "API Token",
+                value=settings.get("openmetadata_api_token", ""),
+                type="password",
+                help="Token JWT para autenticação"
+            )
+            if st.form_submit_button("💾 Salvar OpenMetadata", use_container_width=True):
+                _apply_connection_settings({
+                    "openmetadata_host": om_host.strip(),
+                    "openmetadata_api_token": om_token.strip(),
+                })
+                st.success("✅ Configuração OpenMetadata salva!")
+
+        st.divider()
+
+        # Apache Atlas
+        st.markdown("#### Apache Atlas")
+        with st.form("atlas_config_form"):
+            atlas_host = st.text_input(
+                "Host URL",
+                value=settings.get("atlas_host", ""),
+                help="Ex: http://atlas-host:21000"
+            )
+            if st.form_submit_button("💾 Salvar Atlas", use_container_width=True):
+                _apply_connection_settings({"atlas_host": atlas_host.strip()})
+                st.success("✅ Configuração Atlas salva!")
+
+        st.divider()
+
+        # AWS Glue
+        st.markdown("#### AWS Glue Data Catalog")
+        with st.form("glue_config_form"):
+            glue_region = st.text_input(
+                "AWS Region",
+                value=settings.get("glue_region", ""),
+                help="Ex: us-east-1"
+            )
+            st.info("As credenciais AWS devem estar configuradas no ambiente (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+            if st.form_submit_button("💾 Salvar AWS Glue", use_container_width=True):
+                _apply_connection_settings({"glue_region": glue_region.strip()})
+                st.success("✅ Configuração AWS Glue salva!")
+
+
+def get_available_llm_models() -> Dict[str, List[str]]:
+    """Return available LLM models for use in other tabs."""
+    if "available_models" in st.session_state:
+        return st.session_state.available_models
+    return {
+        "openai": ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-3.5-turbo"],
+        "gemini": ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"],
+        "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+        "claude": ["claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
+    }
+
+
+def get_configured_warehouses() -> List[str]:
+    """Return list of configured and enabled warehouses."""
+    if "warehouse_connections" not in st.session_state:
+        return []
+    warehouses = []
+    wh = st.session_state.warehouse_connections
+    if wh.get("snowflake", {}).get("enabled") and wh["snowflake"].get("account"):
+        warehouses.append("snowflake")
+    if wh.get("redshift", {}).get("enabled") and wh["redshift"].get("host"):
+        warehouses.append("redshift")
+    if wh.get("bigquery", {}).get("enabled") and wh["bigquery"].get("project_id"):
+        warehouses.append("bigquery")
+    if wh.get("synapse", {}).get("enabled") and wh["synapse"].get("server"):
+        warehouses.append("synapse")
+    return warehouses
+
+
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Module", "Vault"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Module", "Vault", "⚙️ Settings"
 ])
 with tab1:
     render_lineage_tab()
@@ -2579,4 +3038,6 @@ with tab7:
     render_ner_tab()
 with tab8:
     render_vault_tab()
+with tab9:
+    render_settings_tab()
 
