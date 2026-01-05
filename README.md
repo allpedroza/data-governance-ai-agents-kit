@@ -1,208 +1,811 @@
 # Data Governance AI Agents Kit
 
-## Resumo
-Framework completo de agentes de IA para governança de dados, cobrindo linhagem, descoberta semântica, enriquecimento de metadados, classificação, qualidade e valor de ativos.
-
-## Summary
-Complete AI agent framework for data governance, covering lineage, semantic discovery, metadata enrichment, classification, quality, and asset value.
-
-*English details available at the end of the file.*
+**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados, monitoramento de qualidade, análise de valor de ativos e proteção contra vazamento de dados sensíveis.
 
 ## Visão Geral
-- Seis agentes especializados funcionam de forma integrada ou independente.
-- Todos operam somente com metadados ou arquivos fornecidos (sem exigir acesso direto a bancos de produção).
-- Exemplos prontos em Python e interface unificada via Streamlit.
+
+Este projeto fornece **7 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
+
+| Agente | Propósito |
+|--------|-----------|
+| **Data Lineage Agent** | Mapear dependências e analisar impacto de mudanças |
+| **Data Discovery RAG Agent** | Descoberta semântica de dados com busca em linguagem natural |
+| **Metadata Enrichment Agent** | Geração automática de descrições, tags e classificações |
+| **Data Classification Agent** | Classificação de PII/PHI/Financeiro/ e termos sensíveis à estratégia dos negócios a partir de metadados |
+| **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
+| **Data Asset Value Agent** | Análise de valor de ativos baseado em uso, JOINs e impacto em data products |
+| **Sensitive Data NER Agent** | Detecção e anonimização de dados sensíveis em texto livre para proteção de LLMs |
 
 ## Início Rápido
+
 ```bash
 # Clone o repositório
 git clone <repo-url>
 cd data-governance-ai-agents-kit
 
-# Crie ambiente virtual com uv (recomendado) ou pip padrão
-curl -Ls https://astral.sh/uv/install.sh | sh
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-# pip install -r requirements.txt
+# Instale as dependências
+pip install -r requirements.txt
 
-# Configure variáveis sensíveis (por exemplo, modelos comerciais)
+# Configure a API key (necessária para alguns agentes)
 export OPENAI_API_KEY="sua-chave-aqui"
 
 # Inicie a interface unificada
 streamlit run app.py
 ```
 
-## Agentes e Documentação
-- **Data Lineage Agent** – Mapeamento de dependências, análise de impacto e grafos interativos. [lineage/README.md](lineage/README.md)
-- **Data Discovery RAG Agent** – Busca semântica com RAG híbrido e validação contra catálogo. [rag_discovery/README.md](rag_discovery/README.md)
-- **Metadata Enrichment Agent** – Geração automática de descrições, tags e classificação. [metadata_enrichment/README.md](metadata_enrichment/README.md)
-- **Data Classification Agent** – Identificação de PII/PHI/dados financeiros apenas com schemas. [data_classification/README.md](data_classification/README.md)
-- **Data Quality Agent** – Métricas multidimensionais, SLA de frescor e schema drift. [data_quality/README.md](data_quality/README.md)
-- **Data Asset Value Agent** – Score de valor considerando uso, JOINs, linhagem e data products. [data_asset_value/README.md](data_asset_value/README.md)
+---
 
-## Exemplo de Integração
+## Agentes Disponíveis
+
+### 1. Data Lineage Agent
+
+Sistema de IA para **análise automática de linhagem de dados** em pipelines complexos.
+
+**Características**:
+- Análise de múltiplos formatos (Python, SQL, Terraform, Databricks, Airflow, Scala)
+- Extração automática de dependências entre assets
+- Visualização interativa de grafos (Force, Hierarchical, Sankey, 3D)
+- Análise de impacto de mudanças
+- Identificação de componentes críticos e ciclos
+- Integração com Apache Atlas
+
+**Documentação**: [lineage/README.md](lineage/README.md)
+
+**Exemplo**:
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
-from rag_discovery.agent import DataDiscoveryAgent
-from metadata_enrichment.agent import MetadataEnrichmentAgent
-from data_classification import DataClassificationAgent
-from data_quality.agent import DataQualityAgent
-from data_asset_value import DataAssetValueAgent
-from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
-from rag_discovery.providers.llm import OpenAILLM
-from rag_discovery.providers.vectorstore import ChromaStore
 
-# 1) Linhagem
-lineage_agent = DataLineageAgent()
-lineage_result = lineage_agent.analyze_pipeline(["etl/*.sql", "etl/*.py"])
+agent = DataLineageAgent()
+analysis = agent.analyze_pipeline([
+    "etl/extract.sql",
+    "etl/transform.py",
+    "etl/load.sql"
+])
 
-# 2) Classificação
-classification_agent = DataClassificationAgent()
-classification_report = classification_agent.classify_from_csv("data/customers.csv")
-
-# 3) Qualidade
-quality_agent = DataQualityAgent()
-quality_report = quality_agent.evaluate_file(
-    "data/customers.csv",
-    freshness_config={"timestamp_column": "updated_at", "sla_hours": 24}
-)
-
-# 4) Enriquecimento
-embeddings = SentenceTransformerEmbeddings()
-enrichment_agent = MetadataEnrichmentAgent(
-    embedding_provider=embeddings,
-    llm_provider=OpenAILLM(model="gpt-4o-mini"),
-    vector_store=ChromaStore(collection_name="standards")
-)
-enrichment_result = enrichment_agent.enrich_from_csv("data/customers.csv")
-
-# 5) Descoberta
-vector_store = ChromaStore(collection_name="catalog")
-discovery_agent = DataDiscoveryAgent(
-    embedding_provider=embeddings,
-    llm_provider=OpenAILLM(),
-    vector_store=vector_store
-)
-discovery_agent.index_metadata([enrichment_result.to_table_metadata()])
-discovery_answer = discovery_agent.discover("tabelas com dados de clientes e boa qualidade")
-
-# 6) Valor de ativo
-value_agent = DataAssetValueAgent()
-value_report = value_agent.analyze_from_query_logs(
-    query_logs=[],
-    lineage_data=lineage_result,
-    data_product_config={},
-    asset_metadata={}
-)
+# Análise de impacto
+impact = agent.analyze_change_impact(["customers_table"])
+print(f"Risk Level: {impact['risk_level']}")
 ```
-
-Este fluxo mostra como cada agente compartilha insumos (linhagem, metadados enriquecidos, classificação, qualidade) para entregar governança ponta a ponta.
-
-## Interface Unificada
-Execute `streamlit run app.py` para navegar pelos seis agentes com configurações rápidas e exemplos pré-carregados.
-
-## Instalação Seletiva
-Use os requirements específicos se precisar apenas de um módulo isolado (ex.: `pip install -r metadata_enrichment/requirements.txt`).
 
 ---
 
-## Summary
-Complete AI agent framework for data governance, covering lineage, semantic discovery, metadata enrichment, classification, quality, and asset value.
+### 2. Data Discovery RAG Agent
 
-## Overview
-- Six specialized agents work together or independently.
-- All operate only with provided metadata/files without requiring direct access to production databases.
-- Ready-to-run Python examples and a unified Streamlit interface.
+Sistema de IA para **descoberta de dados** usando **RAG (Retrieval-Augmented Generation)** com busca híbrida (semântica + lexical).
 
-## Quickstart
-```bash
-# Clone the repository
-git clone <repo-url>
-cd data-governance-ai-agents-kit
+**Características**:
+- Busca semântica em linguagem natural
+- Dartboard Ranking (semântica + lexical + importância)
+- Validação de tabelas contra catálogo
+- Providers plugáveis (OpenAI, SentenceTransformers, VertexAI)
+- Vector stores: ChromaDB, FAISS
+- Integração com Apache Atlas e Lineage Agent
 
-# Create a virtual environment with uv (recommended) or plain pip
-curl -Ls https://astral.sh/uv/install.sh | sh
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-# pip install -r requirements.txt
+**Documentação**: [rag_discovery/README.md](rag_discovery/README.md)
 
-# Configure sensitive variables (e.g., commercial model keys)
-export OPENAI_API_KEY="your-key-here"
+**Exemplo**:
+```python
+from rag_discovery.agent import DataDiscoveryAgent
+from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+from rag_discovery.providers.llm import OpenAILLM
+from rag_discovery.providers.vectorstore import ChromaStore
 
-# Launch the unified interface
-streamlit run app.py
+# Inicializa com providers
+agent = DataDiscoveryAgent(
+    embedding_provider=SentenceTransformerEmbeddings(),
+    llm_provider=OpenAILLM(),
+    vector_store=ChromaStore(collection_name="my_catalog")
+)
+
+# Indexa metadados
+agent.index_from_json("catalog.json")
+
+# Busca semântica
+result = agent.discover("Onde estão os dados de clientes?")
+print(result.answer)
 ```
 
-## Agents and Documentation
-- **Data Lineage Agent** – Dependency mapping, impact analysis, and interactive graphs. [lineage/README.md](lineage/README.md)
-- **Data Discovery RAG Agent** – Semantic search with hybrid RAG and catalog validation. [rag_discovery/README.md](rag_discovery/README.md)
-- **Metadata Enrichment Agent** – Automatic descriptions, tags, and classification generation. [metadata_enrichment/README.md](metadata_enrichment/README.md)
-- **Data Classification Agent** – PII/PHI/financial detection using schemas only. [data_classification/README.md](data_classification/README.md)
-- **Data Quality Agent** – Multi-dimensional metrics, freshness SLAs, and schema drift detection. [data_quality/README.md](data_quality/README.md)
-- **Data Asset Value Agent** – Value scoring based on usage, joins, lineage, and data products. [data_asset_value/README.md](data_asset_value/README.md)
+---
 
-## Integration Example
+### 3. Metadata Enrichment Agent
+
+Sistema de IA para **geração automática de metadados** usando RAG sobre padrões de arquitetura e sampling de dados.
+
+**Características**:
+- Geração de descrições para tabelas e colunas (PT-BR e EN)
+- Classificação automática de dados (public, internal, confidential, restricted)
+- Detecção de PII (CPF, CNPJ, email, telefone, etc.)
+- RAG sobre normativos e padrões de nomenclatura
+- Sugestão de domínio e proprietário
+- Suporte a CSV, Parquet, SQL, Delta Lake
+
+**Documentação**: [metadata_enrichment/README.md](metadata_enrichment/README.md)
+
+**Exemplo**:
+```python
+from metadata_enrichment.agent import MetadataEnrichmentAgent
+from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+from rag_discovery.providers.llm import OpenAILLM
+from rag_discovery.providers.vectorstore import ChromaStore
+
+agent = MetadataEnrichmentAgent(
+    embedding_provider=SentenceTransformerEmbeddings(),
+    llm_provider=OpenAILLM(model="gpt-4o-mini"),
+    vector_store=ChromaStore(collection_name="standards")
+)
+
+# Indexar padrões de nomenclatura
+agent.index_standards_from_json("standards.json")
+
+# Enriquecer metadados
+result = agent.enrich_from_csv("customers.csv")
+
+print(f"Descrição: {result.description}")
+print(f"PII detectado: {result.has_pii}")
+print(f"Colunas PII: {result.pii_columns}")
+```
+
+---
+
+### 4. Data Classification Agent
+
+Sistema de IA para **classificação automática de dados** por níveis de sensibilidade, detectando PII, PHI, PCI, dados financeiros e termos estratégicos proprietários.
+
+**Características**:
+- Detecção de PII (CPF, CNPJ, SSN, email, telefone, IP, etc.)
+- Detecção de PHI (CID-10, CNS, CRM, prontuário médico)
+- Detecção de PCI (cartão de crédito, CVV, IBAN, SWIFT)
+- Detecção de dados financeiros (contas, transações, valores)
+- Detecção de termos estratégicos proprietários via **dicionário customizável** (nomes de projetos, iniciativas, roadmaps)
+- Níveis de sensibilidade: public, internal, confidential, restricted
+- Flags de compliance: LGPD, GDPR, HIPAA, PCI-DSS, SOX
+- Suporte a CSV, Parquet, SQL, Delta Lake
+
+**Documentação**: [data_classification/README.md](data_classification/README.md)
+
+**Exemplo**:
+```python
+from data_classification import DataClassificationAgent
+
+agent = DataClassificationAgent()
+
+# Classificar dados
+report = agent.classify_from_csv("customers.csv")
+
+print(f"Sensibilidade: {report.overall_sensitivity}")
+print(f"PII: {report.pii_columns}")
+print(f"PHI: {report.phi_columns}")
+print(f"Proprietário: {report.proprietary_columns}")
+print(f"Compliance: {report.compliance_flags}")
+```
+
+---
+
+### 5. Data Quality Agent
+
+Sistema de IA para **monitoramento de qualidade de dados** com métricas multi-dimensionais, SLA e detecção de schema drift.
+
+**Características**:
+- 6 dimensões de qualidade: Completeness, Uniqueness, Validity, Consistency, Freshness, Schema
+- Monitoramento de Freshness com SLA configurável
+- Detecção de schema drift com versionamento
+- Sistema de regras e alertas configuráveis
+- Suporte a CSV, Parquet, SQL, Delta Lake
+- Exportação de relatórios (JSON, Markdown)
+
+**Documentação**: [data_quality/README.md](data_quality/README.md)
+
+**Exemplo**:
+```python
+from data_quality.agent import DataQualityAgent
+from data_quality.rules import QualityRule, AlertLevel
+
+agent = DataQualityAgent(enable_schema_tracking=True)
+
+# Avaliar qualidade com SLA de freshness
+report = agent.evaluate_file(
+    "orders.parquet",
+    freshness_config={
+        "timestamp_column": "updated_at",
+        "sla_hours": 4
+    },
+    validity_configs=[{
+        "column": "email",
+        "pattern_name": "email",
+        "threshold": 0.95
+    }]
+)
+
+print(f"Score: {report.overall_score:.0%}")
+print(f"Status: {report.overall_status}")
+print(f"Schema Drift: {report.schema_drift}")
+```
+
+---
+
+### 6. Data Asset Value Agent
+
+Sistema de IA para **análise de valor de ativos de dados** baseado em padrões de uso, relacionamentos de JOIN, linhagem e impacto em data products.
+
+**Características**:
+- Análise de uso direto em queries SQL
+- Mapeamento de relacionamentos de JOIN (hub assets)
+- Integração com saída do Data Lineage Agent
+- Scoring multi-dimensional de valor (uso, JOINs, linhagem, data products)
+- Identificação de ativos críticos e órfãos
+- Detecção de tendências de uso (increasing/stable/decreasing)
+- Recomendações de governança automatizadas
+- Suporte a configuração de data products com impacto de negócio
+
+**Documentação**: [data_asset_value/README.md](data_asset_value/README.md)
+
+**Exemplo**:
+```python
+from data_asset_value import DataAssetValueAgent
+
+agent = DataAssetValueAgent(
+    weights={
+        'usage': 0.30,       # Frequência de uso
+        'joins': 0.25,       # Relacionamentos de JOIN
+        'lineage': 0.25,     # Impacto na linhagem
+        'data_product': 0.20 # Importância em data products
+    },
+    time_range_days=30
+)
+
+# Analisar a partir de logs de queries
+report = agent.analyze_from_query_logs(
+    query_logs=query_logs,
+    lineage_data=lineage_agent_output,  # Integração com Lineage Agent
+    data_product_config=data_products,
+    asset_metadata=asset_metadata
+)
+
+# Top assets por valor
+for asset in report.asset_scores[:5]:
+    print(f"{asset.asset_name}: {asset.overall_value_score:.1f} ({asset.value_category})")
+
+# Ativos críticos e hubs
+print(f"Críticos: {report.critical_assets}")
+print(f"Hubs: {report.hub_assets}")
+print(f"Órfãos: {report.orphan_assets}")
+
+# Exportar relatório
+print(report.to_markdown())
+```
+
+**Formato do Query Log**:
+```json
+[
+  {
+    "query": "SELECT c.name, o.total FROM customers c JOIN orders o ON c.id = o.customer_id",
+    "timestamp": "2024-12-15T10:30:00Z",
+    "user": "analyst_maria",
+    "duration_ms": 1250,
+    "rows_scanned": 150000,
+    "data_product": "customer_360"
+  }
+]
+```
+
+---
+
+### 7. Sensitive Data NER Agent
+
+Sistema de IA para **detecção e anonimização de dados sensíveis** em texto livre, projetado como gateway de proteção para requisições a LLMs terceiras.
+
+**Características**:
+- Detecção de PII (CPF, CNPJ, SSN, email, telefone, nomes)
+- Detecção de PHI (CID-10, CNS, CRM, prontuário médico)
+- Detecção de PCI (cartão de crédito, CVV, IBAN, SWIFT)
+- Detecção de FINANCIAL (contas bancárias, PIX, criptomoedas)
+- Detecção de BUSINESS (projetos confidenciais, termos estratégicos)
+- Detecção de CREDENTIALS (API keys, tokens, secrets, senhas)
+- Detecção determinística (50+ padrões regex) + preditiva (heurísticas, checksum)
+- Múltiplas estratégias de anonimização (REDACT, MASK, HASH, PARTIAL, ENCRYPT)
+- **Secure Vault**: Armazenamento criptografado AES-256 para mapeamentos originais/anonimizados
+- **Controle de Acesso**: 5 níveis de permissão (READ_ONLY, DECRYPT, FULL_DECRYPT, ADMIN, SUPER_ADMIN)
+- **Política de Retenção**: DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER
+- **Audit Log**: Trilha de auditoria tamper-evident com hash chain
+
+**Documentação**: [sensitive_data_ner/README.md](sensitive_data_ner/README.md)
+
+**Exemplo**:
+```python
+from sensitive_data_ner import SensitiveDataNERAgent, FilterPolicy, FilterAction
+
+# Configurar política de filtro
+policy = FilterPolicy(
+    pii_action=FilterAction.ANONYMIZE,
+    phi_action=FilterAction.BLOCK,
+    pci_action=FilterAction.BLOCK,
+    credentials_action=FilterAction.BLOCK,  # Bloquear API keys e secrets
+    business_action=FilterAction.BLOCK,
+)
+
+agent = SensitiveDataNERAgent(
+    filter_policy=policy,
+    business_terms=["Projeto Arara Azul", "Operação Fênix"]
+)
+
+# Analisar texto
+text = """
+O cliente João Silva, CPF 123.456.789-09, solicitou acesso.
+Use a API key: sk-abc123xyz para autenticação.
+"""
+
+result = agent.analyze(text)
+print(f"Entidades: {result.statistics['total']}")
+print(f"Risco: {result.risk_score:.1%}")
+print(f"Texto seguro:\n{result.anonymized_text}")
+```
+
+**Com Secure Vault (armazenamento criptografado)**:
+```python
+from sensitive_data_ner import SecureVault, VaultConfig, RetentionPolicy
+
+# Configurar vault com política de retenção
+config = VaultConfig(
+    storage_path=".secure_vault",
+    default_retention_policy=RetentionPolicy.RETAIN_DAYS,
+    default_retention_days=30,  # Manter por 30 dias após decrypt
+)
+
+vault = SecureVault(config)
+
+# Criar sessão e armazenar mapeamento
+session = vault.create_session(
+    user_id="user123",
+    original_text=text,
+    anonymized_text=result.anonymized_text,
+    mappings=[{"original": "123.456.789-09", "anonymized": "[CPF]"}]
+)
+
+# Posteriormente: recuperar texto original (requer permissão DECRYPT)
+original = vault.decrypt_session(
+    session_id=session.session_id,
+    user_id="admin_user"
+)
+```
+
+**Apenas Data Classification Agent**:
+```bash
+pip install -r classification/requirements.txt
+```
+
+**Apenas Metadata Enrichment Agent**:
+```bash
+pip install -r metadata_enrichment/requirements.txt
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
+---
+
+## Integração entre Agentes
+
+Os 7 agentes podem ser **integrados** para um framework completo de governança:
+
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
 from rag_discovery.agent import DataDiscoveryAgent
 from metadata_enrichment.agent import MetadataEnrichmentAgent
 from data_classification import DataClassificationAgent
 from data_quality.agent import DataQualityAgent
-from data_asset_value import DataAssetValueAgent
 from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
 from rag_discovery.providers.llm import OpenAILLM
 from rag_discovery.providers.vectorstore import ChromaStore
 
-# 1) Lineage
+# 1. LINEAGE: Mapear dependências do pipeline
 lineage_agent = DataLineageAgent()
 lineage_result = lineage_agent.analyze_pipeline(["etl/*.sql", "etl/*.py"])
+print(f"Assets mapeados: {lineage_result['metrics']['total_assets']}")
 
-# 2) Classification
+# 2. CLASSIFICATION: Classificar dados por sensibilidade
 classification_agent = DataClassificationAgent()
 classification_report = classification_agent.classify_from_csv("data/customers.csv")
+print(f"Sensibilidade: {classification_report.overall_sensitivity}")
+print(f"PII detectado: {classification_report.pii_columns}")
+print(f"Compliance: {classification_report.compliance_flags}")
 
-# 3) Quality
+# 3. QUALITY: Avaliar qualidade dos dados
 quality_agent = DataQualityAgent()
 quality_report = quality_agent.evaluate_file(
     "data/customers.csv",
     freshness_config={"timestamp_column": "updated_at", "sla_hours": 24}
 )
+print(f"Qualidade: {quality_report.overall_score:.0%}")
 
-# 4) Enrichment
-embeddings = SentenceTransformerEmbeddings()
+# 4. ENRICHMENT: Gerar metadados automaticamente
 enrichment_agent = MetadataEnrichmentAgent(
-    embedding_provider=embeddings,
+    embedding_provider=SentenceTransformerEmbeddings(),
     llm_provider=OpenAILLM(model="gpt-4o-mini"),
     vector_store=ChromaStore(collection_name="standards")
 )
 enrichment_result = enrichment_agent.enrich_from_csv("data/customers.csv")
+print(f"Descrição: {enrichment_result.description}")
 
-# 5) Discovery
-vector_store = ChromaStore(collection_name="catalog")
+# 5. DISCOVERY: Indexar para busca semântica
 discovery_agent = DataDiscoveryAgent(
-    embedding_provider=embeddings,
+    embedding_provider=SentenceTransformerEmbeddings(),
     llm_provider=OpenAILLM(),
-    vector_store=vector_store
+    vector_store=ChromaStore(collection_name="catalog")
 )
-discovery_agent.index_metadata([enrichment_result.to_table_metadata()])
-discovery_answer = discovery_agent.discover("tables with customer data and good quality")
 
-# 6) Asset value
-value_agent = DataAssetValueAgent()
-value_report = value_agent.analyze_from_query_logs(
-    query_logs=[],
-    lineage_data=lineage_result,
-    data_product_config={},
-    asset_metadata={}
+# Criar metadados enriquecidos com classificação e qualidade
+from rag_discovery.agent import TableMetadata
+table = TableMetadata(
+    name=enrichment_result.table_name,
+    description=enrichment_result.description,
+    columns=[{"name": c.name, "type": c.original_type, "description": c.description}
+             for c in enrichment_result.columns],
+    tags=enrichment_result.tags + [
+        f"quality:{quality_report.overall_status}",
+        f"sensitivity:{classification_report.overall_sensitivity}"
+    ]
 )
+discovery_agent.index_metadata([table])
+
+# Buscar com contexto completo
+result = discovery_agent.discover("tabelas com dados de clientes e boa qualidade")
+print(result.answer)
 ```
 
-This flow illustrates how each agent shares inputs (lineage, enriched metadata, classification, quality) to deliver end-to-end governance.
+### Workflows Recomendados
 
-## Unified Interface
-Run `streamlit run app.py` to explore all six agents with quick settings and preloaded examples.
+| Workflow | Agentes | Caso de Uso |
+|----------|---------|-------------|
+| **Catalogação Automática** | Enrichment → Discovery | Documentar data lake automaticamente |
+| **Análise de Impacto** | Lineage + Discovery | Avaliar mudanças antes de deploy |
+| **Compliance LGPD/GDPR** | Classification + Lineage | Rastrear e classificar dados pessoais |
+| **Detecção de PII/PHI** | Classification | Identificar dados sensíveis automaticamente |
+| **Monitoramento Contínuo** | Quality + Discovery | Alertas de qualidade no catálogo |
+| **Onboarding** | Discovery + Lineage | Entender o data lake rapidamente |
+| **Valor de Ativos** | Value + Lineage | Identificar ativos críticos e subutilizados |
+| **Priorização de Investimentos** | Value + Classification | Focar em ativos de alto valor e alto risco |
+| **Gateway de LLM Seguro** | NER + Vault | Filtrar dados sensíveis antes de enviar a LLMs |
+| **Proteção de Credenciais** | NER | Detectar vazamento de API keys e secrets |
 
-## Selective Installation
-Use module-specific requirement files if you only need one component (e.g., `pip install -r metadata_enrichment/requirements.txt`).
+---
+
+## Interface Unificada (Streamlit)
+
+O projeto inclui uma interface web unificada com todos os 7 agentes:
+
+```bash
+streamlit run app.py
+```
+
+**Tabs disponíveis**:
+- **Lineage**: Upload de arquivos e visualização de grafos
+- **Discovery**: Chat com o catálogo de dados
+- **Enrichment**: Geração automática de metadados
+- **Classification**: Detecção de PII/PHI/Financeiro
+- **Quality**: Avaliação de qualidade e alertas
+- **Asset Value**: Análise de valor de ativos de dados
+- **Sensitive Data NER**: Detecção e anonimização de dados sensíveis com Vault
+
+Cada agente também possui interface standalone:
+```bash
+streamlit run lineage/app.py          # Apenas Lineage
+streamlit run rag_discovery/app.py    # Apenas Discovery (se disponível)
+streamlit run metadata_enrichment/streamlit_app.py  # Apenas Enrichment
+streamlit run data_classification/streamlit_app.py  # Apenas Classification
+streamlit run data_quality/streamlit_app.py         # Apenas Quality
+streamlit run sensitive_data_ner/streamlit_app.py   # Apenas NER
+```
+
+---
+
+## Instalação
+
+### Pré-requisitos
+
+- Python 3.8+
+- OpenAI API Key (para agentes que usam LLM)
+
+### Instalação Completa
+
+```bash
+# Clone o repositório
+git clone <repo-url>
+cd data-governance-ai-agents-kit
+
+# Instale todas as dependências
+pip install -r requirements.txt
+
+# Configure variáveis de ambiente
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
+### Instalação Individual
+
+```bash
+# Apenas Lineage Agent (sem LLM)
+pip install -r lineage/requirements.txt
+
+# Apenas RAG Discovery Agent
+pip install -r rag_discovery/requirements.txt
+
+# Apenas Metadata Enrichment Agent
+pip install -r metadata_enrichment/requirements.txt
+
+# Apenas Data Classification Agent (sem LLM)
+pip install -r data_classification/requirements.txt
+
+# Apenas Data Quality Agent (sem LLM)
+pip install -r data_quality/requirements.txt
+```
+
+---
+
+## Arquitetura
+
+```
+data-governance-ai-agents-kit/
+│
+├── app.py                           # Interface Streamlit unificada (6 tabs)
+├── requirements.txt                 # Dependências globais
+├── README.md                        # Este arquivo
+│
+├── lineage/                         # Data Lineage Agent
+│   ├── data_lineage_agent.py        # Agente principal
+│   ├── visualization_engine.py      # Visualizações Plotly
+│   ├── parsers/                     # Parsers (SQL, Python, Terraform, etc.)
+│   ├── examples/
+│   ├── app.py                       # Streamlit standalone
+│   └── README.md
+│
+├── rag_discovery/                   # Data Discovery RAG Agent
+│   ├── agent.py                     # Agente v2 (Dartboard Ranking)
+│   ├── data_discovery_rag_agent.py  # Agente v1 (compatibilidade)
+│   ├── providers/                   # Providers plugáveis
+│   │   ├── embeddings/              # OpenAI, SentenceTransformers
+│   │   ├── llm/                     # OpenAI, VertexAI
+│   │   └── vectorstore/             # ChromaDB, FAISS
+│   ├── retrieval/                   # Busca híbrida
+│   ├── examples/
+│   └── README.md
+│
+├── metadata_enrichment/             # Metadata Enrichment Agent
+│   ├── agent.py                     # Agente principal
+│   ├── standards/                   # RAG para normativos
+│   │   └── standards_rag.py
+│   ├── sampling/                    # Conectores de sampling
+│   │   └── data_sampler.py
+│   ├── providers/                   # Reusa rag_discovery/providers
+│   ├── examples/
+│   ├── streamlit_app.py
+│   └── README.md
+│
+├── data_classification/             # Data Classification Agent
+│   ├── agent.py                     # Agente principal
+│   ├── classifiers/                 # Classificadores por categoria
+│   ├── rules/                       # Regras de classificação
+│   ├── examples/
+│   ├── streamlit_app.py
+│   └── README.md
+│
+├── data_quality/                    # Data Quality Agent
+│   ├── agent.py                     # Agente principal
+│   ├── metrics/                     # Métricas de qualidade
+│   │   ├── quality_metrics.py       # 5 dimensões
+│   │   └── schema_drift.py          # Detecção de drift
+│   ├── rules/                       # Sistema de regras
+│   │   └── quality_rules.py
+│   ├── connectors/                  # Conectores de dados
+│   │   └── data_connector.py
+│   ├── examples/
+│   ├── streamlit_app.py
+│   └── README.md
+│
+├── data_asset_value/                # Data Asset Value Agent
+│   ├── agent.py                     # Agente principal com parser e calculator
+│   ├── __init__.py                  # Exports do módulo
+│   └── examples/
+│       ├── sample_query_logs.json   # Logs de queries de exemplo
+│       ├── data_products_config.json # Config de data products
+│       ├── asset_metadata.json      # Metadados de ativos (criticidade, custo, risco)
+│       └── usage_example.py         # Script de exemplo de uso
+│
+└── sensitive_data_ner/              # Sensitive Data NER Agent
+    ├── __init__.py                  # Exports principais
+    ├── agent.py                     # SensitiveDataNERAgent (principal)
+    ├── anonymizers.py               # Estratégias de anonimização
+    ├── streamlit_app.py             # Interface visual
+    ├── patterns/                    # Padrões de detecção
+    │   ├── __init__.py
+    │   └── entity_patterns.py       # 50+ padrões regex por categoria
+    ├── predictive/                  # Detecção preditiva
+    │   ├── __init__.py
+    │   ├── validators.py            # Validação de checksum (CPF, cartão, etc.)
+    │   └── heuristics.py            # Análise de contexto e confiança
+    ├── vault/                       # Armazenamento seguro
+    │   ├── __init__.py
+    │   ├── vault.py                 # SecureVault principal
+    │   ├── storage.py               # SQLite/PostgreSQL backends
+    │   ├── key_manager.py           # Gestão de chaves AES-256
+    │   ├── access_control.py        # RBAC (5 níveis)
+    │   └── audit.py                 # Audit logging tamper-evident
+    └── examples/
+        └── usage_example.py
+```
+
+---
+
+## Configuração
+
+### Variáveis de Ambiente
+
+```bash
+# OpenAI (para RAG, Discovery e Enrichment)
+export OPENAI_API_KEY="sk-..."
+export OPENAI_API_URL="https://api.openai.com/v1"  # Opcional
+
+# Modelo para Lineage (opcional)
+export DATA_LINEAGE_LLM_MODEL="gpt-4o"
+
+# Apache Atlas (opcional)
+export ATLAS_HOST="http://atlas-host:21000"
+export ATLAS_USERNAME="admin"
+export ATLAS_PASSWORD="admin"
+```
+
+---
+
+## Comparação de Agentes
+
+| Característica | Lineage | Discovery | Enrichment | Classification | Quality | Asset Value | NER |
+|---------------|---------|-----------|------------|----------------|---------|-------------|-----|
+| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade | Analisar valor | Anonimizar textos |
+| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Query logs (JSON) | Texto livre |
+| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas | Value Score + Insights | Texto anonimizado |
+| **LLM** | Opcional | Requerido | Requerido | Não | Não | Não | Não |
+| **Embeddings** | Não | Sim | Sim | Não | Não | Não | Não |
+| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift | Usage, JOINs, Hubs | Vault, Audit, Retention |
+
+---
+
+## Casos de Uso
+
+### 1. Catalogação Automática de Data Lake
+
+```python
+# Processar todos os arquivos do data lake
+from pathlib import Path
+
+for file in Path("data_lake/").glob("**/*.parquet"):
+    # Avaliar qualidade
+    quality = quality_agent.evaluate_file(str(file))
+
+    # Enriquecer metadados
+    enriched = enrichment_agent.enrich_from_parquet(str(file))
+
+    # Indexar no catálogo
+    discovery_agent.index_metadata([create_table_metadata(enriched, quality)])
+
+print("Catálogo criado com metadados enriquecidos e scores de qualidade!")
+```
+
+### 2. Compliance LGPD/GDPR
+
+```python
+# Identificar e rastrear dados pessoais com Classification Agent
+from data_classification import DataClassificationAgent
+
+classifier = DataClassificationAgent()
+results = []
+
+for file in data_files:
+    # Classificar dados por sensibilidade
+    classification = classifier.classify_from_csv(file)
+
+    if classification.pii_columns or classification.phi_columns:
+        # Rastrear linhagem dos dados sensíveis
+        lineage = lineage_agent.analyze_pipeline([file])
+        results.append({
+            "file": file,
+            "sensitivity": classification.overall_sensitivity,
+            "pii_columns": classification.pii_columns,
+            "phi_columns": classification.phi_columns,
+            "compliance_flags": classification.compliance_flags,
+            "downstream_impact": lineage["metrics"]["total_assets"]
+        })
+
+print(f"Encontrados {len(results)} arquivos com dados sensíveis")
+for r in results:
+    print(f"  {r['file']}: {r['sensitivity']} - {r['compliance_flags']}")
+```
+
+### 3. Monitoramento de SLA
+
+```python
+# Verificar freshness diariamente
+from data_quality.rules import QualityRule, AlertLevel
+
+# Adicionar regra de SLA
+agent.add_rule(QualityRule(
+    name="orders_freshness_sla",
+    dimension="freshness",
+    table_name="orders",
+    threshold=0.95,
+    alert_level=AlertLevel.CRITICAL,
+    params={"sla_hours": 4}
+))
+
+# Avaliar
+report = agent.evaluate_file("orders.parquet")
+
+# Verificar alertas
+for alert in agent.get_active_alerts():
+    print(f"[{alert.level}] {alert.message}")
+```
+
+---
+
+## Roadmap
+
+### Concluído
+- [x] Data Lineage Agent com múltiplos parsers
+- [x] Data Discovery RAG Agent com busca híbrida
+- [x] Metadata Enrichment Agent com PII detection
+- [x] Data Classification Agent com LGPD/HIPAA/PCI-DSS
+- [x] Data Quality Agent com SLA monitoring
+- [x] Data Asset Value Agent com análise de uso e impacto
+- [x] Sensitive Data NER Agent com detecção de 6 categorias (PII, PHI, PCI, Financial, Business, Credentials)
+- [x] Secure Vault com criptografia AES-256 e controle de acesso
+- [x] Política de retenção (DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER)
+- [x] Interface Streamlit unificada (7 agentes)
+- [x] Integração com Apache Atlas
+- [x] Providers plugáveis (embeddings, LLM, vectorstore)
+
+### Em Desenvolvimento
+- [ ] Column-level lineage
+- [ ] Integração com dbt
+- [ ] Integração com AWS Glue Data Catalog
+- [ ] Integração com Databricks Unity Catalog
+- [ ] API REST para integração com outras ferramentas
+- [ ] Dashboard de métricas de governança
+- [ ] Suporte a modelos locais (Ollama)
+
+### Classification Agent
+- [x] Regras de PII/PHI/Financeiro baseadas em metadados
+- [x] Níveis de severidade e recomendações LGPD/GDPR
+- [ ] Validação multilíngue com LLM
+- [ ] Biblioteca ampliada de regras setoriais
+
+### Metadata Enrichment Agent
+- [x] RAG sobre normativos internos
+- [x] Suporte a sampling (CSV, Parquet, SQL, Delta)
+- [x] Exportação em JSON/Markdown/HTML
+- [ ] Conectores adicionais (BigQuery, S3 inventories)
+- [ ] Templates personalizáveis de catálogo
+
+---
+
+## Contribuindo
+
+Contribuições são bem-vindas! Por favor:
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/amazing-feature`)
+3. Commit suas mudanças (`git commit -m 'Add amazing feature'`)
+4. Push para a branch (`git push origin feature/amazing-feature`)
+5. Abra um Pull Request
+
+---
+
+## Licença
+
+Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para detalhes.
+
+---
+
+## Agradecimentos
+
+- **Apache Atlas** - Catálogo de metadados
+- **ChromaDB** - Banco vetorial
+- **OpenAI** - Embeddings e LLM
+- **SentenceTransformers** - Embeddings locais
+- **NetworkX** - Análise de grafos
+- **Plotly** - Visualizações interativas
+- **Streamlit** - Interface web
