@@ -234,7 +234,7 @@ def hero_section() -> None:
         with col1:
             st.title("Data Governance AI Agents")
             st.markdown(
-                "Uma interface enxuta inspirada no OpenMetadata para orquestrar linhagem, catalogação e qualidade de dados."
+                "Uma interface simples para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de dados."
             )
             st.markdown(
                 "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
@@ -495,25 +495,6 @@ def _render_connection_guide() -> None:
                 settings.get("chroma_persist")
             )
         )
-        status_labels.append(
-            "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
-        )
-        status_labels.append(
-            "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
-        )
-        status_labels.append(
-            "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
-        )
-        st.markdown("; ".join(status_labels))
-
-        with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
-            st.markdown(
-                "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
-                "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
-                "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
-                    settings.get("chroma_persist")
-                )
-            )
 
         openai_models = [
             "gpt-4o-mini",
