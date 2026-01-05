@@ -14,9 +14,8 @@ import hashlib
 # Shared models (imported from separate module to avoid chromadb dependency chain)
 from rag_discovery.models import TableMetadata, SearchResult
 
-# Vector database (lazy import would be ideal, but keeping direct for now)
-import chromadb
-from chromadb.config import Settings
+# Vector database - lazy import to avoid requiring chromadb at module load time
+# chromadb and Settings are imported in _initialize_chroma() when actually needed
 
 # Embeddings
 from openai import OpenAI
@@ -77,6 +76,16 @@ class DataDiscoveryRAGAgent:
     def _initialize_chroma(self):
         """Inicializa o cliente ChromaDB"""
         try:
+            # Lazy import of chromadb to avoid requiring it at module load time
+            try:
+                import chromadb
+                from chromadb.config import Settings
+            except ImportError:
+                raise ImportError(
+                    "chromadb is required for DataDiscoveryRAGAgent. "
+                    "Install it with: pip install chromadb"
+                )
+
             # Cria diretório se não existir
             Path(self.persist_directory).mkdir(parents=True, exist_ok=True)
 
@@ -97,6 +106,8 @@ class DataDiscoveryRAGAgent:
 
             print(f"✅ ChromaDB inicializado com {self.collection.count()} documentos")
 
+        except ImportError:
+            raise
         except Exception as e:
             print(f"❌ Erro ao inicializar ChromaDB: {e}")
             raise
