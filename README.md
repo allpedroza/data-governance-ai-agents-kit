@@ -1,10 +1,10 @@
 # Data Governance AI Agents Kit
 
-**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados, monitoramento de qualidade e análise de valor de ativos.
+**Framework completo de agentes de IA para governança de dados**, fornecendo análise de linhagem, descoberta semântica, enriquecimento de metadados, classificação de dados, monitoramento de qualidade, análise de valor de ativos e proteção contra vazamento de dados sensíveis.
 
 ## Visão Geral
 
-Este projeto fornece **6 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
+Este projeto fornece **7 agentes de IA especializados** que trabalham de forma integrada para resolver desafios de governança de dados:
 
 | Agente | Propósito |
 |--------|-----------|
@@ -14,6 +14,7 @@ Este projeto fornece **6 agentes de IA especializados** que trabalham de forma i
 | **Data Classification Agent** | Classificação de PII/PHI/Financeiro/ e termos sensíveis à estratégia dos negócios a partir de metadados |
 | **Data Quality Agent** | Monitoramento de qualidade com SLA e detecção de schema drift |
 | **Data Asset Value Agent** | Análise de valor de ativos baseado em uso, JOINs e impacto em data products |
+| **Sensitive Data NER Agent** | Detecção e anonimização de dados sensíveis em texto livre para proteção de LLMs |
 
 ## Início Rápido
 
@@ -287,6 +288,86 @@ print(report.to_markdown())
 ]
 ```
 
+---
+
+### 7. Sensitive Data NER Agent
+
+Sistema de IA para **detecção e anonimização de dados sensíveis** em texto livre, projetado como gateway de proteção para requisições a LLMs terceiras.
+
+**Características**:
+- Detecção de PII (CPF, CNPJ, SSN, email, telefone, nomes)
+- Detecção de PHI (CID-10, CNS, CRM, prontuário médico)
+- Detecção de PCI (cartão de crédito, CVV, IBAN, SWIFT)
+- Detecção de FINANCIAL (contas bancárias, PIX, criptomoedas)
+- Detecção de BUSINESS (projetos confidenciais, termos estratégicos)
+- Detecção de CREDENTIALS (API keys, tokens, secrets, senhas)
+- Detecção determinística (50+ padrões regex) + preditiva (heurísticas, checksum)
+- Múltiplas estratégias de anonimização (REDACT, MASK, HASH, PARTIAL, ENCRYPT)
+- **Secure Vault**: Armazenamento criptografado AES-256 para mapeamentos originais/anonimizados
+- **Controle de Acesso**: 5 níveis de permissão (READ_ONLY, DECRYPT, FULL_DECRYPT, ADMIN, SUPER_ADMIN)
+- **Política de Retenção**: DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER
+- **Audit Log**: Trilha de auditoria tamper-evident com hash chain
+
+**Documentação**: [sensitive_data_ner/README.md](sensitive_data_ner/README.md)
+
+**Exemplo**:
+```python
+from sensitive_data_ner import SensitiveDataNERAgent, FilterPolicy, FilterAction
+
+# Configurar política de filtro
+policy = FilterPolicy(
+    pii_action=FilterAction.ANONYMIZE,
+    phi_action=FilterAction.BLOCK,
+    pci_action=FilterAction.BLOCK,
+    credentials_action=FilterAction.BLOCK,  # Bloquear API keys e secrets
+    business_action=FilterAction.BLOCK,
+)
+
+agent = SensitiveDataNERAgent(
+    filter_policy=policy,
+    business_terms=["Projeto Arara Azul", "Operação Fênix"]
+)
+
+# Analisar texto
+text = """
+O cliente João Silva, CPF 123.456.789-09, solicitou acesso.
+Use a API key: sk-abc123xyz para autenticação.
+"""
+
+result = agent.analyze(text)
+print(f"Entidades: {result.statistics['total']}")
+print(f"Risco: {result.risk_score:.1%}")
+print(f"Texto seguro:\n{result.anonymized_text}")
+```
+
+**Com Secure Vault (armazenamento criptografado)**:
+```python
+from sensitive_data_ner import SecureVault, VaultConfig, RetentionPolicy
+
+# Configurar vault com política de retenção
+config = VaultConfig(
+    storage_path=".secure_vault",
+    default_retention_policy=RetentionPolicy.RETAIN_DAYS,
+    default_retention_days=30,  # Manter por 30 dias após decrypt
+)
+
+vault = SecureVault(config)
+
+# Criar sessão e armazenar mapeamento
+session = vault.create_session(
+    user_id="user123",
+    original_text=text,
+    anonymized_text=result.anonymized_text,
+    mappings=[{"original": "123.456.789-09", "anonymized": "[CPF]"}]
+)
+
+# Posteriormente: recuperar texto original (requer permissão DECRYPT)
+original = vault.decrypt_session(
+    session_id=session.session_id,
+    user_id="admin_user"
+)
+```
+
 **Apenas Data Classification Agent**:
 ```bash
 pip install -r classification/requirements.txt
@@ -302,7 +383,7 @@ export OPENAI_API_KEY="sua-chave-aqui"
 
 ## Integração entre Agentes
 
-Os 6 agentes podem ser **integrados** para um framework completo de governança:
+Os 7 agentes podem ser **integrados** para um framework completo de governança:
 
 ```python
 from lineage.data_lineage_agent import DataLineageAgent
@@ -381,12 +462,14 @@ print(result.answer)
 | **Onboarding** | Discovery + Lineage | Entender o data lake rapidamente |
 | **Valor de Ativos** | Value + Lineage | Identificar ativos críticos e subutilizados |
 | **Priorização de Investimentos** | Value + Classification | Focar em ativos de alto valor e alto risco |
+| **Gateway de LLM Seguro** | NER + Vault | Filtrar dados sensíveis antes de enviar a LLMs |
+| **Proteção de Credenciais** | NER | Detectar vazamento de API keys e secrets |
 
 ---
 
 ## Interface Unificada (Streamlit)
 
-O projeto inclui uma interface web unificada com todos os 6 agentes:
+O projeto inclui uma interface web unificada com todos os 7 agentes:
 
 ```bash
 streamlit run app.py
@@ -399,6 +482,7 @@ streamlit run app.py
 - **Classification**: Detecção de PII/PHI/Financeiro
 - **Quality**: Avaliação de qualidade e alertas
 - **Asset Value**: Análise de valor de ativos de dados
+- **Sensitive Data NER**: Detecção e anonimização de dados sensíveis com Vault
 
 Cada agente também possui interface standalone:
 ```bash
@@ -407,6 +491,7 @@ streamlit run rag_discovery/app.py    # Apenas Discovery (se disponível)
 streamlit run metadata_enrichment/streamlit_app.py  # Apenas Enrichment
 streamlit run data_classification/streamlit_app.py  # Apenas Classification
 streamlit run data_quality/streamlit_app.py         # Apenas Quality
+streamlit run sensitive_data_ner/streamlit_app.py   # Apenas NER
 ```
 
 ---
@@ -513,14 +598,36 @@ data-governance-ai-agents-kit/
 │   ├── streamlit_app.py
 │   └── README.md
 │
-└── data_asset_value/                # Data Asset Value Agent
-    ├── agent.py                     # Agente principal com parser e calculator
-    ├── __init__.py                  # Exports do módulo
+├── data_asset_value/                # Data Asset Value Agent
+│   ├── agent.py                     # Agente principal com parser e calculator
+│   ├── __init__.py                  # Exports do módulo
+│   └── examples/
+│       ├── sample_query_logs.json   # Logs de queries de exemplo
+│       ├── data_products_config.json # Config de data products
+│       ├── asset_metadata.json      # Metadados de ativos (criticidade, custo, risco)
+│       └── usage_example.py         # Script de exemplo de uso
+│
+└── sensitive_data_ner/              # Sensitive Data NER Agent
+    ├── __init__.py                  # Exports principais
+    ├── agent.py                     # SensitiveDataNERAgent (principal)
+    ├── anonymizers.py               # Estratégias de anonimização
+    ├── streamlit_app.py             # Interface visual
+    ├── patterns/                    # Padrões de detecção
+    │   ├── __init__.py
+    │   └── entity_patterns.py       # 50+ padrões regex por categoria
+    ├── predictive/                  # Detecção preditiva
+    │   ├── __init__.py
+    │   ├── validators.py            # Validação de checksum (CPF, cartão, etc.)
+    │   └── heuristics.py            # Análise de contexto e confiança
+    ├── vault/                       # Armazenamento seguro
+    │   ├── __init__.py
+    │   ├── vault.py                 # SecureVault principal
+    │   ├── storage.py               # SQLite/PostgreSQL backends
+    │   ├── key_manager.py           # Gestão de chaves AES-256
+    │   ├── access_control.py        # RBAC (5 níveis)
+    │   └── audit.py                 # Audit logging tamper-evident
     └── examples/
-        ├── sample_query_logs.json   # Logs de queries de exemplo
-        ├── data_products_config.json # Config de data products
-        ├── asset_metadata.json      # Metadados de ativos (criticidade, custo, risco)
-        └── usage_example.py         # Script de exemplo de uso
+        └── usage_example.py
 ```
 
 ---
@@ -547,14 +654,14 @@ export ATLAS_PASSWORD="admin"
 
 ## Comparação de Agentes
 
-| Característica | Lineage | Discovery | Enrichment | Classification | Quality | Asset Value |
-|---------------|---------|-----------|------------|----------------|---------|-------------|
-| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade | Analisar valor |
-| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Query logs (JSON) |
-| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas | Value Score + Insights |
-| **LLM** | Opcional | Requerido | Requerido | Não | Não | Não |
-| **Embeddings** | Não | Sim | Sim | Não | Não | Não |
-| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift | Usage, JOINs, Hubs |
+| Característica | Lineage | Discovery | Enrichment | Classification | Quality | Asset Value | NER |
+|---------------|---------|-----------|------------|----------------|---------|-------------|-----|
+| **Objetivo** | Mapear dependências | Busca semântica | Gerar metadados | Classificar sensibilidade | Monitorar qualidade | Analisar valor | Anonimizar textos |
+| **Input** | Código (SQL, Python) | Query em LN | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Dados (CSV, Parquet) | Query logs (JSON) | Texto livre |
+| **Output** | Grafo + Impacto | Respostas + Tabelas | Descrições + Tags | PII/PHI/PCI + Compliance | Score + Alertas | Value Score + Insights | Texto anonimizado |
+| **LLM** | Opcional | Requerido | Requerido | Não | Não | Não | Não |
+| **Embeddings** | Não | Sim | Sim | Não | Não | Não | Não |
+| **Principais Features** | Impact analysis, Ciclos | Híbrido search, RAG | Standards, Owner | LGPD, HIPAA, PCI-DSS | SLA, Schema drift | Usage, JOINs, Hubs | Vault, Audit, Retention |
 
 ---
 
@@ -644,7 +751,10 @@ for alert in agent.get_active_alerts():
 - [x] Data Classification Agent com LGPD/HIPAA/PCI-DSS
 - [x] Data Quality Agent com SLA monitoring
 - [x] Data Asset Value Agent com análise de uso e impacto
-- [x] Interface Streamlit unificada (6 agentes)
+- [x] Sensitive Data NER Agent com detecção de 6 categorias (PII, PHI, PCI, Financial, Business, Credentials)
+- [x] Secure Vault com criptografia AES-256 e controle de acesso
+- [x] Política de retenção (DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER)
+- [x] Interface Streamlit unificada (7 agentes)
 - [x] Integração com Apache Atlas
 - [x] Providers plugáveis (embeddings, LLM, vectorstore)
 

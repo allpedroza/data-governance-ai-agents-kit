@@ -20,6 +20,7 @@ Este agente permite que empresas disponibilizem IA Generativa (LLMs) para seus c
 | **PCI** | Dados de Cartão de Pagamento | Número do cartão, CVV, Data de validade |
 | **FINANCIAL** | Informações Financeiras | IBAN, Contas bancárias, PIX, Criptomoedas |
 | **BUSINESS** | Dados Estratégicos de Negócio | Projetos confidenciais, Aquisições, Termos proprietários |
+| **CREDENTIALS** | Credenciais e Segredos | API keys, Tokens, Senhas, AWS/GCP/Azure keys, Private keys |
 
 ## Detecção Preditiva vs Determinística
 
@@ -28,7 +29,7 @@ O agente combina duas abordagens para maximizar precisão:
 ### Detecção Determinística (Regex)
 - Padrões bem definidos (CPF, cartão de crédito, email)
 - Alta precisão para formatos conhecidos
-- 50+ padrões pré-configurados
+- 90+ padrões pré-configurados (incluindo 40+ para credenciais)
 
 ### Detecção Preditiva (Heurísticas)
 - **Validação de Checksum**: CPF, CNPJ, Cartão de crédito, IBAN, CNS
@@ -231,17 +232,24 @@ Acesse `http://localhost:8501` para interface visual.
 
 ```
 sensitive_data_ner/
-├── __init__.py              # Exports principais
+├── __init__.py              # Exports principais (v1.2.0)
 ├── agent.py                 # SensitiveDataNERAgent (principal)
 ├── anonymizers.py           # Estratégias de anonimização
 ├── streamlit_app.py         # Interface visual
 ├── patterns/
 │   ├── __init__.py
-│   └── entity_patterns.py   # Padrões regex por categoria
+│   └── entity_patterns.py   # 90+ padrões regex por categoria
 ├── predictive/
 │   ├── __init__.py
 │   ├── validators.py        # Validação de checksum
 │   └── heuristics.py        # Análise de contexto e confiança
+├── vault/                   # Armazenamento seguro (novo)
+│   ├── __init__.py
+│   ├── vault.py             # SecureVault + RetentionPolicy
+│   ├── storage.py           # SQLite/PostgreSQL backends
+│   ├── key_manager.py       # Gestão de chaves AES-256
+│   ├── access_control.py    # RBAC (5 níveis)
+│   └── audit.py             # Audit logging tamper-evident
 └── examples/
     └── usage_example.py     # Exemplos de uso
 ```
@@ -307,17 +315,237 @@ result = agent.analyze(text)
 
 print(result.statistics)
 # {
-#     'total': 5,
+#     'total': 6,
 #     'pii': 3,
 #     'phi': 0,
 #     'pci': 1,
 #     'financial': 1,
 #     'business': 0,
+#     'credentials': 1,  # API keys, tokens, etc.
 #     'validated': 4,  # Entidades com checksum válido
 #     'high_confidence': 3,  # Confiança >= 80%
 # }
 
 print(f"Tempo de processamento: {result.processing_time_ms:.2f}ms")
+```
+
+## Detecção de Credenciais (CREDENTIALS)
+
+O agente detecta 40+ padrões de credenciais e segredos:
+
+### Tipos Suportados
+
+| Tipo | Exemplos |
+|------|----------|
+| **API Keys** | OpenAI (sk-...), Anthropic (sk-ant-...), Google (AIza...) |
+| **Cloud Providers** | AWS Access Key (AKIA...), GCP Service Account, Azure Connection String |
+| **Tokens** | JWT, Bearer Token, GitHub Token (ghp_..., gho_...) |
+| **Secrets** | Private keys (RSA, SSH), Certificates, .env variables |
+| **Database** | Connection strings (postgres://, mysql://, mongodb://) |
+| **Payment** | Stripe (sk_live_..., pk_live_...), PayPal credentials |
+
+### Exemplo de Detecção
+
+```python
+text = """
+Configure a API com estas credenciais:
+OPENAI_API_KEY=sk-proj-abc123xyz456
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+DATABASE_URL=postgres://user:pass@host:5432/db
+"""
+
+result = agent.analyze(text)
+# Detecta 3 credenciais com alta confiança
+for entity in result.entities:
+    if entity.category == EntityCategory.CREDENTIALS:
+        print(f"{entity.entity_type}: {entity.confidence:.0%}")
+# OPENAI_API_KEY: 95%
+# AWS_ACCESS_KEY: 92%
+# DATABASE_URL: 90%
+```
+
+## Secure Vault (Armazenamento Seguro)
+
+O módulo Vault permite armazenar mapeamentos originais/anonimizados de forma segura para posterior recuperação.
+
+### Características de Segurança
+
+| Feature | Descrição |
+|---------|-----------|
+| **Criptografia** | AES-256 via Fernet (cryptography) |
+| **Derivação de Chave** | PBKDF2 com 480.000 iterações |
+| **Rotação de Chaves** | NEVER, DAILY, WEEKLY, MONTHLY, QUARTERLY |
+| **Controle de Acesso** | 5 níveis: READ_ONLY, DECRYPT, FULL_DECRYPT, ADMIN, SUPER_ADMIN |
+| **Audit Log** | Trilha tamper-evident com hash chain |
+| **Storage** | SQLite (local) ou PostgreSQL (produção) |
+
+### Uso Básico
+
+```python
+from sensitive_data_ner import SecureVault, VaultConfig, AccessLevel
+
+# Configurar vault
+config = VaultConfig(
+    storage_path=".secure_vault",
+    master_password="senha-forte-e-segura",
+)
+
+vault = SecureVault(config)
+
+# Criar usuário admin
+vault.access_controller.create_user(
+    user_id="admin",
+    password="admin-password",
+    access_level=AccessLevel.ADMIN
+)
+
+# Criar sessão com mapeamento
+session = vault.create_session(
+    user_id="admin",
+    original_text="CPF: 123.456.789-09",
+    anonymized_text="CPF: [CPF]",
+    mappings=[{
+        "original": "123.456.789-09",
+        "anonymized": "[CPF]",
+        "entity_type": "CPF"
+    }]
+)
+
+print(f"Session ID: {session.session_id}")
+
+# Recuperar posteriormente
+original = vault.decrypt_session(
+    session_id=session.session_id,
+    user_id="admin"
+)
+print(f"Texto original: {original}")
+```
+
+### Níveis de Acesso
+
+| Nível | Descrição | Permissões |
+|-------|-----------|------------|
+| `READ_ONLY` | Leitura apenas | Ver metadados de sessão |
+| `DECRYPT` | Decriptação limitada | Decriptar próprias sessões |
+| `FULL_DECRYPT` | Decriptação total | Decriptar qualquer sessão |
+| `ADMIN` | Administrador | Gerenciar usuários e políticas |
+| `SUPER_ADMIN` | Super administrador | Rotação de chaves, auditoria |
+
+## Política de Retenção
+
+Controle o ciclo de vida dos dados após decriptação:
+
+### Políticas Disponíveis
+
+| Política | Comportamento |
+|----------|---------------|
+| `DELETE_ON_DECRYPT` | **Padrão**: Dados apagados imediatamente após decriptação |
+| `RETAIN_DAYS` | Dados mantidos por período configurável (ex: 30 dias) |
+| `RETAIN_FOREVER` | Dados mantidos permanentemente |
+
+### Configuração
+
+```python
+from sensitive_data_ner import SecureVault, VaultConfig, RetentionPolicy
+
+# Política padrão: apagar após decriptação
+config = VaultConfig(
+    storage_path=".secure_vault",
+    default_retention_policy=RetentionPolicy.DELETE_ON_DECRYPT,
+)
+
+# Ou: reter por 30 dias
+config = VaultConfig(
+    storage_path=".secure_vault",
+    default_retention_policy=RetentionPolicy.RETAIN_DAYS,
+    default_retention_days=30,
+    auto_cleanup_on_access=True,  # Limpar expirados automaticamente
+)
+
+vault = SecureVault(config)
+
+# Criar sessão com política específica
+session = vault.create_session(
+    user_id="user123",
+    original_text=original_text,
+    anonymized_text=anonymized_text,
+    mappings=mappings,
+    retention_policy=RetentionPolicy.RETAIN_DAYS,
+    retention_days=7,  # Manter apenas 7 dias
+)
+
+# Atualizar política de sessão existente
+vault.update_session_retention(
+    session_id=session.session_id,
+    user_id="admin",
+    retention_policy=RetentionPolicy.RETAIN_FOREVER,
+)
+
+# Limpar sessões expiradas manualmente
+deleted_count = vault.cleanup_expired_sessions(user_id="admin")
+print(f"Sessões removidas: {deleted_count}")
+```
+
+### Fluxo de Retenção
+
+```
+┌─────────────────┐
+│ Dados Originais │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Anonimização  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────────────┐
+│  Armazenamento  │────▶│  Vault (AES-256)        │
+│   no Vault      │     │  + Mapeamento criptog.  │
+└────────┬────────┘     └─────────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Decriptação   │
+│   (sob demanda) │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────┐
+│              Política de Retenção               │
+├─────────────────┬───────────────┬───────────────┤
+│ DELETE_ON_     │ RETAIN_DAYS   │ RETAIN_       │
+│ DECRYPT        │ (ex: 30 dias) │ FOREVER       │
+│ ▼              │ ▼             │ ▼             │
+│ Apaga          │ Mantém +      │ Mantém        │
+│ imediatamente  │ expira_at     │ indefinidame- │
+│                │               │ nte           │
+└─────────────────┴───────────────┴───────────────┘
+```
+
+## Audit Log
+
+O sistema mantém trilha de auditoria tamper-evident:
+
+```python
+from sensitive_data_ner import AuditLogger, AuditEventType
+
+# Consultar eventos
+events = vault.audit_logger.query(
+    event_types=[AuditEventType.DATA_DECRYPTED],
+    user_id="admin",
+    limit=100
+)
+
+for event in events:
+    print(f"{event.timestamp}: {event.event_type.value}")
+    print(f"  Sessão: {event.session_id}")
+    print(f"  Usuário: {event.username}")
+
+# Verificar integridade da trilha
+is_valid, errors = vault.audit_logger.verify_chain_integrity()
+if not is_valid:
+    print(f"ALERTA: Trilha comprometida! {errors}")
 ```
 
 ## Compliance
