@@ -87,8 +87,10 @@ class VaultStorage(ABC):
         pass
 
     @abstractmethod
-    def update_session_access(self, session_id: str) -> None:
-        """Update session access timestamp and count."""
+    def update_session_access(
+        self, session_id: str, metadata_updates: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Update session access timestamp/count and optional metadata."""
         pass
 
     @abstractmethod
@@ -366,15 +368,47 @@ class SQLiteVaultStorage(VaultStorage):
             for row in rows
         ]
 
-    def update_session_access(self, session_id: str) -> None:
-        """Update session access timestamp and count."""
+    def update_session_access(
+        self, session_id: str, metadata_updates: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Update session access timestamp, count, and metadata."""
         conn = self._get_connection()
 
-        conn.execute("""
+        if metadata_updates is None:
+            conn.execute(
+                """
+                UPDATE sessions
+                SET accessed_at = ?, access_count = access_count + 1
+                WHERE session_id = ?
+            """,
+                (datetime.utcnow().isoformat(), session_id),
+            )
+            conn.commit()
+            return
+
+        row = conn.execute(
+            "SELECT metadata FROM sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+
+        if not row:
+            return
+
+        current_metadata = json.loads(row["metadata"]) if row["metadata"] else {}
+        current_metadata.update(metadata_updates)
+
+        conn.execute(
+            """
             UPDATE sessions
-            SET accessed_at = ?, access_count = access_count + 1
+            SET accessed_at = ?, access_count = access_count + 1, metadata = ?
             WHERE session_id = ?
-        """, (datetime.utcnow().isoformat(), session_id))
+        """,
+            (
+                datetime.utcnow().isoformat(),
+                json.dumps(current_metadata),
+                session_id,
+            ),
+        )
 
         conn.commit()
 
@@ -768,16 +802,46 @@ class PostgreSQLVaultStorage(VaultStorage):
             for row in cur.fetchall()
         ]
 
-    def update_session_access(self, session_id: str) -> None:
-        """Update session access timestamp and count."""
+    def update_session_access(
+        self, session_id: str, metadata_updates: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Update session access timestamp, count, and metadata."""
         conn = self._get_connection()
         cur = conn.cursor()
 
-        cur.execute(f"""
+        if metadata_updates is None:
+            cur.execute(
+                f"""
+                UPDATE {self._schema}.sessions
+                SET accessed_at = %s, access_count = access_count + 1
+                WHERE session_id = %s
+            """,
+                (datetime.utcnow(), session_id),
+            )
+            conn.commit()
+            return
+
+        cur.execute(
+            f"SELECT metadata FROM {self._schema}.sessions WHERE session_id = %s",
+            (session_id,),
+        )
+        row = cur.fetchone()
+
+        if not row:
+            conn.commit()
+            return
+
+        current_metadata = row[0] or {}
+        current_metadata.update(metadata_updates)
+
+        cur.execute(
+            f"""
             UPDATE {self._schema}.sessions
-            SET accessed_at = %s, access_count = access_count + 1
+            SET accessed_at = %s, access_count = access_count + 1, metadata = %s
             WHERE session_id = %s
-        """, (datetime.utcnow(), session_id))
+        """,
+            (datetime.utcnow(), Json(current_metadata), session_id),
+        )
 
         conn.commit()
 
