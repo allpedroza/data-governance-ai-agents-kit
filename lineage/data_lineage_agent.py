@@ -70,12 +70,15 @@ class DataLineageAgent:
         self.graph = nx.DiGraph()
         self.impact_analysis_cache = {}
         # Modelo padrão: gpt-5.1 suporta reasoning="none", gpt-5 usa "minimal"
+        # Modelos tradicionais (gpt-4o, gpt-4-turbo) usam chat.completions API
         self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5.1")
         self.llm_api_key = os.getenv("OPENAI_API_KEY")
         self.llm_base_url = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
         self.llm_client = None  # Inicializado sob demanda quando necessário
         self.llm_disabled = False  # Evita tentativas repetidas após falha de autenticação
         self._llm_warning_logged = False
+        # Modelos que suportam a API responses com reasoning
+        self._reasoning_models = {'gpt-5', 'gpt-5.1', 'o1', 'o1-mini', 'o1-pro', 'o3', 'o3-mini'}
         self.parsers = {
             '.py': self._parse_python,
             '.sql': self._parse_sql,
@@ -539,6 +542,49 @@ class DataLineageAgent:
                 )
                 self.transformations.append(trans)
 
+    def _is_reasoning_model(self) -> bool:
+        """Verifica se o modelo atual suporta a API responses com reasoning"""
+        model_lower = self.llm_model.lower()
+        return any(rm in model_lower for rm in self._reasoning_models)
+
+    def _call_llm(self, prompt: str, system_prompt: str = None) -> str:
+        """
+        Chama o LLM usando a API apropriada baseada no modelo.
+        Modelos de raciocínio (gpt-5.x, o1, o3) usam responses.create
+        Modelos tradicionais (gpt-4o, gpt-4-turbo) usam chat.completions.create
+        """
+        if self._is_reasoning_model():
+            # API responses para modelos de raciocínio
+            reasoning_effort = "none" if "5.1" in self.llm_model else "low"
+            full_input = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            response = self.llm_client.responses.create(
+                model=self.llm_model,
+                input=full_input,
+                reasoning={"effort": reasoning_effort},
+                text={"verbosity": "low"}
+            )
+            content = response.output_text or ""
+            if not content and getattr(response, "output", None):
+                text_chunks = []
+                for item in response.output:
+                    for piece in item.get("content", []):
+                        if piece.get("type") == "output_text":
+                            text_chunks.append(piece.get("text", ""))
+                content = "".join(text_chunks)
+            return content
+        else:
+            # API chat.completions para modelos tradicionais (gpt-4o, gpt-4-turbo, etc)
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            response = self.llm_client.chat.completions.create(
+                model=self.llm_model,
+                messages=messages,
+                temperature=0.2
+            )
+            return response.choices[0].message.content or ""
+
     def _infer_lineage_with_llm(self, snippet: str, file_path: str, language: str) -> List[Dict[str, Any]]:
         """
         Usa um LLM (via API OpenAI compatível) para inferir pares fonte->destino.
@@ -557,35 +603,16 @@ class DataLineageAgent:
         if self.llm_client is None:
             self.llm_client = OpenAI(api_key=self.llm_api_key, base_url=self.llm_base_url)
 
-        # Combina system prompt e user prompt em um único input
-        full_prompt = (
+        system_prompt = (
             "Você é um assistente de engenharia de dados. Leia o trecho de código "
             "e extraia pares de linhagem (fonte -> destino) em formato JSON. "
-            "Responda apenas JSON com lista de objetos contendo: source, target, operation, logic, confidence.\n\n"
-            f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n{snippet[:4000]}"
+            "Responda apenas JSON com lista de objetos contendo: source, target, operation, logic, confidence."
         )
-
-        # GPT-5.1 suporta "none", GPT-5 usa "minimal"
-        reasoning_effort = "none" if "5.1" in self.llm_model else "minimal"
+        user_prompt = f"Arquivo: {file_path}\nLinguagem: {language}\nTrecho:\n{snippet[:4000]}"
 
         for attempt in range(3):
             try:
-                response = self.llm_client.responses.create(
-                    model=self.llm_model,
-                    input=full_prompt,
-                    reasoning={"effort": reasoning_effort},
-                    text={"verbosity": "low"}
-                )
-
-                content = response.output_text or ""
-                if not content and getattr(response, "output", None):
-                    text_chunks = []
-                    for item in response.output:
-                        for piece in item.get("content", []):
-                            if piece.get("type") == "output_text":
-                                text_chunks.append(piece.get("text", ""))
-                    content = "".join(text_chunks)
-
+                content = self._call_llm(user_prompt, system_prompt)
                 parsed = json.loads(content or "{}")
                 if isinstance(parsed, dict) and 'lineage' in parsed:
                     return parsed.get('lineage', [])
@@ -876,8 +903,7 @@ class DataLineageAgent:
                 self.llm_disabled = True
                 return None
 
-        # Combina system prompt e contexto em um único input
-        full_prompt = (
+        system_prompt = (
             "Você é um especialista em engenharia de dados e análise de pipelines. "
             "Analise o grafo de linhagem de dados fornecido e gere:\n"
             "1. Um resumo executivo em português (2-3 parágrafos)\n"
@@ -885,27 +911,11 @@ class DataLineageAgent:
             "3. Avaliação de risco (LOW/MEDIUM/HIGH) com justificativa\n"
             "4. Para cada componente/subgrafo, uma breve descrição\n\n"
             "Responda em formato JSON com as chaves: summary, recommendations (array), "
-            "risk_assessment, subgraph_summaries (array).\n\n"
-            f"{context}"
+            "risk_assessment, subgraph_summaries (array)."
         )
 
         try:
-            response = self.llm_client.responses.create(
-                model=self.llm_model,
-                input=full_prompt,
-                reasoning={"effort": "low"},
-                text={"verbosity": "medium"}
-            )
-
-            content = response.output_text or ""
-            if not content and hasattr(response, "output"):
-                text_chunks = []
-                for item in response.output:
-                    for piece in item.get("content", []):
-                        if piece.get("type") == "output_text":
-                            text_chunks.append(piece.get("text", ""))
-                content = "".join(text_chunks)
-
+            content = self._call_llm(context, system_prompt)
             if content:
                 return json.loads(content)
         except Exception as e:
