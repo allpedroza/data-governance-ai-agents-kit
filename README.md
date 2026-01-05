@@ -18,10 +18,43 @@ Este projeto fornece **7 agentes de IA especializados** que trabalham de forma i
 
 ## Início Rápido
 
+### Com uv (Recomendado)
+
+[uv](https://docs.astral.sh/uv/) é um gerenciador de pacotes Python extremamente rápido (10-100x mais rápido que pip).
+
+```bash
+# Instale o uv (se ainda não tiver)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone o repositório
+git clone <repo-url>
+cd data-governance-ai-agents-kit
+
+# Crie ambiente virtual e instale dependências
+uv venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
+
+uv pip install -r requirements.txt
+
+# Configure a API key (necessária para alguns agentes)
+export OPENAI_API_KEY="sua-chave-aqui"
+
+# Inicie a interface unificada
+streamlit run app.py
+```
+
+### Com pip (Alternativo)
+
 ```bash
 # Clone o repositório
 git clone <repo-url>
 cd data-governance-ai-agents-kit
+
+# Crie ambiente virtual (opcional, mas recomendado)
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 
 # Instale as dependências
 pip install -r requirements.txt
@@ -502,13 +535,56 @@ streamlit run sensitive_data_ner/streamlit_app.py   # Apenas NER
 
 - Python 3.8+
 - OpenAI API Key (para agentes que usam LLM)
+- [uv](https://docs.astral.sh/uv/) (recomendado) ou pip
 
-### Instalação Completa
+### Instalando o uv
+
+O `uv` é um gerenciador de pacotes Python extremamente rápido (escrito em Rust), que substitui pip, pip-tools e virtualenv.
+
+```bash
+# Linux/macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Via pip (alternativo)
+pip install uv
+
+# Via Homebrew (macOS)
+brew install uv
+```
+
+### Instalação Completa com uv (Recomendado)
 
 ```bash
 # Clone o repositório
 git clone <repo-url>
 cd data-governance-ai-agents-kit
+
+# Crie e ative o ambiente virtual
+uv venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
+
+# Instale todas as dependências
+uv pip install -r requirements.txt
+
+# Configure variáveis de ambiente
+export OPENAI_API_KEY="sua-chave-aqui"
+```
+
+### Instalação Completa com pip
+
+```bash
+# Clone o repositório
+git clone <repo-url>
+cd data-governance-ai-agents-kit
+
+# Crie e ative o ambiente virtual
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 
 # Instale todas as dependências
 pip install -r requirements.txt
@@ -519,6 +595,30 @@ export OPENAI_API_KEY="sua-chave-aqui"
 
 ### Instalação Individual
 
+Instale apenas os agentes que você precisa:
+
+**Com uv:**
+```bash
+# Apenas Lineage Agent (sem LLM)
+uv pip install -r lineage/requirements.txt
+
+# Apenas RAG Discovery Agent
+uv pip install -r rag_discovery/requirements.txt
+
+# Apenas Metadata Enrichment Agent
+uv pip install -r metadata_enrichment/requirements.txt
+
+# Apenas Data Classification Agent (sem LLM)
+uv pip install -r data_classification/requirements.txt
+
+# Apenas Data Quality Agent (sem LLM)
+uv pip install -r data_quality/requirements.txt
+
+# Apenas Sensitive Data NER Agent (sem LLM)
+uv pip install -r sensitive_data_ner/requirements.txt
+```
+
+**Com pip:**
 ```bash
 # Apenas Lineage Agent (sem LLM)
 pip install -r lineage/requirements.txt
@@ -534,6 +634,9 @@ pip install -r data_classification/requirements.txt
 
 # Apenas Data Quality Agent (sem LLM)
 pip install -r data_quality/requirements.txt
+
+# Apenas Sensitive Data NER Agent (sem LLM)
+pip install -r sensitive_data_ner/requirements.txt
 ```
 
 ---
