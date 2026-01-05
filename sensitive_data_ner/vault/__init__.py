@@ -33,6 +33,7 @@ from .vault import (
     VaultSession,
     VaultConfig,
     StoredMapping,
+    RetentionPolicy,
 )
 
 __all__ = [
@@ -56,4 +57,5 @@ __all__ = [
     "VaultSession",
     "VaultConfig",
     "StoredMapping",
+    "RetentionPolicy",
 ]
