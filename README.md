@@ -887,13 +887,183 @@ for alert in agent.get_active_alerts():
 
 ## Contribuindo
 
-Contribuições são bem-vindas! Por favor:
+Contribuições são muito bem-vindas! Este guia explica passo a passo como contribuir com o projeto.
 
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/amazing-feature`)
-3. Commit suas mudanças (`git commit -m 'Add amazing feature'`)
-4. Push para a branch (`git push origin feature/amazing-feature`)
-5. Abra um Pull Request
+### Pré-requisitos
+
+Antes de contribuir, certifique-se de ter:
+- Conta no GitHub
+- Git instalado localmente
+- Python 3.8+ instalado
+- [uv](https://docs.astral.sh/uv/) instalado (recomendado)
+
+### Passo 1: Fazer Fork do Repositório
+
+1. Acesse o repositório original no GitHub
+2. Clique no botão **"Fork"** no canto superior direito
+3. Selecione sua conta como destino do fork
+4. Aguarde a criação do fork (cópia do repositório na sua conta)
+
+### Passo 2: Clonar seu Fork
+
+```bash
+# Clone SEU fork (substitua <seu-usuario> pelo seu username do GitHub)
+git clone https://github.com/<seu-usuario>/data-governance-ai-agents-kit.git
+
+# Entre no diretório
+cd data-governance-ai-agents-kit
+
+# Configure o repositório original como "upstream"
+git remote add upstream https://github.com/allpedroza/data-governance-ai-agents-kit.git
+
+# Verifique os remotes configurados
+git remote -v
+# Deve mostrar:
+# origin    https://github.com/<seu-usuario>/data-governance-ai-agents-kit.git (fetch)
+# origin    https://github.com/<seu-usuario>/data-governance-ai-agents-kit.git (push)
+# upstream  https://github.com/allpedroza/data-governance-ai-agents-kit.git (fetch)
+# upstream  https://github.com/allpedroza/data-governance-ai-agents-kit.git (push)
+```
+
+### Passo 3: Manter seu Fork Atualizado
+
+Antes de criar uma nova branch, sempre sincronize com o repositório original:
+
+```bash
+# Busque as atualizações do repositório original
+git fetch upstream
+
+# Mude para a branch principal
+git checkout main
+
+# Mescle as atualizações
+git merge upstream/main
+
+# Atualize seu fork no GitHub
+git push origin main
+```
+
+### Passo 4: Criar uma Branch para sua Contribuição
+
+**Importante**: Nunca faça commits diretamente na branch `main`. Sempre crie uma branch específica.
+
+```bash
+# Crie e mude para uma nova branch
+git checkout -b feature/nome-da-sua-feature
+
+# Exemplos de nomes de branch:
+# feature/add-bigquery-connector     (para novas funcionalidades)
+# fix/lineage-parser-error           (para correções de bugs)
+# docs/update-readme                 (para documentação)
+# refactor/improve-quality-metrics   (para refatorações)
+```
+
+### Passo 5: Fazer suas Alterações
+
+1. Faça as alterações necessárias no código
+2. Adicione ou atualize testes se aplicável
+3. Verifique se o código segue os padrões do projeto
+4. Teste suas alterações localmente
+
+```bash
+# Configure o ambiente
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+
+# Execute os testes (se houver)
+pytest
+
+# Verifique se a aplicação funciona
+streamlit run app.py
+```
+
+### Passo 6: Commit das Mudanças
+
+```bash
+# Adicione os arquivos modificados
+git add .
+
+# Faça o commit com mensagem descritiva
+git commit -m "feat: adiciona conector para BigQuery"
+
+# Padrões de mensagem de commit:
+# feat: nova funcionalidade
+# fix: correção de bug
+# docs: alterações em documentação
+# refactor: refatoração de código
+# test: adição ou modificação de testes
+# chore: tarefas de manutenção
+```
+
+### Passo 7: Enviar para seu Fork
+
+```bash
+# Envie sua branch para seu fork no GitHub
+git push origin feature/nome-da-sua-feature
+```
+
+### Passo 8: Criar um Pull Request
+
+1. Acesse seu fork no GitHub
+2. Você verá uma mensagem sugerindo criar um Pull Request - clique em **"Compare & pull request"**
+3. Ou clique na aba **"Pull requests"** → **"New pull request"**
+4. Certifique-se de que:
+   - **base repository**: `allpedroza/data-governance-ai-agents-kit`
+   - **base**: `main`
+   - **head repository**: `<seu-usuario>/data-governance-ai-agents-kit`
+   - **compare**: `feature/nome-da-sua-feature`
+5. Preencha o título e descrição do PR:
+   - Descreva o que foi alterado
+   - Explique o motivo da alteração
+   - Mencione issues relacionadas (se houver)
+6. Clique em **"Create pull request"**
+
+### Boas Práticas
+
+- **Mantenha PRs pequenos e focados**: Um PR deve resolver uma única issue ou adicionar uma única feature
+- **Escreva testes**: Sempre que possível, adicione testes para novas funcionalidades
+- **Documente**: Atualize a documentação se sua alteração afetar o uso do projeto
+- **Siga o estilo do código**: Mantenha consistência com o código existente
+- **Responda feedback**: Esteja disponível para responder comentários e fazer ajustes
+
+### Fluxo Visual
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        FLUXO DE CONTRIBUIÇÃO                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. FORK                    2. CLONE                            │
+│  ┌──────────┐              ┌──────────┐                         │
+│  │ Original │──fork───────▶│ Seu Fork │                         │
+│  │  (GitHub)│              │ (GitHub) │                         │
+│  └──────────┘              └────┬─────┘                         │
+│                                 │clone                          │
+│                                 ▼                               │
+│                            ┌──────────┐                         │
+│  3. BRANCH                 │  Local   │                         │
+│  main ────────────────────▶│   Repo   │                         │
+│    └── feature/xyz         └────┬─────┘                         │
+│                                 │                               │
+│  4. COMMIT & PUSH               │                               │
+│  ┌──────────────────────────────┘                               │
+│  │                                                              │
+│  ▼                                                              │
+│  ┌──────────┐    push     ┌──────────┐    PR     ┌──────────┐  │
+│  │  Local   │────────────▶│ Seu Fork │──────────▶│ Original │  │
+│  │  Branch  │             │ (GitHub) │           │ (GitHub) │  │
+│  └──────────┘             └──────────┘           └──────────┘  │
+│                                                                 │
+│  5. REVIEW: Aguarde revisão e faça ajustes se necessário       │
+│  6. MERGE: Após aprovação, sua contribuição será incorporada!  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Dúvidas?
+
+Se tiver dúvidas sobre como contribuir, abra uma [issue](https://github.com/allpedroza/data-governance-ai-agents-kit/issues) no repositório.
 
 ---
 
