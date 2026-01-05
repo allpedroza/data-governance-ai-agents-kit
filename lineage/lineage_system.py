@@ -634,15 +634,22 @@ class DataLineageSystem:
                 summary = insights.get('summary', '')
                 risk = insights.get('risk_assessment', 'N/A')
 
-                # Garante que risk é uma string
+                # Garante que risk é uma string (pode vir como dict do LLM)
                 if risk is None:
                     risk = 'N/A'
+                    risk_level = 'N/A'
+                elif isinstance(risk, dict):
+                    risk_level = risk.get('level', 'N/A')
+                    justification = risk.get('justification', '')
+                    risk = f"{risk_level}: {justification}" if justification else risk_level
+                else:
+                    risk_level = str(risk)
 
                 # Determina classe CSS do risco
                 risk_class = 'risk-low'
-                if 'HIGH' in risk.upper():
+                if 'HIGH' in risk_level.upper():
                     risk_class = 'risk-high'
-                elif 'MEDIUM' in risk.upper():
+                elif 'MEDIUM' in risk_level.upper():
                     risk_class = 'risk-medium'
 
                 report_html += f"""
