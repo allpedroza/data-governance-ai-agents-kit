@@ -1014,16 +1014,25 @@ def render_enrichment_tab() -> None:
 
     st.divider()
 
-    # File upload for enrichment
+    # Data source selection
     st.markdown("### Enriquecer Metadados")
 
-    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="enrich_file_type")
+    # Use the warehouse selector component
+    source_config = render_warehouse_selector("enrichment")
 
-    uploaded_file = st.file_uploader(
-        f"Selecione o arquivo {file_type}",
-        type=["csv"] if file_type == "CSV" else ["parquet"],
-        key="enrich_file"
-    )
+    uploaded_file = None
+    file_type = None
+    encoding = "utf-8"
+    separator = ","
+
+    if source_config["source_type"] == "file":
+        file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="enrich_file_type")
+
+        uploaded_file = st.file_uploader(
+            f"Selecione o arquivo {file_type}",
+            type=["csv"] if file_type == "CSV" else ["parquet"],
+            key="enrich_file"
+        )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -1035,7 +1044,7 @@ def render_enrichment_tab() -> None:
             key="enrich_sample_size"
         )
     with col2:
-        if file_type == "CSV":
+        if source_config["source_type"] == "file" and file_type == "CSV":
             encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "cp1252"], key="csv_encoding")
             separator = st.selectbox("Separador", [",", ";", "|"], key="csv_sep")
 
@@ -1045,35 +1054,93 @@ def render_enrichment_tab() -> None:
         key="enrich_context"
     )
 
-    if uploaded_file and st.button("🚀 Gerar Metadados", type="primary", key="run_enrichment"):
-        with st.spinner("Analisando dados e gerando metadados..."):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type.lower()}") as f:
-                f.write(uploaded_file.read())
-                temp_path = f.name
+    # Determine if we can run
+    can_run = False
+    if source_config["source_type"] == "file" and uploaded_file:
+        can_run = True
+    elif source_config["source_type"] == "warehouse" and source_config.get("table"):
+        can_run = True
 
+    if can_run and st.button("🚀 Gerar Metadados", type="primary", key="run_enrichment"):
+        with st.spinner("Analisando dados e gerando metadados..."):
             try:
-                if file_type == "CSV":
-                    result = agent.enrich_from_csv(
-                        temp_path,
-                        sample_size=sample_size,
-                        encoding=encoding,
-                        separator=separator,
-                        additional_context=additional_context if additional_context else None
-                    )
+                if source_config["source_type"] == "file":
+                    # File-based enrichment
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type.lower()}") as f:
+                        f.write(uploaded_file.read())
+                        temp_path = f.name
+
+                    try:
+                        if file_type == "CSV":
+                            result = agent.enrich_from_csv(
+                                temp_path,
+                                sample_size=sample_size,
+                                encoding=encoding,
+                                separator=separator,
+                                additional_context=additional_context if additional_context else None
+                            )
+                        else:
+                            result = agent.enrich_from_parquet(
+                                temp_path,
+                                sample_size=sample_size,
+                                additional_context=additional_context if additional_context else None
+                            )
+                    finally:
+                        os.unlink(temp_path)
                 else:
-                    result = agent.enrich_from_parquet(
-                        temp_path,
-                        sample_size=sample_size,
-                        additional_context=additional_context if additional_context else None
+                    # Warehouse-based enrichment
+                    connector = get_warehouse_connector(
+                        source_config["warehouse"],
+                        source_config["warehouse_config"]
                     )
+
+                    if connector:
+                        with st.status("Conectando ao Data Warehouse...", expanded=True) as status:
+                            status.write(f"Conectando ao {source_config['warehouse']}...")
+                            connector.connect()
+                            status.write(f"Lendo amostra de {source_config['table']}...")
+
+                            sample_result = connector.read_sample(
+                                source_config["table"],
+                                schema=source_config.get("schema"),
+                                database=source_config.get("database"),
+                                n_rows=sample_size
+                            )
+
+                            status.write(f"Lidas {sample_result.row_count} linhas. Enriquecendo metadados...")
+
+                            import pandas as pd
+                            df = pd.DataFrame(sample_result.rows)
+
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".parquet") as f:
+                                df.to_parquet(f.name)
+                                temp_path = f.name
+
+                            try:
+                                # Add table context
+                                table_context = f"Tabela: {source_config['table']} do {source_config['warehouse']}"
+                                if additional_context:
+                                    table_context = f"{table_context}. {additional_context}"
+
+                                result = agent.enrich_from_parquet(
+                                    temp_path,
+                                    sample_size=sample_size,
+                                    additional_context=table_context
+                                )
+                            finally:
+                                os.unlink(temp_path)
+
+                            connector.disconnect()
+                            status.update(label="Enriquecimento concluído!", state="complete")
+                    else:
+                        st.error("Não foi possível criar conexão com o Data Warehouse.")
+                        return
 
                 st.session_state.enrichment_result = result
                 st.success("✓ Metadados gerados com sucesso!")
 
             except Exception as exc:
                 st.error(f"Erro ao processar: {exc}")
-            finally:
-                os.unlink(temp_path)
 
     # Display results
     if "enrichment_result" in st.session_state:
@@ -1179,16 +1246,24 @@ def render_quality_tab() -> None:
         st.error("Não foi possível inicializar o agente.")
         return
 
-    # File upload
+    # Data source selection
     st.markdown("### Avaliar Qualidade")
 
-    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="quality_file_type")
+    # Use the warehouse selector component
+    source_config = render_warehouse_selector("quality")
 
-    uploaded_file = st.file_uploader(
-        f"Selecione o arquivo {file_type}",
-        type=["csv"] if file_type == "CSV" else ["parquet"],
-        key="quality_file"
-    )
+    uploaded_file = None
+    file_type = None
+
+    if source_config["source_type"] == "file":
+        # File upload mode
+        file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="quality_file_type")
+
+        uploaded_file = st.file_uploader(
+            f"Selecione o arquivo {file_type}",
+            type=["csv"] if file_type == "CSV" else ["parquet"],
+            key="quality_file"
+        )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -1211,13 +1286,15 @@ def render_quality_tab() -> None:
             )
             sla_hours = st.number_input("SLA (horas)", min_value=1, max_value=168, value=24, key="sla_h")
 
-    if uploaded_file and st.button("🚀 Avaliar Qualidade", type="primary", key="run_quality"):
-        with st.spinner("Analisando dados..."):
-            suffix = ".csv" if file_type == "CSV" else ".parquet"
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-                f.write(uploaded_file.read())
-                temp_path = f.name
+    # Determine if we can run analysis
+    can_run = False
+    if source_config["source_type"] == "file" and uploaded_file:
+        can_run = True
+    elif source_config["source_type"] == "warehouse" and source_config.get("table"):
+        can_run = True
 
+    if can_run and st.button("🚀 Avaliar Qualidade", type="primary", key="run_quality"):
+        with st.spinner("Analisando dados..."):
             try:
                 kwargs = {"sample_size": sample_size}
 
@@ -1228,14 +1305,66 @@ def render_quality_tab() -> None:
                         "max_age_hours": sla_hours * 2
                     }
 
-                report = agent.evaluate_file(temp_path, **kwargs)
+                if source_config["source_type"] == "file":
+                    # File-based analysis
+                    suffix = ".csv" if file_type == "CSV" else ".parquet"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                        f.write(uploaded_file.read())
+                        temp_path = f.name
+
+                    try:
+                        report = agent.evaluate_file(temp_path, **kwargs)
+                    finally:
+                        os.unlink(temp_path)
+                else:
+                    # Warehouse-based analysis
+                    connector = get_warehouse_connector(
+                        source_config["warehouse"],
+                        source_config["warehouse_config"]
+                    )
+
+                    if connector:
+                        with st.status("Conectando ao Data Warehouse...", expanded=True) as status:
+                            status.write(f"Conectando ao {source_config['warehouse']}...")
+                            connector.connect()
+                            status.write(f"Lendo amostra de {source_config['table']}...")
+
+                            # Read sample data to temp file for analysis
+                            result = connector.read_sample(
+                                source_config["table"],
+                                schema=source_config.get("schema"),
+                                database=source_config.get("database"),
+                                n_rows=sample_size
+                            )
+
+                            status.write(f"Lidas {result.row_count} linhas. Analisando qualidade...")
+
+                            # Convert to DataFrame and save as temp parquet
+                            import pandas as pd
+                            df = pd.DataFrame(result.rows)
+
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".parquet") as f:
+                                df.to_parquet(f.name)
+                                temp_path = f.name
+
+                            try:
+                                report = agent.evaluate_file(temp_path, **kwargs)
+                                # Update source name to reflect warehouse table
+                                report.source_name = f"{source_config['warehouse']}.{source_config.get('schema', '')}.{source_config['table']}"
+                            finally:
+                                os.unlink(temp_path)
+
+                            connector.disconnect()
+                            status.update(label="Análise concluída!", state="complete")
+                    else:
+                        st.error("Não foi possível criar conexão com o Data Warehouse.")
+                        return
+
                 st.session_state.quality_report = report
                 st.success(f"✓ Análise concluída em {report.processing_time_ms}ms")
 
             except Exception as exc:
                 st.error(f"Erro: {exc}")
-            finally:
-                os.unlink(temp_path)
 
     # Display results
     if "quality_report" in st.session_state:
@@ -1341,16 +1470,25 @@ def render_classification_tab() -> None:
         st.error("Não foi possível inicializar o agente.")
         return
 
-    # File upload
+    # Data source selection
     st.markdown("### Classificar Dados")
 
-    file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="classification_file_type")
+    # Use the warehouse selector component
+    source_config = render_warehouse_selector("classification")
 
-    uploaded_file = st.file_uploader(
-        f"Selecione o arquivo {file_type}",
-        type=["csv"] if file_type == "CSV" else ["parquet"],
-        key="classification_file"
-    )
+    uploaded_file = None
+    file_type = None
+    encoding = "utf-8"
+    separator = ","
+
+    if source_config["source_type"] == "file":
+        file_type = st.selectbox("Tipo de arquivo", ["CSV", "Parquet"], key="classification_file_type")
+
+        uploaded_file = st.file_uploader(
+            f"Selecione o arquivo {file_type}",
+            type=["csv"] if file_type == "CSV" else ["parquet"],
+            key="classification_file"
+        )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -1362,36 +1500,86 @@ def render_classification_tab() -> None:
             key="classification_sample_size"
         )
 
-    if file_type == "CSV":
+    if source_config["source_type"] == "file" and file_type == "CSV":
         with col2:
             encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "cp1252"], key="class_encoding")
             separator = st.selectbox("Separador", [",", ";", "|"], key="class_sep")
 
-    if uploaded_file and st.button("🔍 Classificar Dados", type="primary", key="run_classification"):
-        with st.spinner("Analisando dados e detectando padrões sensíveis..."):
-            suffix = ".csv" if file_type == "CSV" else ".parquet"
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-                f.write(uploaded_file.read())
-                temp_path = f.name
+    # Determine if we can run analysis
+    can_run = False
+    if source_config["source_type"] == "file" and uploaded_file:
+        can_run = True
+    elif source_config["source_type"] == "warehouse" and source_config.get("table"):
+        can_run = True
 
+    if can_run and st.button("🔍 Classificar Dados", type="primary", key="run_classification"):
+        with st.spinner("Analisando dados e detectando padrões sensíveis..."):
             try:
-                if file_type == "CSV":
-                    report = agent.classify_from_csv(
-                        temp_path,
-                        encoding=encoding,
-                        separator=separator,
-                        sample_size=sample_size
-                    )
+                if source_config["source_type"] == "file":
+                    # File-based classification
+                    suffix = ".csv" if file_type == "CSV" else ".parquet"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                        f.write(uploaded_file.read())
+                        temp_path = f.name
+
+                    try:
+                        if file_type == "CSV":
+                            report = agent.classify_from_csv(
+                                temp_path,
+                                encoding=encoding,
+                                separator=separator,
+                                sample_size=sample_size
+                            )
+                        else:
+                            report = agent.classify_from_parquet(temp_path, sample_size=sample_size)
+                    finally:
+                        os.unlink(temp_path)
                 else:
-                    report = agent.classify_from_parquet(temp_path, sample_size=sample_size)
+                    # Warehouse-based classification
+                    connector = get_warehouse_connector(
+                        source_config["warehouse"],
+                        source_config["warehouse_config"]
+                    )
+
+                    if connector:
+                        with st.status("Conectando ao Data Warehouse...", expanded=True) as status:
+                            status.write(f"Conectando ao {source_config['warehouse']}...")
+                            connector.connect()
+                            status.write(f"Lendo amostra de {source_config['table']}...")
+
+                            result = connector.read_sample(
+                                source_config["table"],
+                                schema=source_config.get("schema"),
+                                database=source_config.get("database"),
+                                n_rows=sample_size
+                            )
+
+                            status.write(f"Lidas {result.row_count} linhas. Classificando...")
+
+                            import pandas as pd
+                            df = pd.DataFrame(result.rows)
+
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".parquet") as f:
+                                df.to_parquet(f.name)
+                                temp_path = f.name
+
+                            try:
+                                report = agent.classify_from_parquet(temp_path, sample_size=sample_size)
+                                report.source_name = f"{source_config['warehouse']}.{source_config.get('schema', '')}.{source_config['table']}"
+                            finally:
+                                os.unlink(temp_path)
+
+                            connector.disconnect()
+                            status.update(label="Classificação concluída!", state="complete")
+                    else:
+                        st.error("Não foi possível criar conexão com o Data Warehouse.")
+                        return
 
                 st.session_state.classification_report = report
                 st.success("✅ Classificação concluída!")
 
             except Exception as exc:
                 st.error(f"Erro ao classificar: {exc}")
-            finally:
-                os.unlink(temp_path)
 
     # Display results
     if "classification_report" in st.session_state:
@@ -3015,6 +3203,191 @@ def get_configured_warehouses() -> List[str]:
     if wh.get("synapse", {}).get("enabled") and wh["synapse"].get("server"):
         warehouses.append("synapse")
     return warehouses
+
+
+def render_warehouse_selector(key_prefix: str, show_schema: bool = True, show_table: bool = True) -> Dict[str, Any]:
+    """
+    Render a reusable warehouse/table selector component.
+
+    Args:
+        key_prefix: Unique prefix for widget keys
+        show_schema: Whether to show schema selector
+        show_table: Whether to show table selector
+
+    Returns:
+        Dict with selected warehouse config and table info, or None if using file upload
+    """
+    configured_warehouses = get_configured_warehouses()
+
+    # Data source selection
+    source_options = ["📁 Upload de arquivo"]
+    if configured_warehouses:
+        source_options.append("🏢 Data Warehouse conectado")
+
+    data_source = st.radio(
+        "Fonte de dados",
+        options=source_options,
+        horizontal=True,
+        key=f"{key_prefix}_data_source"
+    )
+
+    if data_source == "📁 Upload de arquivo" or not configured_warehouses:
+        return {"source_type": "file", "warehouse": None}
+
+    # Warehouse selection
+    with st.container(border=True):
+        st.markdown("##### Selecione a fonte de dados")
+
+        warehouse_labels = {
+            "snowflake": "❄️ Snowflake",
+            "redshift": "🔴 Amazon Redshift",
+            "bigquery": "🔵 Google BigQuery",
+            "synapse": "🟣 Azure Synapse"
+        }
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            selected_wh = st.selectbox(
+                "Data Warehouse",
+                options=configured_warehouses,
+                format_func=lambda x: warehouse_labels.get(x, x),
+                key=f"{key_prefix}_warehouse"
+            )
+
+        # Get warehouse connection details
+        wh_config = st.session_state.warehouse_connections.get(selected_wh, {})
+
+        with col2:
+            # Database/Project selector based on warehouse type
+            if selected_wh == "snowflake":
+                database = st.text_input(
+                    "Database",
+                    value=wh_config.get("database", ""),
+                    key=f"{key_prefix}_database"
+                )
+            elif selected_wh == "redshift":
+                database = st.text_input(
+                    "Database",
+                    value=wh_config.get("database", ""),
+                    key=f"{key_prefix}_database"
+                )
+            elif selected_wh == "bigquery":
+                database = st.text_input(
+                    "Project ID",
+                    value=wh_config.get("project_id", ""),
+                    key=f"{key_prefix}_database"
+                )
+            elif selected_wh == "synapse":
+                database = st.text_input(
+                    "Database",
+                    value=wh_config.get("database", ""),
+                    key=f"{key_prefix}_database"
+                )
+            else:
+                database = ""
+
+        schema = None
+        table = None
+
+        if show_schema:
+            col3, col4 = st.columns(2)
+            with col3:
+                if selected_wh == "bigquery":
+                    schema = st.text_input(
+                        "Dataset",
+                        value=wh_config.get("dataset", ""),
+                        key=f"{key_prefix}_schema"
+                    )
+                else:
+                    schema = st.text_input(
+                        "Schema",
+                        value=wh_config.get("schema", "public"),
+                        key=f"{key_prefix}_schema"
+                    )
+
+            with col4:
+                if show_table:
+                    table = st.text_input(
+                        "Tabela",
+                        placeholder="nome_da_tabela",
+                        key=f"{key_prefix}_table"
+                    )
+        elif show_table:
+            table = st.text_input(
+                "Tabela",
+                placeholder="nome_da_tabela",
+                key=f"{key_prefix}_table"
+            )
+
+        # Connection status indicator
+        st.caption(f"✅ Conectado via configurações salvas em Settings")
+
+    return {
+        "source_type": "warehouse",
+        "warehouse": selected_wh,
+        "warehouse_config": wh_config,
+        "database": database,
+        "schema": schema,
+        "table": table
+    }
+
+
+def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
+    """
+    Create a warehouse connector based on type and config.
+
+    Returns connector instance or None if creation fails.
+    """
+    try:
+        from warehouse.connectors import create_warehouse_connector
+
+        if warehouse_type == "snowflake":
+            return create_warehouse_connector(
+                "snowflake",
+                account=config.get("account"),
+                username=config.get("username"),
+                password=config.get("password"),
+                warehouse=config.get("warehouse"),
+                database=config.get("database"),
+                schema=config.get("schema"),
+                role=config.get("role")
+            )
+        elif warehouse_type == "redshift":
+            return create_warehouse_connector(
+                "redshift",
+                host=config.get("host"),
+                port=int(config.get("port", 5439)),
+                database=config.get("database"),
+                username=config.get("username"),
+                password=config.get("password"),
+                schema=config.get("schema")
+            )
+        elif warehouse_type == "bigquery":
+            return create_warehouse_connector(
+                "bigquery",
+                project_id=config.get("project_id"),
+                dataset=config.get("dataset"),
+                credentials_path=config.get("credentials_path"),
+                location=config.get("location")
+            )
+        elif warehouse_type == "synapse":
+            return create_warehouse_connector(
+                "synapse",
+                server=config.get("server"),
+                database=config.get("database"),
+                username=config.get("username"),
+                password=config.get("password"),
+                authentication=config.get("authentication", "sql")
+            )
+    except ImportError:
+        st.warning("⚠️ Módulo warehouse não disponível. Instale com: `pip install -r warehouse/requirements.txt`")
+        return None
+    except Exception as e:
+        st.error(f"Erro ao criar conector: {e}")
+        return None
+
+    return None
 
 
 init_session_state()
