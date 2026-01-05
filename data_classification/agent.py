@@ -18,6 +18,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set, Tuple
+from rag_discovery.providers.base import LLMProvider
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -52,6 +53,7 @@ class ColumnClassification:
     detected_patterns: List[str] = field(default_factory=list)
     sample_matches: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    rationale: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -63,7 +65,8 @@ class ColumnClassification:
             "confidence": self.confidence,
             "detected_patterns": self.detected_patterns,
             "sample_matches": self.sample_matches[:3],  # Limit samples
-            "recommendations": self.recommendations
+            "recommendations": self.recommendations,
+            "rationale": self.rationale,
         }
 
 
@@ -86,6 +89,7 @@ class ClassificationReport:
     high_risk_count: int = 0
     recommendations: List[str] = field(default_factory=list)
     compliance_flags: List[str] = field(default_factory=list)
+    llm_analysis: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -111,7 +115,8 @@ class ClassificationReport:
             "financial_columns": self.financial_columns,
             "proprietary_columns": self.proprietary_columns,
             "recommendations": self.recommendations,
-            "compliance_flags": self.compliance_flags
+            "compliance_flags": self.compliance_flags,
+            "llm_analysis": self.llm_analysis,
         }
 
     def to_json(self) -> str:
@@ -246,7 +251,8 @@ class DataClassificationAgent:
         custom_patterns: Optional[Dict[str, str]] = None,
         sensitivity_rules: Optional[Dict[str, str]] = None,
         sample_size: int = 1000,
-        business_sensitive_terms: Optional[List[str]] = None
+        business_sensitive_terms: Optional[List[str]] = None,
+        llm_provider: Optional[LLMProvider] = None
     ):
         """
         Initialize the Data Classification Agent.
@@ -263,6 +269,7 @@ class DataClassificationAgent:
         }
         self._business_terms_list: List[str] = sorted(self.business_sensitive_terms)
         self.sensitivity_rules = sensitivity_rules or {}
+        self.llm_provider = llm_provider
 
         # Compile all patterns
         self._compiled_pii = {k: re.compile(v, re.IGNORECASE) for k, v in self.PII_PATTERNS.items()}
@@ -277,6 +284,269 @@ class DataClassificationAgent:
         self._compiled_business_terms = [
             re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE) for term in self._business_terms_list
         ]
+
+    def classify_schema_with_llm(
+        self,
+        table_name: str,
+        columns: List[Dict[str, Any]],
+        description: str = "",
+        database: Optional[str] = None,
+        schema: Optional[str] = None,
+        table_tags: Optional[List[str]] = None
+    ) -> ClassificationReport:
+        """
+        Classify sensitive data using only schema/metadata with an LLM review.
+
+        Args:
+            table_name: Name of the table
+            columns: List of column metadata dictionaries {name, type, description?, tags?}
+            description: Optional table description
+            database: Optional database/catalog name
+            schema: Optional schema name
+            table_tags: Optional list of table tags
+        """
+
+        if not self.llm_provider:
+            raise ValueError("llm_provider não configurado para análise de schema")
+
+        baseline_columns: List[ColumnClassification] = []
+        column_context = []
+
+        for col in columns:
+            baseline = self._classify_column_schema_only(col)
+            baseline_columns.append(baseline)
+            column_context.append({
+                "name": col.get("name"),
+                "type": col.get("type", ""),
+                "description": col.get("description", ""),
+                "tags": col.get("tags", []),
+                "baseline_categories": baseline.categories,
+            })
+
+        table_identifier = ".".join([p for p in [database, schema, table_name] if p]) or table_name
+
+        prompt_payload = {
+            "table": table_identifier,
+            "description": description,
+            "tags": table_tags or [],
+            "columns": column_context,
+        }
+
+        prompt = (
+            "Analise o schema da tabela e identifique colunas PII/PHI/PCI/financeiro/proprietário. "
+            "Use apenas metadados fornecidos; não invente valores. "
+            "Responda em JSON com: columns (lista de objetos com name, categories, confidence, rationale, sensitivity_level), "
+            "table_categories (lista) e next_actions (lista).\n\n"
+            f"Schema:\n{json.dumps(prompt_payload, ensure_ascii=False)}"
+        )
+
+        llm_response = self.llm_provider.generate(
+            prompt=prompt,
+            system_prompt="Você é um especialista em privacidade de dados e compliance.",
+            temperature=0.1,
+            max_tokens=800
+        )
+
+        parsed: Dict[str, Any] = {}
+        try:
+            parsed = json.loads(llm_response.content)
+        except Exception:
+            parsed = {}
+
+        llm_columns = {c.get("name", "").lower(): c for c in parsed.get("columns", []) if isinstance(c, dict)}
+
+        merged_columns: List[ColumnClassification] = []
+        pii_columns: List[str] = []
+        phi_columns: List[str] = []
+        pci_columns: List[str] = []
+        financial_columns: List[str] = []
+        proprietary_columns: List[str] = []
+        all_categories: Set[str] = set()
+        high_risk_count = 0
+
+        for baseline in baseline_columns:
+            llm_info = llm_columns.get(baseline.name.lower()) if baseline.name else None
+            llm_categories = [c.lower() for c in llm_info.get("categories", [])] if llm_info else []
+            combined_categories = sorted(list({*baseline.categories, *llm_categories}))
+            confidence = max(
+                baseline.confidence,
+                float(llm_info.get("confidence", 0)) if llm_info else 0.0
+            )
+
+            sensitivity_level = llm_info.get("sensitivity_level") if llm_info else None
+            if not sensitivity_level:
+                sensitivity_level = self._determine_column_sensitivity(combined_categories, confidence)
+
+            rationale = llm_info.get("rationale") if llm_info else baseline.rationale
+
+            final_column = ColumnClassification(
+                name=baseline.name,
+                original_type=baseline.original_type,
+                categories=combined_categories,
+                sensitivity_level=sensitivity_level,
+                pii_type=baseline.pii_type,
+                confidence=confidence,
+                detected_patterns=baseline.detected_patterns,
+                sample_matches=[],
+                recommendations=self._generate_column_recommendations(
+                    baseline.name, combined_categories, sensitivity_level, baseline.pii_type
+                ),
+                rationale=rationale or baseline.rationale,
+            )
+
+            merged_columns.append(final_column)
+
+            if "pii" in combined_categories:
+                pii_columns.append(baseline.name)
+            if "phi" in combined_categories:
+                phi_columns.append(baseline.name)
+            if "pci" in combined_categories:
+                pci_columns.append(baseline.name)
+            if "financial" in combined_categories:
+                financial_columns.append(baseline.name)
+            if "proprietary" in combined_categories:
+                proprietary_columns.append(baseline.name)
+
+            all_categories.update(combined_categories)
+            if sensitivity_level in ("confidential", "restricted"):
+                high_risk_count += 1
+
+        overall_sensitivity = parsed.get("overall_sensitivity") or self._determine_overall_sensitivity(merged_columns)
+
+        recommendations = parsed.get("next_actions") or self._generate_recommendations(
+            pii_columns,
+            phi_columns,
+            pci_columns,
+            financial_columns,
+            proprietary_columns,
+            overall_sensitivity
+        )
+
+        compliance_flags = self._check_compliance(
+            pii_columns, phi_columns, pci_columns, financial_columns, proprietary_columns
+        )
+
+        return ClassificationReport(
+            source_name=table_identifier,
+            source_type="schema_llm",
+            classification_timestamp=datetime.now().isoformat(),
+            overall_sensitivity=overall_sensitivity,
+            categories_found=list(all_categories),
+            columns=merged_columns,
+            pii_columns=pii_columns,
+            phi_columns=phi_columns,
+            pci_columns=pci_columns,
+            financial_columns=financial_columns,
+            proprietary_columns=proprietary_columns,
+            row_count=0,
+            columns_analyzed=len(merged_columns),
+            high_risk_count=high_risk_count,
+            recommendations=recommendations,
+            compliance_flags=compliance_flags,
+            llm_analysis={
+                "model": getattr(self.llm_provider, "model_name", ""),
+                "prompt": prompt,
+                "raw_response": llm_response.content,
+                "parsed": parsed,
+            }
+        )
+
+    def _classify_column_schema_only(self, column: Dict[str, Any]) -> ColumnClassification:
+        """Heuristic classification using only column name/description/type."""
+
+        name = column.get("name", "")
+        col_type = column.get("type", "")
+        description = column.get("description", "") or ""
+        tags = [t.lower() for t in column.get("tags", []) if isinstance(t, str)]
+
+        categories: List[str] = []
+        detected_patterns: List[str] = []
+        rationale_parts: List[str] = []
+        confidence = 0.0
+
+        name_lower = name.lower()
+        desc_lower = description.lower()
+        type_lower = col_type.lower()
+
+        # Column name hints
+        for hint in self.PII_COLUMN_HINTS:
+            if hint in name_lower:
+                categories.append("pii")
+                confidence = max(confidence, 0.35)
+                rationale_parts.append(f"nome contém '{hint}'")
+                break
+
+        for hint in self.PHI_COLUMN_HINTS:
+            if hint in name_lower:
+                if "phi" not in categories:
+                    categories.append("phi")
+                confidence = max(confidence, 0.35)
+                rationale_parts.append(f"nome indica saúde ('{hint}')")
+                break
+
+        for hint in self.FINANCIAL_COLUMN_HINTS:
+            if hint in name_lower:
+                if "financial" not in categories:
+                    categories.append("financial")
+                confidence = max(confidence, 0.35)
+                rationale_parts.append(f"nome sugere dado financeiro ('{hint}')")
+                break
+
+        # Description/type hints using pattern keys
+        for pattern_name in list(self.PII_PATTERNS.keys()):
+            if pattern_name in name_lower or pattern_name in desc_lower:
+                if "pii" not in categories:
+                    categories.append("pii")
+                confidence = max(confidence, 0.4)
+                detected_patterns.append(f"pii:{pattern_name}")
+
+        for pattern_name in list(self.PHI_PATTERNS.keys()):
+            if pattern_name in name_lower or pattern_name in desc_lower:
+                if "phi" not in categories:
+                    categories.append("phi")
+                confidence = max(confidence, 0.4)
+                detected_patterns.append(f"phi:{pattern_name}")
+
+        for pattern_name in list(self.FINANCIAL_PATTERNS.keys()):
+            if pattern_name in name_lower or pattern_name in desc_lower or pattern_name in type_lower:
+                if "financial" not in categories:
+                    categories.append("financial")
+                confidence = max(confidence, 0.4)
+                detected_patterns.append(f"financial:{pattern_name}")
+                if pattern_name == "credit_card" and "pci" not in categories:
+                    categories.append("pci")
+
+        if any(tag in ("pii", "phi", "pci", "financial") for tag in tags):
+            categories.extend([t for t in tags if t in ("pii", "phi", "pci", "financial")])
+            confidence = max(confidence, 0.45)
+            rationale_parts.append("tag sensível presente")
+
+        # Business/proprietary hints
+        for term in self.business_sensitive_terms:
+            if term and (term in name_lower or term in desc_lower):
+                if "proprietary" not in categories:
+                    categories.append("proprietary")
+                confidence = max(confidence, 0.35)
+                detected_patterns.append(f"business:{term}")
+
+        sensitivity_level = self._determine_column_sensitivity(categories, confidence)
+
+        recommendations = self._generate_column_recommendations(
+            name, categories, sensitivity_level, None
+        )
+
+        return ColumnClassification(
+            name=name,
+            original_type=col_type,
+            categories=categories,
+            sensitivity_level=sensitivity_level,
+            pii_type=None,
+            confidence=confidence,
+            detected_patterns=detected_patterns,
+            sample_matches=[],
+            recommendations=recommendations,
+            rationale=", ".join(rationale_parts) if rationale_parts else None,
+        )
 
     def classify_from_csv(
         self,

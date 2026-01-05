@@ -16,6 +16,12 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR / "lineage"))
 sys.path.append(str(BASE_DIR / "rag_discovery"))
 
+# External catalog connectors
+from rag_discovery.openmetadata_connector import (  # noqa: E402
+    OpenMetadataConnector,
+    OpenMetadataConnectorError,
+)
+
 missing_core_modules = [module for module in ["openai"] if find_spec(module) is None]
 if missing_core_modules:
     missing_list = ", ".join(sorted(missing_core_modules))
@@ -104,14 +110,69 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        .metric-card {background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 12px;}
-        .section-card {background: #0b1220; padding: 1.25rem; border-radius: 16px; border: 1px solid #1f2937;}
-        .pill {display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; background: #1e293b; color: #e2e8f0; margin-right: 0.5rem;}
-        .callout {border-left: 4px solid #22c55e; background: #0f172a; padding: 0.75rem; border-radius: 12px;}
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #2563eb;
+        }
+
+        .main {
+            background: var(--bg);
+        }
+
+        .section-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 0.2rem 0.7rem;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: var(--text);
+            margin-right: 0.4rem;
+            border: 1px solid var(--border);
+        }
+
+        .callout {
+            border-left: 4px solid var(--accent);
+            background: #eef2ff;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            color: var(--text);
+        }
+
+        .compact-header h1, .compact-header p {
+            margin-bottom: 0.35rem;
+            color: var(--text);
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def section_header(title: str, description: str | None = None) -> None:
+    """Consistent header used across tabs to keep the UI minimal."""
+
+    st.markdown("<div class='compact-header'>", unsafe_allow_html=True)
+    st.subheader(title)
+    if description:
+        st.markdown(f"<p style='color:#475569;'>{description}</p>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def card_container():
+    """Provide a lightly styled container similar to OpenMetadata panels."""
+
+    return st.container(border=True)
 
 
 def _initialize_rag_agent() -> None:
@@ -146,9 +207,20 @@ def init_session_state() -> None:
         st.session_state.connection_settings = {
             "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
             "openai_api_url": os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1"),
+            "llm_provider": os.environ.get("LLM_PROVIDER", "openai"),
+            "llm_model": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+            "gemini_api_key": os.environ.get("GOOGLE_API_KEY", ""),
+            "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
+            "deepseek_api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
+            "deepseek_model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+            "deepseek_api_url": os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com"),
+            "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+            "anthropic_model": os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620"),
             "atlas_host": os.environ.get("ATLAS_HOST", ""),
             "glue_region": os.environ.get("AWS_REGION", ""),
             "chroma_persist": str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+            "openmetadata_host": os.environ.get("OPENMETADATA_HOST", ""),
+            "openmetadata_api_token": os.environ.get("OPENMETADATA_API_TOKEN", ""),
         }
 
     if "rag_agent" not in st.session_state:
@@ -157,38 +229,38 @@ def init_session_state() -> None:
 
 def hero_section() -> None:
     """Top banner with quick context."""
-    left, right = st.columns([3, 2])
-    with left:
-        st.title("Data Governance AI Agents")
-        st.markdown(
-            "**Interface unificada para trabalhar com o Data Lineage Agent e o Data Discovery RAG Agent.**\n"
-            "Envie pipelines, documente tabelas e faça perguntas em um único lugar."
-        )
-        st.markdown(
-            "<div class='callout'>Configuração rápida: defina sua `OPENAI_API_KEY` para habilitar todos os recursos.</div>",
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.image(
-            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-            caption="Governança de dados assistida por IA",
-            use_container_width=True,
-        )
+    with st.container(border=True):
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            st.title("Data Governance AI Agents")
+            st.markdown(
+                "Uma interface enxuta inspirada no OpenMetadata para orquestrar linhagem, catalogação e qualidade de dados."
+            )
+            st.markdown(
+                "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.metric("Agentes disponíveis", "5", help="Lineage, Discovery, Enrichment, Classification e Quality")
+            st.metric("Status da sessão", "Pronto", help="Sessão inicializada com os caches padrões")
 
 
 def render_lineage_tab() -> None:
     """UI for running the Data Lineage Agent."""
-    st.subheader("🔗 Data Lineage Agent")
-    st.markdown("Analise rapidamente pipelines e visualize o estado da análise em tempo real.")
+    section_header(
+        "🔗 Data Lineage Agent",
+        "Envie pipelines e acompanhe a análise de forma direta, sem painéis complexos.",
+    )
 
-    with st.form("lineage_form"):
-        uploads = st.file_uploader(
-            "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
-            type=["py", "sql", "tf", "json", "scala", "dag"],
-            accept_multiple_files=True,
-        )
-        st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
-        analyze = st.form_submit_button("Gerar linhagem")
+    with card_container():
+        with st.form("lineage_form"):
+            uploads = st.file_uploader(
+                "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
+                type=["py", "sql", "tf", "json", "scala", "dag"],
+                accept_multiple_files=True,
+            )
+            st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
+            analyze = st.form_submit_button("Gerar linhagem")
 
     if analyze:
         if not uploads:
@@ -243,6 +315,28 @@ def _apply_connection_settings(settings: Dict[str, str]) -> None:
         os.environ["ATLAS_HOST"] = settings["atlas_host"]
     if settings.get("glue_region"):
         os.environ["AWS_REGION"] = settings["glue_region"]
+    if settings.get("llm_provider"):
+        os.environ["LLM_PROVIDER"] = settings["llm_provider"]
+    if settings.get("llm_model"):
+        os.environ["LLM_MODEL"] = settings["llm_model"]
+    if settings.get("gemini_api_key"):
+        os.environ["GOOGLE_API_KEY"] = settings["gemini_api_key"]
+    if settings.get("gemini_model"):
+        os.environ["GEMINI_MODEL"] = settings["gemini_model"]
+    if settings.get("deepseek_api_key"):
+        os.environ["DEEPSEEK_API_KEY"] = settings["deepseek_api_key"]
+    if settings.get("deepseek_model"):
+        os.environ["DEEPSEEK_MODEL"] = settings["deepseek_model"]
+    if settings.get("deepseek_api_url"):
+        os.environ["DEEPSEEK_API_URL"] = settings["deepseek_api_url"]
+    if settings.get("anthropic_api_key"):
+        os.environ["ANTHROPIC_API_KEY"] = settings["anthropic_api_key"]
+    if settings.get("anthropic_model"):
+        os.environ["ANTHROPIC_MODEL"] = settings["anthropic_model"]
+    if settings.get("openmetadata_host"):
+        os.environ["OPENMETADATA_HOST"] = settings["openmetadata_host"]
+    if settings.get("openmetadata_api_token"):
+        os.environ["OPENMETADATA_API_TOKEN"] = settings["openmetadata_api_token"]
 
     _initialize_rag_agent()
 
@@ -276,6 +370,35 @@ def _index_table_if_possible(table: TableMetadata) -> None:
         agent.index_table(table, force_update=True)
     except Exception as exc:  # noqa: BLE001
         st.warning(f"Não foi possível indexar esta tabela no ChromaDB: {exc}")
+
+
+def _sync_openmetadata_tables(
+    server_url: str,
+    api_token: str,
+    service_filter: str,
+    limit: int,
+) -> List[TableMetadata]:
+    """Fetch tables from OpenMetadata and index them for discovery."""
+
+    connector = OpenMetadataConnector(server_url=server_url, api_token=api_token)
+    with st.status("Sincronizando metadados do OpenMetadata", expanded=True) as status:
+        status.write("Chamando API do OpenMetadata...")
+        tables = connector.fetch_tables(
+            max_tables=limit,
+            service_filter=service_filter or None,
+        )
+
+        status.write(f"{len(tables)} tabelas retornadas; indexando no catálogo local...")
+        for table in tables:
+            st.session_state.rag_catalog.append(table)
+            _index_table_if_possible(table)
+
+        status.update(
+            label="Metadados sincronizados do OpenMetadata",
+            state="complete",
+        )
+
+    return tables
 
 
 def _search_with_fallback(query: str) -> List[Dict[str, str]]:
@@ -338,62 +461,227 @@ def _render_connected_catalogs() -> None:
 
 def _render_connection_guide() -> None:
     """Display a guided experience for configuring external connections."""
-    st.markdown("### Guia de conexões essenciais")
-    settings: Dict[str, str] = st.session_state.connection_settings
+    with card_container():
+        st.markdown("### Guia de conexões essenciais")
+        settings: Dict[str, str] = st.session_state.connection_settings
 
     status_labels = []
     status_labels.append(
         "✅ OPENAI_API_KEY configurada" if settings.get("openai_api_key") else "⚠️ OPENAI_API_KEY ausente"
     )
     status_labels.append(
+        "✅ GOOGLE_API_KEY configurada" if settings.get("gemini_api_key") else "⚠️ GOOGLE_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
+    )
+    status_labels.append(
+        "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
+    )
+    status_labels.append(
         "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
     )
+    if settings.get("openmetadata_host"):
+        status_labels.append("✅ Endpoint do OpenMetadata definido")
+    else:
+        status_labels.append("⚠️ Defina a URL do OpenMetadata para sincronizar catálogos")
     st.markdown("; ".join(status_labels))
 
-    with st.expander("Configurar IA (OpenAI) e vetorização", expanded=not settings.get("openai_api_key")):
+    with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
         st.markdown(
-            "- Defina a `OPENAI_API_KEY` para habilitar embeddings e evitar erros 401 como o exibido na indexação.\n"
-            "- Opcionalmente ajuste a `OPENAI_API_URL` para provedores compatíveis.\n"
+            "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
+            "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
             "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
                 settings.get("chroma_persist")
             )
         )
-        with st.form("openai_settings_form"):
-            openai_key = st.text_input(
-                "OPENAI_API_KEY",
-                value=settings.get("openai_api_key", ""),
-                type="password",
-                help="Copie a chave exata do painel da OpenAI para evitar erros de autenticação.",
-            )
-            openai_url = st.text_input(
-                "OPENAI_API_URL",
-                value=settings.get("openai_api_url", "https://api.openai.com/v1"),
-                help="Use o endpoint padrão ou um compatível (Azure/OpenAI compatível).",
-            )
-            apply_credentials = st.form_submit_button("Salvar e reiniciar o agente RAG")
+        status_labels.append(
+            "✅ DEEPSEEK_API_KEY configurada" if settings.get("deepseek_api_key") else "⚠️ DEEPSEEK_API_KEY ausente"
+        )
+        status_labels.append(
+            "✅ ANTHROPIC_API_KEY configurada" if settings.get("anthropic_api_key") else "⚠️ ANTHROPIC_API_KEY ausente"
+        )
+        status_labels.append(
+            "✅ Persistência local do Chroma pronta" if settings.get("chroma_persist") else "⚠️ Revise o diretório do Chroma"
+        )
+        st.markdown("; ".join(status_labels))
 
-        if apply_credentials:
-            _apply_connection_settings(
-                {
-                    "openai_api_key": openai_key.strip(),
-                    "openai_api_url": openai_url.strip(),
-                    "atlas_host": settings.get("atlas_host", ""),
-                    "glue_region": settings.get("glue_region", ""),
-                }
-            )
-            if st.session_state.get("rag_agent"):
-                st.success("Credenciais aplicadas. O agente RAG foi reiniciado com a nova configuração.")
-            else:
-                st.error(
-                    "Atualizamos as credenciais, mas o agente ainda não inicializou. "
-                    "Revise os valores e tente novamente."
+        with st.expander("Configurar provedores de LLM e vetorização", expanded=not settings.get("openai_api_key")):
+            st.markdown(
+                "- Defina a chave de cada provedor para habilitar fluxos de IA no framework.\n"
+                "- Selecione o modelo padrão por provedor e, opcionalmente, defina qual será o padrão global (`LLM_PROVIDER`).\n"
+                "- O catálogo vetorial usa ChromaDB local em `{}`; nenhum serviço externo é necessário.".format(
+                    settings.get("chroma_persist")
                 )
+            )
+
+        openai_models = [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4.1",
+            "gpt-3.5-turbo",
+        ]
+        gemini_models = [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.0-pro",
+        ]
+        deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
+        claude_models = [
+            "claude-3-5-sonnet-20240620",
+            "claude-3-opus-20240229",
+            "claude-3-haiku-20240307",
+        ]
+
+        openai_tab, gemini_tab, deepseek_tab, claude_tab = st.tabs(
+            ["OpenAI", "Gemini", "DeepSeek", "Claude"]
+        )
+
+        with openai_tab:
+            with st.form("openai_settings_form"):
+                openai_key = st.text_input(
+                    "OPENAI_API_KEY",
+                    value=settings.get("openai_api_key", ""),
+                    type="password",
+                    help="Copie a chave exata do painel da OpenAI para evitar erros de autenticação.",
+                )
+                openai_url = st.text_input(
+                    "OPENAI_API_URL",
+                    value=settings.get("openai_api_url", "https://api.openai.com/v1"),
+                    help="Use o endpoint padrão ou um compatível (Azure/OpenAI compatível).",
+                )
+                openai_model = st.selectbox(
+                    "Modelo OpenAI",
+                    options=openai_models,
+                    index=openai_models.index(settings.get("llm_model", "gpt-4o-mini"))
+                    if settings.get("llm_model") in openai_models
+                    else 0,
+                )
+                set_default = st.checkbox(
+                    "Usar OpenAI como provedor padrão", value=settings.get("llm_provider") == "openai"
+                )
+                apply_credentials = st.form_submit_button("Salvar configuração OpenAI")
+
+            if apply_credentials:
+                _apply_connection_settings(
+                    {
+                        "openai_api_key": openai_key.strip(),
+                        "openai_api_url": openai_url.strip(),
+                        "llm_model": openai_model,
+                        "llm_provider": "openai" if set_default else settings.get("llm_provider", "openai"),
+                    }
+                )
+                st.success("Configuração OpenAI salva.")
+
+        with gemini_tab:
+            with st.form("gemini_settings_form"):
+                gemini_key = st.text_input(
+                    "GOOGLE_API_KEY",
+                    value=settings.get("gemini_api_key", ""),
+                    type="password",
+                    help="Chave da API Gemini (Google AI/Vertex).",
+                )
+                gemini_model = st.selectbox(
+                    "Modelo Gemini",
+                    options=gemini_models,
+                    index=gemini_models.index(settings.get("gemini_model", "gemini-1.5-flash"))
+                    if settings.get("gemini_model") in gemini_models
+                    else 0,
+                )
+                set_default_gemini = st.checkbox(
+                    "Usar Gemini como provedor padrão", value=settings.get("llm_provider") == "gemini"
+                )
+                apply_gemini = st.form_submit_button("Salvar configuração Gemini")
+
+            if apply_gemini:
+                _apply_connection_settings(
+                    {
+                        "gemini_api_key": gemini_key.strip(),
+                        "gemini_model": gemini_model,
+                        "llm_provider": "gemini" if set_default_gemini else settings.get("llm_provider", "openai"),
+                        "llm_model": gemini_model if set_default_gemini else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração Gemini salva.")
+
+        with deepseek_tab:
+            with st.form("deepseek_settings_form"):
+                deepseek_key = st.text_input(
+                    "DEEPSEEK_API_KEY",
+                    value=settings.get("deepseek_api_key", ""),
+                    type="password",
+                    help="Chave da API DeepSeek (compatível com OpenAI).",
+                )
+                deepseek_url = st.text_input(
+                    "DEEPSEEK_API_URL",
+                    value=settings.get("deepseek_api_url", "https://api.deepseek.com"),
+                    help="Endpoint compatível com OpenAI para DeepSeek.",
+                )
+                deepseek_model = st.selectbox(
+                    "Modelo DeepSeek",
+                    options=deepseek_models,
+                    index=deepseek_models.index(settings.get("deepseek_model", "deepseek-chat"))
+                    if settings.get("deepseek_model") in deepseek_models
+                    else 0,
+                )
+                set_default_deepseek = st.checkbox(
+                    "Usar DeepSeek como provedor padrão", value=settings.get("llm_provider") == "deepseek"
+                )
+                apply_deepseek = st.form_submit_button("Salvar configuração DeepSeek")
+
+            if apply_deepseek:
+                _apply_connection_settings(
+                    {
+                        "deepseek_api_key": deepseek_key.strip(),
+                        "deepseek_api_url": deepseek_url.strip(),
+                        "deepseek_model": deepseek_model,
+                        "llm_provider": "deepseek"
+                        if set_default_deepseek
+                        else settings.get("llm_provider", "openai"),
+                        "llm_model": deepseek_model if set_default_deepseek else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração DeepSeek salva.")
+
+        with claude_tab:
+            with st.form("claude_settings_form"):
+                claude_key = st.text_input(
+                    "ANTHROPIC_API_KEY",
+                    value=settings.get("anthropic_api_key", ""),
+                    type="password",
+                    help="Chave da API Anthropic Claude.",
+                )
+                claude_model = st.selectbox(
+                    "Modelo Claude",
+                    options=claude_models,
+                    index=claude_models.index(settings.get("anthropic_model", "claude-3-5-sonnet-20240620"))
+                    if settings.get("anthropic_model") in claude_models
+                    else 0,
+                )
+                set_default_claude = st.checkbox(
+                    "Usar Claude como provedor padrão", value=settings.get("llm_provider") == "claude"
+                )
+                apply_claude = st.form_submit_button("Salvar configuração Claude")
+
+            if apply_claude:
+                _apply_connection_settings(
+                    {
+                        "anthropic_api_key": claude_key.strip(),
+                        "anthropic_model": claude_model,
+                        "llm_provider": "claude"
+                        if set_default_claude
+                        else settings.get("llm_provider", "openai"),
+                        "llm_model": claude_model if set_default_claude else settings.get("llm_model", "gpt-4o-mini"),
+                    }
+                )
+                st.success("Configuração Claude salva.")
 
     with st.expander("Conexões de catálogos corporativos"):
         st.markdown(
             "- **Apache Atlas**: informe o host em `ATLAS_HOST` (ex.: `http://atlas-host:21000`).\n"
             "- **Glue Data Catalog**: use a região em `AWS_REGION` e credenciais AWS no ambiente.\n"
             "- **BigQuery/Snowflake**: a conexão é guiada na seção de conectores; inclua o projeto/warehouse ao selecionar.\n"
+            "- **OpenMetadata**: defina `OPENMETADATA_HOST` e o token (`OPENMETADATA_API_TOKEN`) ou informe-os na conexão guiada.\n"
             "- Após salvar, volte à aba de conexão de catálogo para sincronizar metadados."
         )
 
@@ -454,10 +742,9 @@ def _answer_discovery_question(prompt: str) -> str:
 
 def render_rag_tab() -> None:
     """UI for the RAG discovery agent."""
-    st.subheader("🔍 Data Discovery RAG Agent")
-    st.markdown(
-        "Construa um catálogo rápido de tabelas e faça perguntas em linguagem natural. "
-        "Se a `OPENAI_API_KEY` estiver configurada, a busca usa embeddings e RAG; caso contrário, aplica busca textual simples."
+    section_header(
+        "🔍 Data Discovery RAG Agent",
+        "Construa um catálogo rápido e converse em linguagem natural com uma experiência limpa.",
     )
 
     if st.session_state.get("rag_agent_error"):
@@ -472,6 +759,7 @@ def render_rag_tab() -> None:
 
     with connection_tab:
         st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
+        settings = st.session_state.connection_settings
         with st.form("catalog_connection_form"):
             mode = st.radio(
                 "Origem do catálogo",
@@ -480,6 +768,10 @@ def render_rag_tab() -> None:
             )
             catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
             dataset_hint = ""
+            service_filter = ""
+            om_host = settings.get("openmetadata_host", "")
+            om_token = settings.get("openmetadata_api_token", "")
+            table_limit = 200
 
             if mode == "Arquivo de catálogo":
                 uploaded = st.file_uploader(
@@ -491,22 +783,56 @@ def render_rag_tab() -> None:
                 connector = st.selectbox(
                     "Selecione um conector existente",
                     [
+                        "OpenMetadata",
                         "Apache Atlas",
                         "Glue Data Catalog",
                         "BigQuery",
                         "Snowflake",
                     ],
                 )
-                dataset_hint = st.text_input(
-                    "Escopo ou dataset", placeholder="ex: projeto-analytics"
-                )
+                if connector == "OpenMetadata":
+                    om_host = st.text_input(
+                        "Endpoint do OpenMetadata",
+                        value=om_host,
+                        placeholder="https://openmetadata:8585",
+                        help="Use o endpoint da API (porta padrão 8585).",
+                    )
+                    om_token = st.text_input(
+                        "Token de autenticação",
+                        value=om_token,
+                        type="password",
+                        help="Cole o JWT de serviço do OpenMetadata ou um token pessoal.",
+                    )
+                    service_filter = st.text_input(
+                        "Filtrar por serviço (opcional)",
+                        placeholder="ex: lakehouse_service",
+                        help="Use para sincronizar apenas tabelas de um serviço específico.",
+                    )
+                    table_limit = int(
+                        st.number_input(
+                            "Limite de tabelas a sincronizar",
+                            min_value=10,
+                            max_value=1000,
+                            value=200,
+                            step=10,
+                        )
+                    )
+                    dataset_hint = service_filter or om_host
+                else:
+                    dataset_hint = st.text_input(
+                        "Escopo ou dataset", placeholder="ex: projeto-analytics"
+                    )
                 uploaded = None
 
-            connect = st.form_submit_button("Conectar catálogo")
+                connect = st.form_submit_button("Conectar catálogo")
 
         if connect:
             if mode == "Arquivo de catálogo" and not uploaded:
                 st.warning("Envie um arquivo de metadados para conectar.")
+            elif mode != "Arquivo de catálogo" and connector == "OpenMetadata" and (
+                not om_host or not om_token
+            ):
+                st.warning("Informe o endpoint e o token do OpenMetadata para sincronizar.")
             else:
                 catalog_label = catalog_name or (
                     uploaded.name if uploaded else connector  # type: ignore[misc]
@@ -522,6 +848,25 @@ def render_rag_tab() -> None:
                     except Exception as exc:  # noqa: BLE001
                         st.error(f"Não foi possível processar o arquivo: {exc}")
                         tables_added = 0
+                elif mode != "Arquivo de catálogo" and connector == "OpenMetadata":
+                    try:
+                        _apply_connection_settings(
+                            {
+                                "openmetadata_host": om_host.strip(),
+                                "openmetadata_api_token": om_token.strip(),
+                            }
+                        )
+                        tables = _sync_openmetadata_tables(
+                            om_host,
+                            om_token,
+                            service_filter,
+                            table_limit,
+                        )
+                        tables_added = len(tables)
+                    except OpenMetadataConnectorError as exc:
+                        st.error(f"Falha ao sincronizar com o OpenMetadata: {exc}")
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Erro inesperado ao ler o OpenMetadata: {exc}")
 
                 st.session_state.connected_catalogs.append(
                     {
@@ -1842,6 +2187,36 @@ def render_vault_tab() -> None:
                     help="Senha do usuário administrador"
                 )
 
+            retention_mode = st.selectbox(
+                "Política após decriptação",
+                [
+                    "Apagar imediatamente (padrão)",
+                    "Reter por um período",
+                    "Reter indefinidamente",
+                ],
+                help=(
+                    "Escolha se as sessões devem ser excluídas após a decriptação "
+                    "ou mantidas por um período configurável."
+                ),
+            )
+
+            retention_days = None
+            delete_after_decrypt = True
+
+            if retention_mode == "Reter por um período":
+                retention_days = int(
+                    st.number_input(
+                        "Dias de retenção após decriptar",
+                        min_value=1,
+                        max_value=3650,
+                        value=30,
+                        help="Quantidade de dias para manter a sessão decriptada antes de removê-la.",
+                    )
+                )
+                delete_after_decrypt = False
+            elif retention_mode == "Reter indefinidamente":
+                delete_after_decrypt = False
+
             if st.button("🚀 Inicializar Vault", type="primary"):
                 if not master_password or not admin_password:
                     st.error("Preencha ambas as senhas para inicializar o vault.")
@@ -1850,6 +2225,8 @@ def render_vault_tab() -> None:
                         vault_config = VaultConfig(
                             storage_path=str(BASE_DIR / ".vault_data"),
                             require_authentication=True,
+                            delete_after_decrypt=delete_after_decrypt,
+                            decryption_retention_days=retention_days,
                         )
                         vault = SecureVault(vault_config)
                         vault.initialize(master_password)
@@ -1907,12 +2284,22 @@ def render_vault_tab() -> None:
             if sessions:
                 session_data = []
                 for s in sessions:
+                    retention_info = s.get("metadata", {}).get("decryption_retention", {})
+                    retention_label = "Apagar após decriptar"
+                    if retention_info.get("mode") == "retain":
+                        days = retention_info.get("retention_days")
+                        if days:
+                            retention_label = f"Reter {days}d"
+                        else:
+                            retention_label = "Reter indefinido"
+
                     session_data.append({
                         "ID": s["session_id"][:20] + "...",
                         "Entidades": s["entity_count"],
                         "Risco": f"{s['risk_score']:.0%}",
                         "Criado": s["created_at"][:19],
                         "Acessos": s["access_count"],
+                        "Retenção": retention_label,
                         "Preview": s.get("anonymized_preview", "")[:50]
                     })
 
@@ -1966,6 +2353,21 @@ def render_vault_tab() -> None:
             "⚠️ Esta operação revela os dados originais. "
             "Apenas usuários autorizados devem ter acesso."
         )
+
+        retention_message = "As sessões são apagadas imediatamente após a decriptação."
+        if not vault.config.delete_after_decrypt:
+            if vault.config.decryption_retention_days:
+                retention_message = (
+                    f"As sessões permanecem armazenadas por "
+                    f"{vault.config.decryption_retention_days} dia(s) após a decriptação."
+                )
+            else:
+                retention_message = (
+                    "As sessões permanecem armazenadas mesmo após a decriptação "
+                    "(retenção perene)."
+                )
+
+        st.info(retention_message)
 
         session_id_input = st.text_input(
             "ID da Sessão",
