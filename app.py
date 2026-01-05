@@ -805,7 +805,7 @@ def render_rag_tab() -> None:
                     )
                 uploaded = None
 
-                connect = st.form_submit_button("Conectar catálogo")
+            connect = st.form_submit_button("Conectar catálogo")
 
         if connect:
             if mode == "Arquivo de catálogo" and not uploaded:
@@ -2322,7 +2322,7 @@ def render_vault_tab() -> None:
             else:
                 st.info("Nenhuma sessão armazenada ainda.")
                 st.markdown(
-                    "Use o **NER Filter** com vault habilitado para armazenar sessões automaticamente."
+                    "Use o **NER Module** com vault habilitado para armazenar sessões automaticamente."
                 )
 
         except Exception as exc:
@@ -2561,7 +2561,7 @@ def render_vault_tab() -> None:
 init_session_state()
 hero_section()
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Filter", "Vault"
+    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Module", "Vault"
 ])
 with tab1:
     render_lineage_tab()
