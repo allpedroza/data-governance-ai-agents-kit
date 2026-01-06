@@ -551,38 +551,142 @@ class SynapseConnector(WarehouseConnector):
 
         return {"distribution_type": "UNKNOWN"}
 
-    def get_query_history(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get recent query history."""
+    def get_ddl(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        include_dependencies: bool = False
+    ) -> str:
+        """Get DDL for a table by constructing it from metadata."""
+        if not self._connected:
+            self.connect()
+
+        sch = self._validate_identifier(schema) if schema else self.schema
+        tbl = self._validate_identifier(table_name)
+
+        # Get column definitions
+        columns = self.get_table_schema(table_name, schema)
+
+        if not columns:
+            return ""
+
+        # Build CREATE TABLE statement
+        ddl_parts = [f"CREATE TABLE [{sch}].[{tbl}] ("]
+
+        col_defs = []
+        for col in columns:
+            col_def = f"    [{col['name']}] {col['type']}"
+            if not col.get("nullable", True):
+                col_def += " NOT NULL"
+            if col.get("default"):
+                col_def += f" DEFAULT {col['default']}"
+            col_defs.append(col_def)
+
+        ddl_parts.append(",\n".join(col_defs))
+        ddl_parts.append("\n)")
+
+        ddl = "\n".join(ddl_parts)
+
+        # Get distribution info
+        dist_info = self.get_distribution_info(table_name, schema)
+        if dist_info.get("distribution_type"):
+            ddl += f"\n-- WITH (DISTRIBUTION = {dist_info['distribution_type']})"
+
+        return ddl
+
+    def get_query_history(
+        self,
+        days: int = 7,
+        limit: int = 1000,
+        database_filter: Optional[str] = None,
+        schema_filter: Optional[str] = None,
+        table_filter: Optional[str] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get query history from Synapse DMVs."""
         if not self._connected:
             self.connect()
 
         try:
-            self._cursor.execute(f"""
+            # Build query with filters
+            query = f"""
                 SELECT TOP {limit}
-                    request_id,
-                    status,
-                    submit_time,
-                    start_time,
-                    end_time,
-                    total_elapsed_time,
-                    command
-                FROM sys.dm_pdw_exec_requests
-                WHERE status NOT IN ('Running', 'Queued')
-                ORDER BY submit_time DESC
-            """)
+                    r.request_id,
+                    r.status,
+                    r.submit_time,
+                    r.start_time,
+                    r.end_time,
+                    r.total_elapsed_time,
+                    r.command,
+                    r.resource_class,
+                    r.label,
+                    s.login_name as user_name
+                FROM sys.dm_pdw_exec_requests r
+                LEFT JOIN sys.dm_pdw_exec_sessions s ON r.session_id = s.session_id
+                WHERE r.status NOT IN ('Running', 'Queued')
+                AND r.submit_time >= DATEADD(day, -{days}, GETDATE())
+            """
 
-            return [
-                {
-                    "request_id": row[0],
-                    "status": row[1],
-                    "submit_time": row[2].isoformat() if row[2] else None,
-                    "start_time": row[3].isoformat() if row[3] else None,
-                    "end_time": row[4].isoformat() if row[4] else None,
-                    "elapsed_ms": row[5],
-                    "command": row[6][:500] if row[6] else None
-                }
-                for row in self._cursor.fetchall()
-            ]
-        except Exception:
-            # Fallback for serverless pool
-            return []
+            if user_filter:
+                query += f" AND s.login_name = '{user_filter}'"
+
+            if table_filter:
+                query += f" AND r.command LIKE '%{table_filter}%'"
+
+            query += " ORDER BY r.submit_time DESC"
+
+            self._cursor.execute(query)
+            rows = self._cursor.fetchall()
+
+            results = []
+            for row in rows:
+                results.append({
+                    "query_id": row[0],
+                    "query_text": row[6] if row[6] else None,
+                    "user_name": row[9] if len(row) > 9 else None,
+                    "start_time": row[3],
+                    "end_time": row[4],
+                    "execution_time_ms": row[5],
+                    "rows_produced": None,
+                    "bytes_scanned": None,
+                    "status": "success" if row[1] == "Succeeded" else row[1].lower(),
+                    "tables_accessed": [],
+                    "resource_class": row[7] if len(row) > 7 else None,
+                    "label": row[8] if len(row) > 8 else None
+                })
+
+            return results
+
+        except Exception as e:
+            logger.warning(f"Could not get query history from dedicated pool DMVs: {str(e)}")
+            # Try serverless pool query
+            try:
+                self._cursor.execute(f"""
+                    SELECT TOP {limit}
+                        distributed_statement_id as request_id,
+                        start_time,
+                        end_time,
+                        DATEDIFF(millisecond, start_time, end_time) as elapsed_ms,
+                        command
+                    FROM sys.dm_exec_requests_history
+                    WHERE start_time >= DATEADD(day, -{days}, GETDATE())
+                    ORDER BY start_time DESC
+                """)
+                rows = self._cursor.fetchall()
+
+                return [
+                    {
+                        "query_id": str(row[0]),
+                        "query_text": row[4] if row[4] else None,
+                        "start_time": row[1],
+                        "end_time": row[2],
+                        "execution_time_ms": row[3],
+                        "status": "success",
+                        "tables_accessed": []
+                    }
+                    for row in rows
+                ]
+            except Exception as e2:
+                logger.error(f"Could not get query history: {str(e2)}")
+                return []

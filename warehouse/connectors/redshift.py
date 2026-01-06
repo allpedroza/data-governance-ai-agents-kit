@@ -475,31 +475,186 @@ class RedshiftConnector(WarehouseConnector):
 
         return stats
 
-    def get_query_history(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get recent query history."""
+    def get_ddl(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        include_dependencies: bool = False
+    ) -> str:
+        """Get DDL for a table by constructing it from metadata."""
         if not self._connected:
             self.connect()
 
-        self._cursor.execute("""
-            SELECT
-                query,
-                starttime,
-                endtime,
-                elapsed / 1000000.0 as elapsed_seconds,
-                label
-            FROM stl_query
-            WHERE userid > 1
-            ORDER BY starttime DESC
-            LIMIT %s
-        """, (limit,))
+        sch = self._validate_identifier(schema) if schema else self.schema
+        tbl = self._validate_identifier(table_name)
 
-        return [
-            {
-                "query": row[0][:500],
-                "start_time": row[1].isoformat() if row[1] else None,
-                "end_time": row[2].isoformat() if row[2] else None,
-                "elapsed_seconds": row[3],
-                "label": row[4]
-            }
-            for row in self._cursor.fetchall()
-        ]
+        # Get column definitions
+        columns = self.get_table_schema(table_name, schema)
+
+        if not columns:
+            return ""
+
+        # Build CREATE TABLE statement
+        ddl_parts = [f'CREATE TABLE "{sch}"."{tbl}" (']
+
+        col_defs = []
+        for col in columns:
+            col_def = f'    "{col["name"]}" {col["type"]}'
+            if not col.get("nullable", True):
+                col_def += " NOT NULL"
+            if col.get("default"):
+                col_def += f' DEFAULT {col["default"]}'
+            col_defs.append(col_def)
+
+        ddl_parts.append(",\n".join(col_defs))
+        ddl_parts.append("\n);")
+
+        ddl = "\n".join(ddl_parts)
+
+        # Get distribution and sort keys
+        try:
+            self._cursor.execute("""
+                SELECT
+                    t.diststyle,
+                    d.distkey,
+                    s.sortkey1
+                FROM svv_table_info t
+                LEFT JOIN pg_table_def d ON t.table = d.tablename AND t.schema = d.schemaname AND d.distkey = true
+                LEFT JOIN (
+                    SELECT tablename, schemaname, attname as sortkey1
+                    FROM pg_table_def
+                    WHERE sortkey = 1
+                ) s ON t.table = s.tablename AND t.schema = s.schemaname
+                WHERE t.schema = %s AND t.table = %s
+            """, (sch, tbl))
+            dist_info = self._cursor.fetchone()
+
+            if dist_info:
+                dist_style = dist_info[0]
+                dist_key = dist_info[1]
+                sort_key = dist_info[2]
+
+                if dist_style and dist_style != "AUTO(ALL)":
+                    ddl += f"\n-- DISTSTYLE {dist_style}"
+                if dist_key:
+                    ddl += f"\n-- DISTKEY ({dist_key})"
+                if sort_key:
+                    ddl += f"\n-- SORTKEY ({sort_key})"
+        except Exception as e:
+            logger.warning(f"Could not get distribution info: {str(e)}")
+
+        return ddl
+
+    def get_query_history(
+        self,
+        days: int = 7,
+        limit: int = 1000,
+        database_filter: Optional[str] = None,
+        schema_filter: Optional[str] = None,
+        table_filter: Optional[str] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get query history from STL_QUERY and STL_QUERYTEXT."""
+        if not self._connected:
+            self.connect()
+
+        # Build query with filters
+        query = """
+            SELECT
+                q.query as query_id,
+                LISTAGG(qt.text, '') WITHIN GROUP (ORDER BY qt.sequence) as query_text,
+                u.usename as user_name,
+                q.database as database_name,
+                q.starttime as start_time,
+                q.endtime as end_time,
+                q.elapsed / 1000 as execution_time_ms,
+                q.label
+            FROM stl_query q
+            JOIN stl_querytext qt ON q.query = qt.query
+            JOIN pg_user u ON q.userid = u.usesysid
+            WHERE q.starttime >= DATEADD(day, -%s, CURRENT_DATE)
+            AND q.userid > 1
+        """
+
+        params = [days]
+
+        if database_filter:
+            query += " AND q.database = %s"
+            params.append(database_filter)
+
+        if table_filter:
+            query += " AND qt.text ILIKE %s"
+            params.append(f"%{table_filter}%")
+
+        if user_filter:
+            query += " AND u.usename = %s"
+            params.append(user_filter)
+
+        query += """
+            GROUP BY q.query, u.usename, q.database, q.starttime, q.endtime, q.elapsed, q.label
+            ORDER BY q.starttime DESC
+            LIMIT %s
+        """
+        params.append(limit)
+
+        try:
+            self._cursor.execute(query, params)
+            rows = self._cursor.fetchall()
+
+            results = []
+            for row in rows:
+                results.append({
+                    "query_id": str(row[0]),
+                    "query_text": row[1],
+                    "user_name": row[2],
+                    "database_name": row[3],
+                    "start_time": row[4],
+                    "end_time": row[5],
+                    "execution_time_ms": row[6],
+                    "rows_produced": None,
+                    "bytes_scanned": None,
+                    "status": "success",
+                    "tables_accessed": [],
+                    "label": row[7]
+                })
+
+            return results
+
+        except Exception as e:
+            logger.warning(f"Could not get query history: {str(e)}")
+            # Try simpler query
+            try:
+                simple_query = """
+                    SELECT
+                        query,
+                        starttime,
+                        endtime,
+                        elapsed / 1000000.0 as elapsed_seconds,
+                        label
+                    FROM stl_query
+                    WHERE userid > 1
+                    AND starttime >= DATEADD(day, -%s, CURRENT_DATE)
+                    ORDER BY starttime DESC
+                    LIMIT %s
+                """
+                self._cursor.execute(simple_query, [days, limit])
+                rows = self._cursor.fetchall()
+
+                return [
+                    {
+                        "query_id": str(row[0]),
+                        "query_text": "",
+                        "user_name": None,
+                        "start_time": row[1],
+                        "end_time": row[2],
+                        "execution_time_ms": row[3] * 1000 if row[3] else None,
+                        "status": "success",
+                        "tables_accessed": [],
+                        "label": row[4]
+                    }
+                    for row in rows
+                ]
+            except Exception as e2:
+                logger.error(f"Could not get query history: {str(e2)}")
+                return []

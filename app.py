@@ -252,32 +252,141 @@ def render_lineage_tab() -> None:
         "Envie pipelines e acompanhe a análise de forma direta, sem painéis complexos.",
     )
 
-    with card_container():
-        with st.form("lineage_form"):
-            uploads = st.file_uploader(
-                "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
-                type=["py", "sql", "tf", "json", "scala", "dag"],
-                accept_multiple_files=True,
-            )
-            st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
-            analyze = st.form_submit_button("Gerar linhagem")
+    # Check for configured warehouses
+    configured_warehouses = list(st.session_state.get("warehouse_connections", {}).keys())
 
-    if analyze:
-        if not uploads:
-            st.warning("Envie ao menos um arquivo para análise.")
-        else:
-            with st.status("Processando arquivos", expanded=True) as status:
-                tmp_paths: List[str] = []
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    for upload in uploads:
-                        dest = Path(temp_dir) / upload.name
-                        dest.write_bytes(upload.read())
-                        tmp_paths.append(str(dest))
-                    status.write(f"{len(tmp_paths)} arquivos enviados")
-                    status.write("Executando análise de linhagem...")
-                    results = st.session_state.lineage_agent.analyze_pipeline(tmp_paths)
-                    st.session_state.lineage_results = results
-                    status.update(label="Análise concluída", state="complete")
+    with card_container():
+        # Source selection
+        source_options = ["Arquivos enviados"]
+        if configured_warehouses:
+            source_options.append("DDL do Data Warehouse")
+
+        lineage_source = st.radio(
+            "Fonte dos dados",
+            source_options,
+            horizontal=True,
+            key="lineage_source_mode"
+        )
+
+        if lineage_source == "Arquivos enviados":
+            with st.form("lineage_form"):
+                uploads = st.file_uploader(
+                    "Envie arquivos do pipeline (SQL, Python, Terraform, etc.)",
+                    type=["py", "sql", "tf", "json", "scala", "dag"],
+                    accept_multiple_files=True,
+                )
+                st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming")
+                analyze = st.form_submit_button("Gerar linhagem")
+
+            if analyze:
+                if not uploads:
+                    st.warning("Envie ao menos um arquivo para análise.")
+                else:
+                    with st.status("Processando arquivos", expanded=True) as status:
+                        tmp_paths: List[str] = []
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            for upload in uploads:
+                                dest = Path(temp_dir) / upload.name
+                                dest.write_bytes(upload.read())
+                                tmp_paths.append(str(dest))
+                            status.write(f"{len(tmp_paths)} arquivos enviados")
+                            status.write("Executando análise de linhagem...")
+                            results = st.session_state.lineage_agent.analyze_pipeline(tmp_paths)
+                            st.session_state.lineage_results = results
+                            status.update(label="Análise concluída", state="complete")
+
+        elif lineage_source == "DDL do Data Warehouse":
+            st.markdown("**Extrair DDL diretamente do Data Warehouse conectado**")
+
+            selected_wh = st.selectbox(
+                "Data Warehouse",
+                configured_warehouses,
+                key="lineage_dw_select"
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                wh_database = st.text_input("Database (opcional)", key="lineage_dw_database")
+            with col2:
+                wh_schema = st.text_input("Schema (opcional)", key="lineage_dw_schema")
+
+            # Table selection mode
+            table_mode = st.radio(
+                "Modo de seleção",
+                ["Todas as tabelas", "Tabelas específicas"],
+                horizontal=True,
+                key="lineage_table_mode"
+            )
+
+            specific_tables = []
+            if table_mode == "Tabelas específicas":
+                tables_input = st.text_area(
+                    "Nomes das tabelas (uma por linha)",
+                    placeholder="tabela1\ntabela2\ntabela3",
+                    key="lineage_specific_tables"
+                )
+                if tables_input:
+                    specific_tables = [t.strip() for t in tables_input.strip().split("\n") if t.strip()]
+
+            st.checkbox("Detectar padrões de streaming", value=True, key="detect_streaming_dw")
+
+            if st.button("Extrair DDL e Gerar Linhagem", key="lineage_dw_analyze"):
+                if selected_wh:
+                    wh_config = st.session_state.warehouse_connections.get(selected_wh, {})
+
+                    with st.status("Conectando ao Data Warehouse...", expanded=True) as status:
+                        try:
+                            dw_connector = get_warehouse_connector(selected_wh, wh_config)
+                            dw_connector.connect()
+                            status.write(f"Conectado a {selected_wh}")
+
+                            # Get tables to process
+                            if specific_tables:
+                                tables_to_process = specific_tables
+                            else:
+                                status.write("Listando tabelas...")
+                                table_list = dw_connector.list_tables(
+                                    schema=wh_schema or None,
+                                    database=wh_database or None
+                                )
+                                tables_to_process = [t.name for t in table_list]
+
+                            status.write(f"Extraindo DDL de {len(tables_to_process)} tabelas...")
+
+                            # Extract DDL for each table
+                            ddl_contents = []
+                            for tbl_name in tables_to_process:
+                                try:
+                                    ddl = dw_connector.get_ddl(
+                                        tbl_name,
+                                        schema=wh_schema or None,
+                                        database=wh_database or None
+                                    )
+                                    if ddl:
+                                        ddl_contents.append(f"-- Table: {tbl_name}\n{ddl}\n")
+                                except Exception as e:
+                                    status.write(f"Erro ao extrair DDL de {tbl_name}: {e}")
+
+                            if not ddl_contents:
+                                st.warning("Nenhum DDL foi extraído.")
+                            else:
+                                # Write DDL to temp file and analyze
+                                with tempfile.TemporaryDirectory() as temp_dir:
+                                    ddl_file = Path(temp_dir) / f"{selected_wh}_ddl.sql"
+                                    ddl_file.write_text("\n\n".join(ddl_contents))
+
+                                    status.write(f"DDL extraído: {len(ddl_contents)} tabelas")
+                                    status.write("Executando análise de linhagem...")
+
+                                    results = st.session_state.lineage_agent.analyze_pipeline([str(ddl_file)])
+                                    st.session_state.lineage_results = results
+
+                                status.update(label="Análise concluída", state="complete")
+
+                            dw_connector.disconnect()
+
+                        except Exception as e:
+                            st.error(f"Erro ao conectar ao Data Warehouse: {e}")
 
     results = st.session_state.get("lineage_results")
     if results:
@@ -741,10 +850,17 @@ def render_rag_tab() -> None:
     with connection_tab:
         st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
         settings = st.session_state.connection_settings
+        configured_warehouses = get_configured_warehouses()
+
         with st.form("catalog_connection_form"):
+            # Add DW option if warehouses are configured
+            mode_options = ["Arquivo de catálogo", "Conectores disponíveis"]
+            if configured_warehouses:
+                mode_options.append("Data Warehouse conectado")
+
             mode = st.radio(
                 "Origem do catálogo",
-                options=["Arquivo de catálogo", "Conectores disponíveis"],
+                options=mode_options,
                 horizontal=True,
             )
             catalog_name = st.text_input("Nome do catálogo", placeholder="Data Lake Principal")
@@ -753,6 +869,11 @@ def render_rag_tab() -> None:
             om_host = settings.get("openmetadata_host", "")
             om_token = settings.get("openmetadata_api_token", "")
             table_limit = 200
+            uploaded = None
+            connector = None
+            selected_wh = None
+            wh_database = ""
+            wh_schema = ""
 
             if mode == "Arquivo de catálogo":
                 uploaded = st.file_uploader(
@@ -760,6 +881,44 @@ def render_rag_tab() -> None:
                     type=["json", "csv", "txt"],
                     accept_multiple_files=False,
                 )
+            elif mode == "Data Warehouse conectado":
+                # Data Warehouse sync options
+                warehouse_labels = {
+                    "snowflake": "❄️ Snowflake",
+                    "redshift": "🔴 Amazon Redshift",
+                    "bigquery": "🔵 Google BigQuery",
+                    "synapse": "🟣 Azure Synapse"
+                }
+                selected_wh = st.selectbox(
+                    "Data Warehouse",
+                    options=configured_warehouses,
+                    format_func=lambda x: warehouse_labels.get(x, x),
+                )
+                wh_config = st.session_state.warehouse_connections.get(selected_wh, {})
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if selected_wh == "bigquery":
+                        wh_database = st.text_input("Project ID", value=wh_config.get("project_id", ""))
+                    else:
+                        wh_database = st.text_input("Database", value=wh_config.get("database", ""))
+                with col2:
+                    if selected_wh == "bigquery":
+                        wh_schema = st.text_input("Dataset (vazio = todos)", value=wh_config.get("dataset", ""))
+                    else:
+                        wh_schema = st.text_input("Schema (vazio = todos)", value=wh_config.get("schema", ""))
+
+                table_limit = int(
+                    st.number_input(
+                        "Limite de tabelas a sincronizar",
+                        min_value=10,
+                        max_value=1000,
+                        value=200,
+                        step=10,
+                        key="dw_table_limit"
+                    )
+                )
+                dataset_hint = f"{selected_wh}:{wh_database}"
             else:
                 connector = st.selectbox(
                     "Selecione um conector existente",
@@ -810,15 +969,18 @@ def render_rag_tab() -> None:
         if connect:
             if mode == "Arquivo de catálogo" and not uploaded:
                 st.warning("Envie um arquivo de metadados para conectar.")
-            elif mode != "Arquivo de catálogo" and connector == "OpenMetadata" and (
+            elif mode == "Conectores disponíveis" and connector == "OpenMetadata" and (
                 not om_host or not om_token
             ):
                 st.warning("Informe o endpoint e o token do OpenMetadata para sincronizar.")
+            elif mode == "Data Warehouse conectado" and not selected_wh:
+                st.warning("Selecione um Data Warehouse para sincronizar.")
             else:
                 catalog_label = catalog_name or (
-                    uploaded.name if uploaded else connector  # type: ignore[misc]
+                    uploaded.name if uploaded else (selected_wh if mode == "Data Warehouse conectado" else connector)
                 )
                 tables_added = 0
+
                 if uploaded:
                     try:
                         tables = _parse_tables_from_file(uploaded)
@@ -829,7 +991,61 @@ def render_rag_tab() -> None:
                     except Exception as exc:  # noqa: BLE001
                         st.error(f"Não foi possível processar o arquivo: {exc}")
                         tables_added = 0
-                elif mode != "Arquivo de catálogo" and connector == "OpenMetadata":
+                elif mode == "Data Warehouse conectado" and selected_wh:
+                    # Sync tables from Data Warehouse
+                    try:
+                        wh_config = st.session_state.warehouse_connections.get(selected_wh, {})
+                        dw_connector = get_warehouse_connector(selected_wh, wh_config)
+
+                        if dw_connector:
+                            with st.status("Sincronizando catálogo do Data Warehouse...", expanded=True) as status:
+                                status.write(f"Conectando ao {selected_wh}...")
+                                dw_connector.connect()
+
+                                status.write("Listando tabelas...")
+                                dw_tables = dw_connector.list_tables(
+                                    schema=wh_schema if wh_schema else None,
+                                    database=wh_database if wh_database else None,
+                                    include_views=True
+                                )
+
+                                # Limit tables
+                                dw_tables = dw_tables[:table_limit]
+
+                                status.write(f"Processando {len(dw_tables)} tabelas...")
+                                for dw_table in dw_tables:
+                                    # Get schema info for description
+                                    try:
+                                        columns = dw_connector.get_table_schema(
+                                            dw_table.name,
+                                            schema=dw_table.schema,
+                                            database=dw_table.database
+                                        )
+                                        col_names = [c["name"] for c in columns[:10]]
+                                        col_desc = f"Colunas: {', '.join(col_names)}"
+                                        if len(columns) > 10:
+                                            col_desc += f" (+{len(columns) - 10} mais)"
+                                    except Exception:
+                                        col_desc = ""
+
+                                    table_meta = TableMetadata(
+                                        name=dw_table.name,
+                                        database=dw_table.database or wh_database,
+                                        schema=dw_table.schema or wh_schema,
+                                        description=f"Tabela do {selected_wh}. {col_desc}",
+                                        tags=[selected_wh, dw_table.table_type.lower()]
+                                    )
+                                    st.session_state.rag_catalog.append(table_meta)
+                                    _index_table_if_possible(table_meta)
+
+                                tables_added = len(dw_tables)
+                                dw_connector.disconnect()
+                                status.update(label=f"Sincronizadas {tables_added} tabelas!", state="complete")
+                        else:
+                            st.error("Não foi possível criar conexão com o Data Warehouse.")
+                    except Exception as exc:
+                        st.error(f"Erro ao sincronizar com Data Warehouse: {exc}")
+                elif mode == "Conectores disponíveis" and connector == "OpenMetadata":
                     try:
                         _apply_connection_settings(
                             {
@@ -849,10 +1065,11 @@ def render_rag_tab() -> None:
                     except Exception as exc:  # noqa: BLE001
                         st.error(f"Erro inesperado ao ler o OpenMetadata: {exc}")
 
+                source_label = "Arquivo" if uploaded else (selected_wh if mode == "Data Warehouse conectado" else connector)
                 st.session_state.connected_catalogs.append(
                     {
                         "name": catalog_label,
-                        "source": "Arquivo" if uploaded else connector,  # type: ignore[misc]
+                        "source": source_label,
                         "tables": tables_added,
                         "scope": dataset_hint if mode != "Arquivo de catálogo" else "",
                     }
@@ -1745,79 +1962,228 @@ def render_value_tab() -> None:
         st.error("Não foi possível inicializar o agente.")
         return
 
-    # File upload
-    st.markdown("### Analisar Valor dos Ativos")
+    # Check for configured warehouses
+    configured_warehouses = list(st.session_state.get("warehouse_connections", {}).keys())
 
-    col1, col2 = st.columns(2)
+    # Source selection
+    st.markdown("### Fonte dos Logs de Queries")
 
-    with col1:
-        query_logs_file = st.file_uploader(
-            "📋 Logs de Queries (JSON)",
-            type=["json"],
-            help="Arquivo JSON com logs de queries SQL executadas",
-            key="value_query_logs"
-        )
+    source_options = ["Arquivo JSON enviado", "Dados de exemplo"]
+    if configured_warehouses:
+        source_options.insert(1, "Query History do Data Warehouse")
 
-    with col2:
-        data_products_file = st.file_uploader(
-            "📦 Config Data Products (JSON, opcional)",
-            type=["json"],
-            help="Configuração de data products com impacto de negócio",
-            key="value_data_products"
-        )
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        asset_metadata_file = st.file_uploader(
-            "📊 Metadados de Ativos (JSON, opcional)",
-            type=["json"],
-            help="Metadados adicionais: criticidade, custo, risco",
-            key="value_asset_metadata"
-        )
-
-    with col4:
-        lineage_output_file = st.file_uploader(
-            "🔗 Saída do Lineage Agent (JSON, opcional)",
-            type=["json"],
-            help="Output do Data Lineage Agent para análise de impacto",
-            key="value_lineage_output"
-        )
-
-    time_range = st.slider(
-        "Período de análise (dias)",
-        min_value=7,
-        max_value=90,
-        value=30,
-        key="value_time_range"
+    value_source = st.radio(
+        "Selecione a fonte dos logs de queries",
+        source_options,
+        horizontal=True,
+        key="value_source_mode"
     )
 
-    # Load sample data button
-    use_sample = st.checkbox("Usar dados de exemplo", key="use_sample_data")
+    # File upload section
+    st.markdown("### Analisar Valor dos Ativos")
 
-    if st.button("🚀 Analisar Valor", type="primary", key="run_value_analysis"):
-        if not query_logs_file and not use_sample:
-            st.warning("Envie um arquivo de logs de queries ou use os dados de exemplo.")
-            return
+    query_logs = None
+    query_logs_file = None
+    data_products_file = None
+    asset_metadata_file = None
+    lineage_output_file = None
+    dw_query_logs = None
 
-        with st.spinner("Analisando valor dos ativos..."):
-            try:
-                # Load query logs
-                if use_sample:
-                    sample_path = BASE_DIR / "data_asset_value" / "examples" / "sample_query_logs.json"
-                    with open(sample_path, 'r', encoding='utf-8') as f:
-                        query_logs = json.load(f)
+    if value_source == "Query History do Data Warehouse":
+        st.markdown("**Extrair histórico de queries diretamente do Data Warehouse**")
 
-                    dp_path = BASE_DIR / "data_asset_value" / "examples" / "data_products_config.json"
-                    with open(dp_path, 'r', encoding='utf-8') as f:
-                        data_product_config = json.load(f)
+        selected_wh = st.selectbox(
+            "Data Warehouse",
+            configured_warehouses,
+            key="value_dw_select"
+        )
 
-                    meta_path = BASE_DIR / "data_asset_value" / "examples" / "asset_metadata.json"
-                    with open(meta_path, 'r', encoding='utf-8') as f:
-                        asset_metadata = json.load(f)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            dw_days = st.number_input(
+                "Período (dias)",
+                min_value=1,
+                max_value=90,
+                value=30,
+                key="value_dw_days"
+            )
+        with col2:
+            dw_limit = st.number_input(
+                "Limite de queries",
+                min_value=100,
+                max_value=10000,
+                value=1000,
+                key="value_dw_limit"
+            )
+        with col3:
+            dw_user_filter = st.text_input(
+                "Filtrar por usuário (opcional)",
+                key="value_dw_user"
+            )
 
-                    lineage_data = None
-                else:
+        col4, col5 = st.columns(2)
+        with col4:
+            dw_database_filter = st.text_input(
+                "Filtrar por database (opcional)",
+                key="value_dw_database"
+            )
+        with col5:
+            dw_table_filter = st.text_input(
+                "Filtrar por tabela (opcional)",
+                key="value_dw_table"
+            )
+
+        # Additional optional files
+        st.markdown("**Arquivos adicionais (opcional)**")
+        col_dp, col_meta, col_lin = st.columns(3)
+
+        with col_dp:
+            data_products_file = st.file_uploader(
+                "📦 Config Data Products",
+                type=["json"],
+                help="Configuração de data products",
+                key="value_dw_data_products"
+            )
+
+        with col_meta:
+            asset_metadata_file = st.file_uploader(
+                "📊 Metadados de Ativos",
+                type=["json"],
+                help="Metadados adicionais",
+                key="value_dw_asset_metadata"
+            )
+
+        with col_lin:
+            lineage_output_file = st.file_uploader(
+                "🔗 Saída do Lineage",
+                type=["json"],
+                help="Output do Lineage Agent",
+                key="value_dw_lineage_output"
+            )
+
+        if st.button("🚀 Extrair Logs e Analisar Valor", type="primary", key="run_dw_value_analysis"):
+            if selected_wh:
+                wh_config = st.session_state.warehouse_connections.get(selected_wh, {})
+
+                with st.status("Conectando ao Data Warehouse...", expanded=True) as status:
+                    try:
+                        dw_connector = get_warehouse_connector(selected_wh, wh_config)
+                        dw_connector.connect()
+                        status.write(f"Conectado a {selected_wh}")
+
+                        status.write("Extraindo histórico de queries...")
+                        query_history = dw_connector.get_query_history(
+                            days=dw_days,
+                            limit=dw_limit,
+                            database_filter=dw_database_filter or None,
+                            table_filter=dw_table_filter or None,
+                            user_filter=dw_user_filter or None
+                        )
+
+                        status.write(f"{len(query_history)} queries encontradas")
+
+                        # Convert to format expected by the agent
+                        dw_query_logs = []
+                        for qh in query_history:
+                            if qh.get("query_text"):
+                                dw_query_logs.append({
+                                    "query_id": qh.get("query_id"),
+                                    "query_text": qh.get("query_text"),
+                                    "user_name": qh.get("user_name"),
+                                    "timestamp": str(qh.get("start_time")) if qh.get("start_time") else None,
+                                    "execution_time_ms": qh.get("execution_time_ms"),
+                                    "rows_produced": qh.get("rows_produced"),
+                                    "bytes_scanned": qh.get("bytes_scanned"),
+                                    "status": qh.get("status", "success")
+                                })
+
+                        if not dw_query_logs:
+                            st.warning("Nenhuma query válida encontrada no período.")
+                        else:
+                            # Load optional files
+                            data_product_config = None
+                            if data_products_file:
+                                data_product_config = json.load(data_products_file)
+
+                            asset_metadata = None
+                            if asset_metadata_file:
+                                asset_metadata = json.load(asset_metadata_file)
+
+                            lineage_data = None
+                            if lineage_output_file:
+                                lineage_data = json.load(lineage_output_file)
+
+                            status.write("Analisando valor dos ativos...")
+
+                            report = agent.analyze_from_query_logs(
+                                query_logs=dw_query_logs,
+                                lineage_data=lineage_data,
+                                data_product_config=data_product_config,
+                                asset_metadata=asset_metadata,
+                                time_range_days=dw_days
+                            )
+
+                            st.session_state.value_report = report
+                            status.update(label="Análise concluída", state="complete")
+                            st.success(f"✅ Análise concluída: {report.assets_analyzed} ativos analisados")
+
+                        dw_connector.disconnect()
+
+                    except Exception as e:
+                        st.error(f"Erro ao conectar ao Data Warehouse: {e}")
+
+    elif value_source == "Arquivo JSON enviado":
+        col1, col2 = st.columns(2)
+
+        with col1:
+            query_logs_file = st.file_uploader(
+                "📋 Logs de Queries (JSON)",
+                type=["json"],
+                help="Arquivo JSON com logs de queries SQL executadas",
+                key="value_query_logs"
+            )
+
+        with col2:
+            data_products_file = st.file_uploader(
+                "📦 Config Data Products (JSON, opcional)",
+                type=["json"],
+                help="Configuração de data products com impacto de negócio",
+                key="value_data_products"
+            )
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            asset_metadata_file = st.file_uploader(
+                "📊 Metadados de Ativos (JSON, opcional)",
+                type=["json"],
+                help="Metadados adicionais: criticidade, custo, risco",
+                key="value_asset_metadata"
+            )
+
+        with col4:
+            lineage_output_file = st.file_uploader(
+                "🔗 Saída do Lineage Agent (JSON, opcional)",
+                type=["json"],
+                help="Output do Data Lineage Agent para análise de impacto",
+                key="value_lineage_output"
+            )
+
+        time_range = st.slider(
+            "Período de análise (dias)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            key="value_time_range"
+        )
+
+        if st.button("🚀 Analisar Valor", type="primary", key="run_value_analysis"):
+            if not query_logs_file:
+                st.warning("Envie um arquivo de logs de queries.")
+                return
+
+            with st.spinner("Analisando valor dos ativos..."):
+                try:
                     query_logs = json.load(query_logs_file)
 
                     data_product_config = None
@@ -1832,20 +2198,59 @@ def render_value_tab() -> None:
                     if lineage_output_file:
                         lineage_data = json.load(lineage_output_file)
 
-                # Run analysis
-                report = agent.analyze_from_query_logs(
-                    query_logs=query_logs,
-                    lineage_data=lineage_data,
-                    data_product_config=data_product_config,
-                    asset_metadata=asset_metadata,
-                    time_range_days=time_range
-                )
+                    report = agent.analyze_from_query_logs(
+                        query_logs=query_logs,
+                        lineage_data=lineage_data,
+                        data_product_config=data_product_config,
+                        asset_metadata=asset_metadata,
+                        time_range_days=time_range
+                    )
 
-                st.session_state.value_report = report
-                st.success(f"✅ Análise concluída: {report.assets_analyzed} ativos analisados")
+                    st.session_state.value_report = report
+                    st.success(f"✅ Análise concluída: {report.assets_analyzed} ativos analisados")
 
-            except Exception as exc:
-                st.error(f"Erro ao analisar: {exc}")
+                except Exception as exc:
+                    st.error(f"Erro ao analisar: {exc}")
+
+    elif value_source == "Dados de exemplo":
+        st.info("Usando dados de exemplo para demonstração.")
+
+        time_range = st.slider(
+            "Período de análise (dias)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            key="value_time_range_sample"
+        )
+
+        if st.button("🚀 Analisar com Dados de Exemplo", type="primary", key="run_sample_value_analysis"):
+            with st.spinner("Analisando valor dos ativos..."):
+                try:
+                    sample_path = BASE_DIR / "data_asset_value" / "examples" / "sample_query_logs.json"
+                    with open(sample_path, 'r', encoding='utf-8') as f:
+                        query_logs = json.load(f)
+
+                    dp_path = BASE_DIR / "data_asset_value" / "examples" / "data_products_config.json"
+                    with open(dp_path, 'r', encoding='utf-8') as f:
+                        data_product_config = json.load(f)
+
+                    meta_path = BASE_DIR / "data_asset_value" / "examples" / "asset_metadata.json"
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        asset_metadata = json.load(f)
+
+                    report = agent.analyze_from_query_logs(
+                        query_logs=query_logs,
+                        lineage_data=None,
+                        data_product_config=data_product_config,
+                        asset_metadata=asset_metadata,
+                        time_range_days=time_range
+                    )
+
+                    st.session_state.value_report = report
+                    st.success(f"✅ Análise concluída: {report.assets_analyzed} ativos analisados")
+
+                except Exception as exc:
+                    st.error(f"Erro ao analisar: {exc}")
 
     # Display results
     if "value_report" in st.session_state:
