@@ -230,6 +230,64 @@ class WarehouseConnector(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_ddl(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        include_dependencies: bool = False
+    ) -> str:
+        """
+        Get the DDL (CREATE statement) for a table.
+
+        Args:
+            table_name: Name of the table
+            schema: Schema name (optional)
+            database: Database name (optional)
+            include_dependencies: Include dependent objects DDL
+
+        Returns:
+            DDL statement as string
+        """
+        pass
+
+    @abstractmethod
+    def get_query_history(
+        self,
+        days: int = 7,
+        limit: int = 1000,
+        database_filter: Optional[str] = None,
+        schema_filter: Optional[str] = None,
+        table_filter: Optional[str] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get query execution history from warehouse audit tables.
+
+        Args:
+            days: Number of days to look back
+            limit: Maximum number of queries to return
+            database_filter: Filter by database name
+            schema_filter: Filter by schema name
+            table_filter: Filter by table name
+            user_filter: Filter by user name
+
+        Returns:
+            List of query history records with:
+            - query_id: Unique query identifier
+            - query_text: SQL text
+            - user_name: User who ran the query
+            - start_time: Query start time
+            - end_time: Query end time
+            - execution_time_ms: Duration in milliseconds
+            - rows_produced: Number of rows returned
+            - bytes_scanned: Data scanned in bytes
+            - status: Query status (success/failed)
+            - tables_accessed: List of tables accessed
+        """
+        pass
+
     @property
     def is_connected(self) -> bool:
         """Check if currently connected."""

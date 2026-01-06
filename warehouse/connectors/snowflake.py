@@ -482,3 +482,161 @@ class SnowflakeConnector(WarehouseConnector):
         self._cursor.execute(f"USE DATABASE {self._validate_identifier(database_name)}")
         self.database = database_name
         logger.info(f"Switched to database: {database_name}")
+
+    def get_ddl(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        include_dependencies: bool = False
+    ) -> str:
+        """Get DDL for a table using Snowflake's GET_DDL function."""
+        if not self._connected:
+            self.connect()
+
+        db = self._validate_identifier(database) if database else self.database
+        sch = self._validate_identifier(schema) if schema else self.schema
+        tbl = self._validate_identifier(table_name)
+
+        # Build fully qualified name for GET_DDL
+        if db and sch:
+            full_name = f"'{db}.{sch}.{tbl}'"
+        elif sch:
+            full_name = f"'{sch}.{tbl}'"
+        else:
+            full_name = f"'{tbl}'"
+
+        try:
+            self._cursor.execute(f"SELECT GET_DDL('TABLE', {full_name})")
+            result = self._cursor.fetchone()
+            return result[0] if result else ""
+        except Exception as e:
+            # Try as VIEW if TABLE fails
+            try:
+                self._cursor.execute(f"SELECT GET_DDL('VIEW', {full_name})")
+                result = self._cursor.fetchone()
+                return result[0] if result else ""
+            except Exception:
+                logger.warning(f"Could not get DDL for {table_name}: {str(e)}")
+                return ""
+
+    def get_query_history(
+        self,
+        days: int = 7,
+        limit: int = 1000,
+        database_filter: Optional[str] = None,
+        schema_filter: Optional[str] = None,
+        table_filter: Optional[str] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get query history from Snowflake's QUERY_HISTORY view."""
+        if not self._connected:
+            self.connect()
+
+        # Build query with filters
+        query = """
+        SELECT
+            QUERY_ID,
+            QUERY_TEXT,
+            USER_NAME,
+            ROLE_NAME,
+            DATABASE_NAME,
+            SCHEMA_NAME,
+            START_TIME,
+            END_TIME,
+            TOTAL_ELAPSED_TIME as EXECUTION_TIME_MS,
+            ROWS_PRODUCED,
+            BYTES_SCANNED,
+            EXECUTION_STATUS,
+            ERROR_MESSAGE,
+            WAREHOUSE_NAME,
+            QUERY_TYPE
+        FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+        WHERE START_TIME >= DATEADD(day, -%s, CURRENT_TIMESTAMP())
+        """
+
+        params = [days]
+
+        if database_filter:
+            query += " AND DATABASE_NAME = %s"
+            params.append(database_filter)
+
+        if schema_filter:
+            query += " AND SCHEMA_NAME = %s"
+            params.append(schema_filter)
+
+        if table_filter:
+            query += " AND QUERY_TEXT ILIKE %s"
+            params.append(f"%{table_filter}%")
+
+        if user_filter:
+            query += " AND USER_NAME = %s"
+            params.append(user_filter)
+
+        query += f" ORDER BY START_TIME DESC LIMIT {limit}"
+
+        try:
+            self._cursor.execute(query, params)
+            columns = [desc[0] for desc in self._cursor.description]
+            rows = self._cursor.fetchall()
+
+            results = []
+            for row in rows:
+                record = dict(zip(columns, row))
+                results.append({
+                    "query_id": record.get("QUERY_ID"),
+                    "query_text": record.get("QUERY_TEXT"),
+                    "user_name": record.get("USER_NAME"),
+                    "role_name": record.get("ROLE_NAME"),
+                    "database_name": record.get("DATABASE_NAME"),
+                    "schema_name": record.get("SCHEMA_NAME"),
+                    "start_time": record.get("START_TIME"),
+                    "end_time": record.get("END_TIME"),
+                    "execution_time_ms": record.get("EXECUTION_TIME_MS"),
+                    "rows_produced": record.get("ROWS_PRODUCED"),
+                    "bytes_scanned": record.get("BYTES_SCANNED"),
+                    "status": "success" if record.get("EXECUTION_STATUS") == "SUCCESS" else "failed",
+                    "error_message": record.get("ERROR_MESSAGE"),
+                    "warehouse_name": record.get("WAREHOUSE_NAME"),
+                    "query_type": record.get("QUERY_TYPE"),
+                    "tables_accessed": []  # Would need additional parsing
+                })
+
+            return results
+
+        except Exception as e:
+            logger.warning(f"Could not get query history: {str(e)}")
+            # Try alternative view (requires less privileges)
+            try:
+                alt_query = """
+                SELECT *
+                FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY(
+                    END_TIME_RANGE_START => DATEADD(day, -%s, CURRENT_TIMESTAMP()),
+                    RESULT_LIMIT => %s
+                ))
+                ORDER BY START_TIME DESC
+                """
+                self._cursor.execute(alt_query, [days, limit])
+                columns = [desc[0] for desc in self._cursor.description]
+                rows = self._cursor.fetchall()
+
+                results = []
+                for row in rows:
+                    record = dict(zip(columns, row))
+                    results.append({
+                        "query_id": record.get("QUERY_ID"),
+                        "query_text": record.get("QUERY_TEXT"),
+                        "user_name": record.get("USER_NAME"),
+                        "start_time": record.get("START_TIME"),
+                        "end_time": record.get("END_TIME"),
+                        "execution_time_ms": record.get("TOTAL_ELAPSED_TIME"),
+                        "rows_produced": record.get("ROWS_PRODUCED"),
+                        "bytes_scanned": record.get("BYTES_SCANNED"),
+                        "status": "success" if record.get("EXECUTION_STATUS") == "SUCCESS" else "failed",
+                        "tables_accessed": []
+                    })
+
+                return results
+            except Exception as e2:
+                logger.error(f"Could not get query history from alternative view: {str(e2)}")
+                return []

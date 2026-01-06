@@ -473,3 +473,193 @@ class BigQueryConnector(WarehouseConnector):
             }
             for job in jobs
         ]
+
+    def get_ddl(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        include_dependencies: bool = False
+    ) -> str:
+        """Get DDL for a table using BigQuery's INFORMATION_SCHEMA."""
+        if not self._connected:
+            self.connect()
+
+        dataset_id = schema or self.dataset
+        project = database or self.project_id
+
+        # BigQuery provides DDL via INFORMATION_SCHEMA.TABLES
+        query = f"""
+            SELECT ddl
+            FROM `{project}.{dataset_id}.INFORMATION_SCHEMA.TABLES`
+            WHERE table_name = '{table_name}'
+        """
+
+        try:
+            result = self.execute_query(query)
+            if result.rows:
+                return result.rows[0].get("ddl", "")
+            return ""
+        except Exception as e:
+            logger.warning(f"Could not get DDL from INFORMATION_SCHEMA: {str(e)}")
+            # Fall back to constructing DDL from schema
+            try:
+                table_ref = f"{project}.{dataset_id}.{table_name}"
+                table = self._client.get_table(table_ref)
+
+                # Build CREATE TABLE statement
+                ddl_parts = [f"CREATE TABLE `{project}.{dataset_id}.{table_name}` ("]
+
+                col_defs = []
+                for field in table.schema:
+                    col_def = f"  `{field.name}` {field.field_type}"
+                    if field.mode == "REQUIRED":
+                        col_def += " NOT NULL"
+                    if field.description:
+                        col_def += f' OPTIONS(description="{field.description}")'
+                    col_defs.append(col_def)
+
+                ddl_parts.append(",\n".join(col_defs))
+                ddl_parts.append("\n)")
+
+                # Add table options
+                options = []
+                if table.description:
+                    options.append(f'description="{table.description}"')
+                if table.labels:
+                    labels_str = ", ".join([f'"{k}", "{v}"' for k, v in table.labels.items()])
+                    options.append(f"labels=[{labels_str}]")
+                if table.time_partitioning:
+                    if table.time_partitioning.field:
+                        options.append(f'partition_by="{table.time_partitioning.field}"')
+                if table.clustering_fields:
+                    cluster_str = ", ".join([f'"{f}"' for f in table.clustering_fields])
+                    options.append(f"cluster_by=[{cluster_str}]")
+
+                if options:
+                    ddl_parts.append(f"\nOPTIONS({', '.join(options)})")
+
+                return "\n".join(ddl_parts)
+            except Exception as e2:
+                logger.error(f"Could not construct DDL: {str(e2)}")
+                return ""
+
+    def get_query_history(
+        self,
+        days: int = 7,
+        limit: int = 1000,
+        database_filter: Optional[str] = None,
+        schema_filter: Optional[str] = None,
+        table_filter: Optional[str] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get query history from BigQuery's INFORMATION_SCHEMA.JOBS."""
+        if not self._connected:
+            self.connect()
+
+        region = self.location or "US"
+
+        # Build query using INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        query = f"""
+            SELECT
+                job_id,
+                query,
+                user_email,
+                creation_time,
+                start_time,
+                end_time,
+                total_bytes_processed,
+                total_bytes_billed,
+                total_slot_ms,
+                state,
+                error_result
+            FROM `{self.project_id}.region-{region.lower()}.INFORMATION_SCHEMA.JOBS_BY_PROJECT`
+            WHERE job_type = 'QUERY'
+            AND creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+        """
+
+        if user_filter:
+            query += f" AND user_email = '{user_filter}'"
+
+        if table_filter:
+            query += f" AND query LIKE '%{table_filter}%'"
+
+        query += f"""
+            ORDER BY creation_time DESC
+            LIMIT {limit}
+        """
+
+        try:
+            result = self.execute_query(query)
+
+            results = []
+            for row in result.rows:
+                start_time = row.get("start_time")
+                end_time = row.get("end_time")
+
+                execution_time_ms = None
+                if start_time and end_time:
+                    execution_time_ms = (end_time - start_time).total_seconds() * 1000
+
+                error_result = row.get("error_result")
+                status = "failed" if error_result else "success"
+
+                results.append({
+                    "query_id": row.get("job_id"),
+                    "query_text": row.get("query"),
+                    "user_name": row.get("user_email"),
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "execution_time_ms": execution_time_ms,
+                    "rows_produced": None,
+                    "bytes_scanned": row.get("total_bytes_processed"),
+                    "bytes_billed": row.get("total_bytes_billed"),
+                    "status": status,
+                    "error_message": str(error_result) if error_result else None,
+                    "tables_accessed": [],
+                    "slot_ms": row.get("total_slot_ms")
+                })
+
+            return results
+
+        except Exception as e:
+            logger.warning(f"Could not get query history from INFORMATION_SCHEMA: {str(e)}")
+            # Fall back to job listing API
+            try:
+                from datetime import timedelta
+
+                jobs = list(self._client.list_jobs(
+                    max_results=limit,
+                    all_users=True if not user_filter else False,
+                    min_creation_time=datetime.utcnow() - timedelta(days=days)
+                ))
+
+                results = []
+                for job in jobs:
+                    if job.job_type != "query":
+                        continue
+
+                    if user_filter and getattr(job, "user_email", None) != user_filter:
+                        continue
+
+                    execution_time_ms = None
+                    if job.started and job.ended:
+                        execution_time_ms = (job.ended - job.started).total_seconds() * 1000
+
+                    results.append({
+                        "query_id": job.job_id,
+                        "query_text": getattr(job, "query", None),
+                        "user_name": getattr(job, "user_email", None),
+                        "start_time": job.started,
+                        "end_time": job.ended,
+                        "execution_time_ms": execution_time_ms,
+                        "bytes_scanned": getattr(job, "total_bytes_processed", None),
+                        "status": "success" if job.state == "DONE" else job.state,
+                        "tables_accessed": []
+                    })
+
+                return results
+
+            except Exception as e2:
+                logger.error(f"Could not get query history: {str(e2)}")
+                return []
