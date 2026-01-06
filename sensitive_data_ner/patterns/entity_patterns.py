@@ -39,9 +39,11 @@ class EntityPatternConfig:
     context_boost: float = 0.2  # Confidence boost when context keywords found
     priority: int = 1  # Higher priority patterns are checked first
     locale: str = "universal"  # Country/region specific (e.g., "br", "us", "eu")
+    case_sensitive: bool = False  # Whether pattern should be case-sensitive
 
     def __post_init__(self):
-        self._compiled: Pattern = re.compile(self.pattern, re.IGNORECASE)
+        flags = 0 if self.case_sensitive else re.IGNORECASE
+        self._compiled: Pattern = re.compile(self.pattern, flags)
 
     @property
     def compiled(self) -> Pattern:
@@ -170,12 +172,16 @@ PII_PATTERNS: Dict[str, EntityPatternConfig] = {
     ),
 
     # Personal Names (predictive - context-dependent)
+    # Case-sensitive to ensure proper noun capitalization
     "person_name": EntityPatternConfig(
         name="person_name",
         category=EntityCategory.PII,
-        pattern=r"\b[A-Z][a-záàâãéèêíïóôõöúçñ]+(?:\s+(?:de|da|do|dos|das|e|van|von|der|del|la|el))?\s+[A-Z][a-záàâãéèêíïóôõöúçñ]+(?:\s+[A-Z][a-záàâãéèêíïóôõöúçñ]+)*\b",
+        pattern=r"\b[A-Z][a-záàâãéèêíïóôõöúçñ]{2,}(?:\s+(?:de|da|do|dos|das|e|van|von|der|del|la|el|Di|De|Da|Van|Von))?\s+[A-Z][a-záàâãéèêíïóôõöúçñ]{2,}(?:\s+(?:de|da|do|dos|das|e)?\s*[A-Z][a-záàâãéèêíïóôõöúçñ]{2,})*\b",
         description="Person Full Name (Portuguese/Spanish)",
-        context_boost=0.3
+        context_boost=0.3,
+        case_sensitive=True,  # Critical: names must have proper capitalization
+        has_validation=True,  # Enable validation to filter false positives
+        priority=2  # Higher priority to check before other patterns
     ),
 
     # Address Components

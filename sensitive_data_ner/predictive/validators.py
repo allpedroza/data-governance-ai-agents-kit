@@ -320,6 +320,102 @@ def validate_email(email: str) -> bool:
     return True
 
 
+# Common Portuguese/Spanish words that are NOT names (false positive exclusions)
+_NOT_PERSON_NAMES = {
+    # Common nouns and verbs that may start with capital (sentence start)
+    "erro", "erro", "token", "acesso", "usuario", "usuário", "cliente", "sistema",
+    "cartao", "cartão", "pagamento", "autenticacao", "autenticação", "falha",
+    "falhou", "portador", "titular", "conta", "senha", "login", "logout",
+    "sessao", "sessão", "servico", "serviço", "endpoint", "api", "request",
+    "response", "codigo", "código", "chave", "valor", "dados", "arquivo",
+    "processo", "processamento", "transacao", "transação", "compra", "venda",
+    "produto", "item", "pedido", "ordem", "status", "estado", "tipo",
+    # Technical terms
+    "string", "integer", "float", "boolean", "array", "object", "null",
+    "true", "false", "undefined", "function", "class", "method", "variable",
+    # Common adjectives/adverbs
+    "final", "inicial", "primeiro", "ultimo", "último", "novo", "antigo",
+    "grande", "pequeno", "alto", "baixo", "bom", "mau", "melhor", "pior",
+    # Common verbs (conjugated forms that might match)
+    "erro", "errou", "falha", "falhou", "sucesso", "processou", "validou",
+}
+
+# Common phrase patterns that are NOT names
+_NOT_NAME_PATTERNS = [
+    r"^erro\s",  # "Erro ao..."
+    r"^falha\s",  # "Falha na..."
+    r"^token\s",  # "Token de..."
+    r"^cartao\s",  # "Cartão de..."
+    r"^cartão\s",
+    r"\s+(de|do|da)\s+(acesso|pagamento|autenticacao|autenticação|sistema|cliente|usuario|usuário)$",
+    r"^(usuario|usuário)\s+\w+$",  # "Usuário X" where X is not a name
+]
+
+
+def validate_person_name(name: str) -> bool:
+    """
+    Validate that a detected string is actually a person's name.
+
+    Checks:
+    1. Proper capitalization (each name part starts with uppercase)
+    2. Not in the exclusion list of common words
+    3. Minimum length requirements
+    4. Has at least two proper name parts
+
+    Args:
+        name: Detected name string
+
+    Returns:
+        True if appears to be a valid person name, False otherwise
+    """
+    if not name or len(name) < 5:
+        return False
+
+    # Split into parts
+    parts = name.split()
+    if len(parts) < 2:
+        return False
+
+    # Connectors that are allowed in lowercase
+    connectors = {"de", "da", "do", "dos", "das", "e", "van", "von", "der", "del", "la", "el"}
+
+    # Check each word
+    name_parts = 0  # Count actual name parts (not connectors)
+    for part in parts:
+        part_lower = part.lower()
+
+        # Skip connectors
+        if part_lower in connectors:
+            continue
+
+        # Check if first word is in exclusion list (case-insensitive)
+        if name_parts == 0 and part_lower in _NOT_PERSON_NAMES:
+            return False
+
+        # Name parts must start with uppercase
+        if not part[0].isupper():
+            return False
+
+        # Rest of the name part should be lowercase (except for compound names like "McDonald")
+        # Allow flexibility but ensure it's not ALL CAPS
+        if part.isupper() and len(part) > 2:
+            return False
+
+        name_parts += 1
+
+    # Must have at least 2 proper name parts (first + last name)
+    if name_parts < 2:
+        return False
+
+    # Check against common false positive patterns
+    name_lower = name.lower()
+    for pattern in _NOT_NAME_PATTERNS:
+        if re.search(pattern, name_lower):
+            return False
+
+    return True
+
+
 # Validator registry
 _VALIDATORS: dict[str, Callable[[str], bool]] = {
     "cpf": validate_cpf,
@@ -333,6 +429,7 @@ _VALIDATORS: dict[str, Callable[[str], bool]] = {
     "iban": validate_iban,
     "ip_address": validate_ip_address,
     "email": validate_email,
+    "person_name": validate_person_name,
 }
 
 
