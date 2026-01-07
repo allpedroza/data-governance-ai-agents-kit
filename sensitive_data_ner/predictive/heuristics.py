@@ -67,12 +67,13 @@ class ContextAnalyzer:
     """
 
     # Negation patterns that reduce confidence
+    # Note: "no" removed - in Portuguese it's a preposition ("em + o" = "in the"), not negation
     NEGATION_PATTERNS = [
-        r"(?:não|no|not|never|nunca|sem|without)\s+(?:é|is|are|was|were|tem|has|have)?\s*",
-        r"(?:exemplo|example|sample|teste|test|fake|mock|dummy|placeholder)",
-        r"(?:inválido|invalid|incorreto|incorrect|erro|error)",
+        r"\b(?:não|not|never|nunca|sem|without)\s+(?:é|is|are|was|were|tem|has|have)?\s*",
+        r"\b(?:exemplo|example|sample|teste|test|fake|mock|dummy|placeholder)\b",
+        r"\b(?:inválido|invalid|incorreto|incorrect|erro|error)\b",
         r"(?:formato|format):\s*",
-        r"(?:xxx+|000+|123+|999+)",
+        r"(?:x{4,}|0{5,}|1{5,}|9{5,})",  # Require 4+ x's or 5+ repeated digits
     ]
 
     # Context window size (characters before/after entity)
