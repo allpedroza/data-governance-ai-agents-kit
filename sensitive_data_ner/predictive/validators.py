@@ -364,21 +364,11 @@ _NOT_NAME_PATTERNS = [
 ]
 
 
-def validate_person_name(name: str) -> bool:
+def _validate_person_name_regex(name: str) -> bool:
     """
-    Validate that a detected string is actually a person's name.
+    Validate person name using regex-based rules.
 
-    Checks:
-    1. Proper capitalization (each name part starts with uppercase)
-    2. Not in the exclusion list of common words
-    3. Minimum length requirements
-    4. Has at least two proper name parts
-
-    Args:
-        name: Detected name string
-
-    Returns:
-        True if appears to be a valid person name, False otherwise
+    This is the fallback validation when SpaCy is not available.
     """
     if not name or len(name) < 5:
         return False
@@ -425,6 +415,75 @@ def validate_person_name(name: str) -> bool:
         if re.search(pattern, name_lower):
             return False
 
+    return True
+
+
+def validate_person_name(name: str) -> bool:
+    """
+    Validate that a detected string is actually a person's name.
+
+    Uses a combination of:
+    1. SpaCy NER (PER entity classification) - when available
+    2. SpaCy POS tagging (PROPN vs VERB/NOUN) - when available
+    3. Regex-based rules (capitalization, exclusion lists)
+
+    The validation is conservative: if SpaCy confidently says it's NOT
+    a person name (e.g., contains verbs, classified as ORG/LOC), we reject.
+    If SpaCy is uncertain or unavailable, we fall back to regex rules.
+
+    Args:
+        name: Detected name string
+
+    Returns:
+        True if appears to be a valid person name, False otherwise
+    """
+    # First apply regex rules (fast, always available)
+    if not _validate_person_name_regex(name):
+        return False
+
+    # Try SpaCy validation for additional accuracy
+    try:
+        from .spacy_helper import (
+            is_spacy_available,
+            validate_person_name_with_spacy,
+            contains_verb
+        )
+
+        if is_spacy_available():
+            # Check for verbs - key indicator of false positive
+            has_verb, verbs = contains_verb(name)
+            if has_verb:
+                # If detected as containing verbs, likely not a name
+                # But check if SpaCy also thinks it's a person
+                is_valid, confidence, reason = validate_person_name_with_spacy(name)
+
+                if not is_valid and confidence >= 0.7:
+                    return False
+
+                # Even if uncertain, if it contains verbs, be conservative
+                if has_verb and confidence < 0.8:
+                    return False
+
+            # Full SpaCy validation
+            is_valid, confidence, reason = validate_person_name_with_spacy(name)
+
+            # If SpaCy confidently rejects, trust it
+            if not is_valid and confidence >= 0.75:
+                return False
+
+            # If SpaCy confidently confirms, accept
+            if is_valid and confidence >= 0.85:
+                return True
+
+    except ImportError:
+        # SpaCy helper not available, continue with regex result
+        pass
+    except Exception as e:
+        # Log error but don't fail
+        import logging
+        logging.getLogger(__name__).debug(f"SpaCy validation error: {str(e)}")
+
+    # Default: regex validation passed
     return True
 
 
