@@ -902,7 +902,8 @@ CONTEXT_KEYWORDS: Dict[EntityCategory, Dict[str, Set[str]]] = {
             "saúde", "health", "doença", "disease", "sintoma", "symptom",
             "alergia", "allergy", "histórico médico", "medical history",
             "consulta", "appointment", "internação", "hospitalization",
-            "laboratório", "laboratory", "sangue", "blood"
+            "laboratório", "laboratory", "sangue", "blood",
+            "diabetes", "hipertensão", "asma", "câncer", "cancer"  # Common diseases
         },
         "low_confidence": {
             "peso", "weight", "altura", "height", "pressão", "pressure",
@@ -926,7 +927,8 @@ CONTEXT_KEYWORDS: Dict[EntityCategory, Dict[str, Set[str]]] = {
     },
     EntityCategory.FINANCIAL: {
         "high_confidence": {
-            "banco", "bank", "conta", "account", "agência", "branch",
+            "banco", "bank", "conta", "account", "agência", "agencia", "branch",
+            "ag:", "cc:", "c/c",  # Common Brazilian bank shortcuts
             "iban", "swift", "bic", "transferência", "transfer",
             "pix", "saldo", "balance", "extrato", "statement",
             "investimento", "investment", "aplicação", "deposit"
