@@ -320,16 +320,24 @@ def validate_email(email: str) -> bool:
     return True
 
 
-# Common Portuguese/Spanish words that are NOT names (false positive exclusions)
+# Common Portuguese/Spanish/English words that are NOT names (false positive exclusions)
 _NOT_PERSON_NAMES = {
     # Common nouns and verbs that may start with capital (sentence start)
-    "erro", "erro", "token", "acesso", "usuario", "usuário", "cliente", "sistema",
+    "erro", "token", "acesso", "usuario", "usuário", "cliente", "sistema",
     "cartao", "cartão", "pagamento", "autenticacao", "autenticação", "falha",
     "falhou", "portador", "titular", "conta", "senha", "login", "logout",
     "sessao", "sessão", "servico", "serviço", "endpoint", "api", "request",
     "response", "codigo", "código", "chave", "valor", "dados", "arquivo",
     "processo", "processamento", "transacao", "transação", "compra", "venda",
     "produto", "item", "pedido", "ordem", "status", "estado", "tipo",
+    # English technical terms that may appear capitalized
+    "critical", "error", "warning", "info", "debug", "fatal", "success",
+    "failed", "failure", "exception", "message", "alert", "notice",
+    "invalid", "valid", "null", "undefined", "unknown", "default",
+    "system", "server", "client", "user", "admin", "root", "guest",
+    "public", "private", "internal", "external", "local", "remote",
+    "input", "output", "result", "return", "value", "data", "response",
+    "request", "query", "update", "delete", "insert", "select", "create",
     # Technical terms
     "string", "integer", "float", "boolean", "array", "object", "null",
     "true", "false", "undefined", "function", "class", "method", "variable",
@@ -337,36 +345,30 @@ _NOT_PERSON_NAMES = {
     "final", "inicial", "primeiro", "ultimo", "último", "novo", "antigo",
     "grande", "pequeno", "alto", "baixo", "bom", "mau", "melhor", "pior",
     # Common verbs (conjugated forms that might match)
-    "erro", "errou", "falha", "falhou", "sucesso", "processou", "validou",
+    "errou", "falhou", "sucesso", "processou", "validou",
 }
 
 # Common phrase patterns that are NOT names
 _NOT_NAME_PATTERNS = [
     r"^erro\s",  # "Erro ao..."
+    r"^error\s",  # "Error in..."
+    r"^critical\s",  # "Critical Error..."
+    r"^warning\s",  # "Warning:..."
     r"^falha\s",  # "Falha na..."
     r"^token\s",  # "Token de..."
     r"^cartao\s",  # "Cartão de..."
     r"^cartão\s",
     r"\s+(de|do|da)\s+(acesso|pagamento|autenticacao|autenticação|sistema|cliente|usuario|usuário)$",
     r"^(usuario|usuário)\s+\w+$",  # "Usuário X" where X is not a name
+    r"^(system|server|client|user)\s+\w+$",  # "System Error", "Server Fault"
 ]
 
 
-def validate_person_name(name: str) -> bool:
+def _validate_person_name_regex(name: str) -> bool:
     """
-    Validate that a detected string is actually a person's name.
+    Validate person name using regex-based rules.
 
-    Checks:
-    1. Proper capitalization (each name part starts with uppercase)
-    2. Not in the exclusion list of common words
-    3. Minimum length requirements
-    4. Has at least two proper name parts
-
-    Args:
-        name: Detected name string
-
-    Returns:
-        True if appears to be a valid person name, False otherwise
+    This is the fallback validation when SpaCy is not available.
     """
     if not name or len(name) < 5:
         return False
@@ -416,6 +418,94 @@ def validate_person_name(name: str) -> bool:
     return True
 
 
+def validate_person_name(name: str) -> bool:
+    """
+    Validate that a detected string is actually a person's name.
+
+    Uses a combination of:
+    1. SpaCy NER (PER entity classification) - when available
+    2. SpaCy POS tagging (PROPN vs VERB/NOUN) - when available
+    3. Regex-based rules (capitalization, exclusion lists)
+
+    The validation is conservative: if SpaCy confidently says it's NOT
+    a person name (e.g., contains verbs, classified as ORG/LOC), we reject.
+    If SpaCy is uncertain or unavailable, we fall back to regex rules.
+
+    Args:
+        name: Detected name string
+
+    Returns:
+        True if appears to be a valid person name, False otherwise
+    """
+    # First apply regex rules (fast, always available)
+    if not _validate_person_name_regex(name):
+        return False
+
+    # Try SpaCy validation for additional accuracy
+    try:
+        from .spacy_helper import (
+            is_spacy_available,
+            validate_person_name_with_spacy,
+            contains_verb
+        )
+
+        if is_spacy_available():
+            # Check for verbs - key indicator of false positive
+            has_verb, verbs = contains_verb(name)
+            if has_verb:
+                # If detected as containing verbs, likely not a name
+                # But check if SpaCy also thinks it's a person
+                is_valid, confidence, reason = validate_person_name_with_spacy(name)
+
+                if not is_valid and confidence >= 0.7:
+                    return False
+
+                # Even if uncertain, if it contains verbs, be conservative
+                if has_verb and confidence < 0.8:
+                    return False
+
+            # Full SpaCy validation
+            is_valid, confidence, reason = validate_person_name_with_spacy(name)
+
+            # If SpaCy confidently rejects, trust it
+            if not is_valid and confidence >= 0.75:
+                return False
+
+            # If SpaCy confidently confirms, accept
+            if is_valid and confidence >= 0.85:
+                return True
+
+    except ImportError:
+        # SpaCy helper not available, continue with regex result
+        pass
+    except Exception as e:
+        # Log error but don't fail
+        import logging
+        logging.getLogger(__name__).debug(f"SpaCy validation error: {str(e)}")
+
+    # Default: regex validation passed
+    return True
+
+
+# Common Portuguese/Spanish words that accidentally match SWIFT/BIC pattern
+# These words have 8 characters, all uppercase letters, and happen to contain
+# what looks like a valid country code in positions 4-5
+_SWIFT_FALSE_POSITIVES = {
+    "CONSEGUE",  # Portuguese verb "consegue" - contains EG (Egypt)
+    "CONSIGNA",  # Spanish/Portuguese - contains IG (not valid but similar pattern)
+    "CONSELHE",  # Portuguese - contains EL (not valid)
+    "CONSEJOS",  # Spanish - contains EJ (not valid)
+    "CONSULTE",  # Portuguese - contains UL (not valid)
+    "CONTINUE",  # English/Portuguese - contains IN (India)
+    "CONTEXTO",  # Portuguese - contains EX (not valid)
+    "CONTRATE",  # Portuguese - contains RA (not valid)
+    "CONTROLE",  # Portuguese - contains RO (Romania)
+    "CONVERSE",  # English/Portuguese - contains VE (Venezuela)
+    "COMPLETE",  # English - contains PL (Poland)
+    "COMPARTE",  # Spanish - contains PA (Panama)
+    "COMPROVE",  # Portuguese - contains RO (Romania)
+}
+
 # Valid ISO 3166-1 alpha-2 country codes for SWIFT/BIC validation
 _VALID_COUNTRY_CODES = {
     "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ",
@@ -457,6 +547,10 @@ def validate_swift_bic(code: str) -> bool:
         return False
 
     code = code.upper().strip()
+
+    # Check against known false positives (common words)
+    if code in _SWIFT_FALSE_POSITIVES:
+        return False
 
     # Must be 8 or 11 characters
     if len(code) not in (8, 11):

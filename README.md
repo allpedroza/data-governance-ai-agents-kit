@@ -334,12 +334,31 @@ Sistema de IA para **detecção e anonimização de dados sensíveis** em texto 
 - Detecção de FINANCIAL (contas bancárias, PIX, criptomoedas)
 - Detecção de BUSINESS (projetos confidenciais, termos estratégicos)
 - Detecção de CREDENTIALS (API keys, tokens, secrets, senhas)
-- Detecção determinística (50+ padrões regex) + preditiva (heurísticas, checksum)
+- Detecção determinística (90+ padrões regex) + preditiva (heurísticas, checksum)
+- **🆕 Integração SpaCy**: NER com modelos treinados em português para maior precisão
+- **🆕 POS Tagging**: Distinção automática entre nomes próprios e verbos
 - Múltiplas estratégias de anonimização (REDACT, MASK, HASH, PARTIAL, ENCRYPT)
 - **Secure Vault**: Armazenamento criptografado AES-256 para mapeamentos originais/anonimizados
 - **Controle de Acesso**: 5 níveis de permissão (READ_ONLY, DECRYPT, FULL_DECRYPT, ADMIN, SUPER_ADMIN)
 - **Política de Retenção**: DELETE_ON_DECRYPT, RETAIN_DAYS, RETAIN_FOREVER
 - **Audit Log**: Trilha de auditoria tamper-evident com hash chain
+
+**🆕 Integração SpaCy (Opcional)**:
+
+O agente agora suporta SpaCy para maior precisão na detecção de nomes de pessoas, evitando falsos positivos como verbos e termos técnicos.
+
+```bash
+# Instalar SpaCy e modelo português
+pip install spacy
+python -m spacy download pt_core_news_md  # modelo médio (recomendado)
+# ou
+python -m spacy download pt_core_news_lg  # modelo grande (mais preciso)
+```
+
+Com SpaCy, o sistema:
+- Classifica entidades como PER (Pessoa), ORG (Organização), LOC (Localização)
+- Usa POS tagging para distinguir PROPN (nome próprio) de VERB (verbo)
+- Evita falsos positivos como "Critical Error", "Carlos comprou", "Sistema Falhou"
 
 **Documentação**: [sensitive_data_ner/README.md](sensitive_data_ner/README.md)
 

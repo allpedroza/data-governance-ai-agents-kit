@@ -77,9 +77,13 @@ PII_PATTERNS: Dict[str, EntityPatternConfig] = {
     "rg": EntityPatternConfig(
         name="rg",
         category=EntityCategory.PII,
-        pattern=r"\b\d{1,2}\.?\d{3}\.?\d{3}[-.]?[\dxX]\b",
+        # Brazilian RG: XX.XXX.XXX-X or variations
+        # Higher priority to match before generic patterns
+        pattern=r"\b(?:RG[-:\s]*)?(\d{1,2}\.?\d{3}\.?\d{3}[-.]?[\dxX])\b",
         description="Brazilian RG (Identity Card)",
-        locale="br"
+        locale="br",
+        priority=3,  # High priority
+        context_boost=0.3
     ),
 
     # US Documents
@@ -270,9 +274,13 @@ PHI_PATTERNS: Dict[str, EntityPatternConfig] = {
     "cpt_code": EntityPatternConfig(
         name="cpt_code",
         category=EntityCategory.PHI,
-        pattern=r"\b\d{5}[A-Z]?\b",
+        # CPT codes: 5 digits, often with letter suffix (e.g., 99213, 99214F)
+        # More specific pattern to avoid matching generic 5-digit numbers
+        # Require either: letter suffix OR CPT prefix OR specific ranges
+        pattern=r"\b(?:CPT[-:\s]*)?(?:(?:[0-8]\d{4}|9[0-8]\d{3}|990\d{2}|991\d{2}|992\d{2}|993\d{2}|994\d{2})[A-Z]|CPT[-:\s]*\d{5})\b",
         description="CPT Procedure Code",
-        context_boost=0.3
+        context_boost=0.4,
+        priority=1  # Lower priority than more specific patterns
     ),
 
     # Medical License Numbers
@@ -425,11 +433,12 @@ FINANCIAL_PATTERNS: Dict[str, EntityPatternConfig] = {
     "bank_account_br": EntityPatternConfig(
         name="bank_account_br",
         category=EntityCategory.FINANCIAL,
-        # More flexible pattern for Brazilian bank accounts
-        # Matches: "Ag: 0001 / CC: 98765-4", "AG 1234 CONTA 12345-6", etc.
-        pattern=r"\b(?:AG(?:ENCIA)?|Ag(?:[eê]ncia)?)[-:\s]*\d{3,5}[-\s/]*(?:\d[-\s/]*)?(?:C/?C|CONTA|Conta)[-:\s]*\d{4,12}[-]?\d?\b",
+        # Flexible pattern for Brazilian bank accounts
+        # Matches: "Ag 1234 CC 56789", "AG: 0001 / CC: 98765-4", "Agencia 1234 Conta 12345-6", etc.
+        pattern=r"\b(?:AG(?:[EÊ]NCIA)?|[Aa]g(?:[eê]ncia)?)[-:\s]*\d{3,5}[-\s/]*(?:\d[-\s/]*)?(?:C/?C|CONTA|[Cc]onta)[-:\s]*\d{4,12}[-]?\d?\b",
         description="Brazilian Bank Account (Agency + Account)",
-        locale="br"
+        locale="br",
+        priority=3  # Higher priority to match before generic patterns
     ),
     "routing_number": EntityPatternConfig(
         name="routing_number",
@@ -587,28 +596,32 @@ CREDENTIALS_PATTERNS: Dict[str, EntityPatternConfig] = {
     "github_token_classic": EntityPatternConfig(
         name="github_token_classic",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\bghp_[a-zA-Z0-9]{36}\b",
+        # GitHub classic PATs: ghp_ followed by 20-50 alphanumeric chars
+        pattern=r"\bghp_[a-zA-Z0-9]{20,50}\b",
         description="GitHub Personal Access Token (Classic)",
         priority=3
     ),
     "github_token_fine": EntityPatternConfig(
         name="github_token_fine",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\bgithub_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}\b",
+        # Fine-grained tokens: github_pat_ followed by variable length
+        pattern=r"\bgithub_pat_[a-zA-Z0-9_]{20,100}\b",
         description="GitHub Fine-Grained Token",
         priority=3
     ),
     "github_oauth": EntityPatternConfig(
         name="github_oauth",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\bgho_[a-zA-Z0-9]{36}\b",
+        # OAuth tokens: gho_ followed by 20-50 alphanumeric chars
+        pattern=r"\bgho_[a-zA-Z0-9]{20,50}\b",
         description="GitHub OAuth Access Token",
         priority=3
     ),
     "github_app_token": EntityPatternConfig(
         name="github_app_token",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\b(?:ghu|ghs)_[a-zA-Z0-9]{36}\b",
+        # App tokens: ghu_ or ghs_ followed by 20-50 alphanumeric chars
+        pattern=r"\b(?:ghu|ghs)_[a-zA-Z0-9]{20,50}\b",
         description="GitHub App Token",
         priority=3
     ),

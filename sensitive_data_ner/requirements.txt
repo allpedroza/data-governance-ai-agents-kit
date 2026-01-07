@@ -1,0 +1,19 @@
+# Core dependencies
+cryptography>=41.0.0
+
+# Optional: SpaCy for enhanced NER accuracy
+# Install Portuguese model after installing spacy:
+#   pip install spacy
+#   python -m spacy download pt_core_news_md
+#
+# For best accuracy, use the large model:
+#   python -m spacy download pt_core_news_lg
+#
+# SpaCy provides:
+# - Better person name detection (PER entity)
+# - Verb detection (POS tagging) to avoid false positives
+# - Entity disambiguation (ORG, LOC vs PER)
+spacy>=3.5.0; extra == "spacy"
+
+# Alternative: use smaller model for faster processing
+# python -m spacy download pt_core_news_sm
