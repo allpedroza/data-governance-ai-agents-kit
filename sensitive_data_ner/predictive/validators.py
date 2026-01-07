@@ -416,6 +416,72 @@ def validate_person_name(name: str) -> bool:
     return True
 
 
+# Valid ISO 3166-1 alpha-2 country codes for SWIFT/BIC validation
+_VALID_COUNTRY_CODES = {
+    "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ",
+    "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS",
+    "BT", "BV", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN",
+    "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE",
+    "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF",
+    "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM",
+    "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM",
+    "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC",
+    "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK",
+    "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ", "NA",
+    "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG",
+    "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW",
+    "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS",
+    "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO",
+    "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI",
+    "VN", "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW"
+}
+
+
+def validate_swift_bic(code: str) -> bool:
+    """
+    Validate SWIFT/BIC code structure.
+
+    SWIFT/BIC format:
+    - 4 letters: Bank code
+    - 2 letters: ISO 3166-1 alpha-2 country code
+    - 2 alphanumeric: Location code
+    - 3 alphanumeric (optional): Branch code
+
+    Args:
+        code: SWIFT/BIC code string
+
+    Returns:
+        True if valid structure, False otherwise
+    """
+    if not code:
+        return False
+
+    code = code.upper().strip()
+
+    # Must be 8 or 11 characters
+    if len(code) not in (8, 11):
+        return False
+
+    # First 4 characters must be letters (bank code)
+    if not code[:4].isalpha():
+        return False
+
+    # Characters 5-6 must be a valid country code
+    country_code = code[4:6]
+    if country_code not in _VALID_COUNTRY_CODES:
+        return False
+
+    # Characters 7-8 must be alphanumeric (location)
+    if not code[6:8].isalnum():
+        return False
+
+    # If 11 characters, last 3 must be alphanumeric (branch)
+    if len(code) == 11 and not code[8:11].isalnum():
+        return False
+
+    return True
+
+
 # Validator registry
 _VALIDATORS: dict[str, Callable[[str], bool]] = {
     "cpf": validate_cpf,
@@ -430,6 +496,7 @@ _VALIDATORS: dict[str, Callable[[str], bool]] = {
     "ip_address": validate_ip_address,
     "email": validate_email,
     "person_name": validate_person_name,
+    "swift_bic": validate_swift_bic,
 }
 
 

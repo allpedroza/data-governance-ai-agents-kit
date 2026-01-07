@@ -133,9 +133,12 @@ PII_PATTERNS: Dict[str, EntityPatternConfig] = {
     "phone_br": EntityPatternConfig(
         name="phone_br",
         category=EntityCategory.PII,
-        pattern=r"\b\(?\d{2}\)?[-.\s]?\d{4,5}[-.]?\d{4}\b",
+        # Matches various Brazilian phone formats:
+        # (11) 98765-4321, 11 98765-4321, 11987654321, +55 11 98765-4321
+        pattern=r"\b(?:\+55[-.\s]?)?\(?\d{2}\)?[-.\s]?\d{4,5}[-.\s]?\d{4}\b",
         description="Brazilian Phone Number",
-        locale="br"
+        locale="br",
+        priority=2  # Higher priority to match before generic patterns
     ),
     "passport": EntityPatternConfig(
         name="passport",
@@ -411,14 +414,20 @@ FINANCIAL_PATTERNS: Dict[str, EntityPatternConfig] = {
     "swift_bic": EntityPatternConfig(
         name="swift_bic",
         category=EntityCategory.FINANCIAL,
-        pattern=r"\b[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
+        # SWIFT/BIC: 4 letters (bank) + 2 letters (country ISO) + 2 alphanumeric (location) + optional 3 (branch)
+        # Must be case-sensitive to avoid matching common words
+        pattern=r"\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
         description="SWIFT/BIC Code",
-        priority=2
+        priority=2,
+        case_sensitive=True,  # Avoid matching words like "CONSEGUE", "CORRENTE"
+        has_validation=True  # Enable validation for country code check
     ),
     "bank_account_br": EntityPatternConfig(
         name="bank_account_br",
         category=EntityCategory.FINANCIAL,
-        pattern=r"\b(?:AG|AGENCIA)[-:\s]?\d{4}[-\s]?\d?[-\s]?(?:CC|CONTA)[-:\s]?\d{5,12}[-]?\d?\b",
+        # More flexible pattern for Brazilian bank accounts
+        # Matches: "Ag: 0001 / CC: 98765-4", "AG 1234 CONTA 12345-6", etc.
+        pattern=r"\b(?:AG(?:ENCIA)?|Ag(?:[eê]ncia)?)[-:\s]*\d{3,5}[-\s/]*(?:\d[-\s/]*)?(?:C/?C|CONTA|Conta)[-:\s]*\d{4,12}[-]?\d?\b",
         description="Brazilian Bank Account (Agency + Account)",
         locale="br"
     ),
@@ -722,18 +731,21 @@ CREDENTIALS_PATTERNS: Dict[str, EntityPatternConfig] = {
     "jwt_token": EntityPatternConfig(
         name="jwt_token",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\beyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b",
+        # JWT format: base64url.base64url.base64url (header.payload.signature)
+        # Also matches incomplete JWTs (2 parts) which may appear in logs
+        pattern=r"\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)?\b",
         description="JWT Token",
         priority=3
     ),
 
-    # Bearer Tokens
+    # Bearer Tokens (including JWTs)
     "bearer_token": EntityPatternConfig(
         name="bearer_token",
         category=EntityCategory.CREDENTIALS,
-        pattern=r"\b[Bb]earer\s+[a-zA-Z0-9_-]{20,}\b",
+        # Bearer followed by token (may contain dots for JWTs)
+        pattern=r"\b[Bb]earer\s+[a-zA-Z0-9_.-]{20,}\b",
         description="Bearer Token",
-        priority=2
+        priority=3  # High priority - credentials are critical
     ),
 
     # Basic Auth (base64)
