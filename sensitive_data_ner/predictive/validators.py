@@ -320,16 +320,24 @@ def validate_email(email: str) -> bool:
     return True
 
 
-# Common Portuguese/Spanish words that are NOT names (false positive exclusions)
+# Common Portuguese/Spanish/English words that are NOT names (false positive exclusions)
 _NOT_PERSON_NAMES = {
     # Common nouns and verbs that may start with capital (sentence start)
-    "erro", "erro", "token", "acesso", "usuario", "usuário", "cliente", "sistema",
+    "erro", "token", "acesso", "usuario", "usuário", "cliente", "sistema",
     "cartao", "cartão", "pagamento", "autenticacao", "autenticação", "falha",
     "falhou", "portador", "titular", "conta", "senha", "login", "logout",
     "sessao", "sessão", "servico", "serviço", "endpoint", "api", "request",
     "response", "codigo", "código", "chave", "valor", "dados", "arquivo",
     "processo", "processamento", "transacao", "transação", "compra", "venda",
     "produto", "item", "pedido", "ordem", "status", "estado", "tipo",
+    # English technical terms that may appear capitalized
+    "critical", "error", "warning", "info", "debug", "fatal", "success",
+    "failed", "failure", "exception", "message", "alert", "notice",
+    "invalid", "valid", "null", "undefined", "unknown", "default",
+    "system", "server", "client", "user", "admin", "root", "guest",
+    "public", "private", "internal", "external", "local", "remote",
+    "input", "output", "result", "return", "value", "data", "response",
+    "request", "query", "update", "delete", "insert", "select", "create",
     # Technical terms
     "string", "integer", "float", "boolean", "array", "object", "null",
     "true", "false", "undefined", "function", "class", "method", "variable",
@@ -337,18 +345,22 @@ _NOT_PERSON_NAMES = {
     "final", "inicial", "primeiro", "ultimo", "último", "novo", "antigo",
     "grande", "pequeno", "alto", "baixo", "bom", "mau", "melhor", "pior",
     # Common verbs (conjugated forms that might match)
-    "erro", "errou", "falha", "falhou", "sucesso", "processou", "validou",
+    "errou", "falhou", "sucesso", "processou", "validou",
 }
 
 # Common phrase patterns that are NOT names
 _NOT_NAME_PATTERNS = [
     r"^erro\s",  # "Erro ao..."
+    r"^error\s",  # "Error in..."
+    r"^critical\s",  # "Critical Error..."
+    r"^warning\s",  # "Warning:..."
     r"^falha\s",  # "Falha na..."
     r"^token\s",  # "Token de..."
     r"^cartao\s",  # "Cartão de..."
     r"^cartão\s",
     r"\s+(de|do|da)\s+(acesso|pagamento|autenticacao|autenticação|sistema|cliente|usuario|usuário)$",
     r"^(usuario|usuário)\s+\w+$",  # "Usuário X" where X is not a name
+    r"^(system|server|client|user)\s+\w+$",  # "System Error", "Server Fault"
 ]
 
 
@@ -416,6 +428,25 @@ def validate_person_name(name: str) -> bool:
     return True
 
 
+# Common Portuguese/Spanish words that accidentally match SWIFT/BIC pattern
+# These words have 8 characters, all uppercase letters, and happen to contain
+# what looks like a valid country code in positions 4-5
+_SWIFT_FALSE_POSITIVES = {
+    "CONSEGUE",  # Portuguese verb "consegue" - contains EG (Egypt)
+    "CONSIGNA",  # Spanish/Portuguese - contains IG (not valid but similar pattern)
+    "CONSELHE",  # Portuguese - contains EL (not valid)
+    "CONSEJOS",  # Spanish - contains EJ (not valid)
+    "CONSULTE",  # Portuguese - contains UL (not valid)
+    "CONTINUE",  # English/Portuguese - contains IN (India)
+    "CONTEXTO",  # Portuguese - contains EX (not valid)
+    "CONTRATE",  # Portuguese - contains RA (not valid)
+    "CONTROLE",  # Portuguese - contains RO (Romania)
+    "CONVERSE",  # English/Portuguese - contains VE (Venezuela)
+    "COMPLETE",  # English - contains PL (Poland)
+    "COMPARTE",  # Spanish - contains PA (Panama)
+    "COMPROVE",  # Portuguese - contains RO (Romania)
+}
+
 # Valid ISO 3166-1 alpha-2 country codes for SWIFT/BIC validation
 _VALID_COUNTRY_CODES = {
     "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ",
@@ -457,6 +488,10 @@ def validate_swift_bic(code: str) -> bool:
         return False
 
     code = code.upper().strip()
+
+    # Check against known false positives (common words)
+    if code in _SWIFT_FALSE_POSITIVES:
+        return False
 
     # Must be 8 or 11 characters
     if len(code) not in (8, 11):
