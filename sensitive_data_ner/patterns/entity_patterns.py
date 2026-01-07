@@ -142,7 +142,8 @@ PII_PATTERNS: Dict[str, EntityPatternConfig] = {
         pattern=r"\b(?:\+55[-.\s]?)?\(?\d{2}\)?[-.\s]?\d{4,5}[-.\s]?\d{4}\b",
         description="Brazilian Phone Number",
         locale="br",
-        priority=2  # Higher priority to match before generic patterns
+        priority=2,  # Higher priority to match before generic patterns
+        context_boost=0.3  # Boost when "tel", "telefone", etc. nearby
     ),
     "passport": EntityPatternConfig(
         name="passport",
@@ -748,7 +749,8 @@ CREDENTIALS_PATTERNS: Dict[str, EntityPatternConfig] = {
         # Also matches incomplete JWTs (2 parts) which may appear in logs
         pattern=r"\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)?\b",
         description="JWT Token",
-        priority=3
+        priority=3,
+        context_boost=0.3  # Boost when "jwt", "token", "authorization" nearby
     ),
 
     # Bearer Tokens (including JWTs)
@@ -758,7 +760,8 @@ CREDENTIALS_PATTERNS: Dict[str, EntityPatternConfig] = {
         # Bearer followed by token (may contain dots for JWTs)
         pattern=r"\b[Bb]earer\s+[a-zA-Z0-9_.-]{20,}\b",
         description="Bearer Token",
-        priority=3  # High priority - credentials are critical
+        priority=3,  # High priority - credentials are critical
+        context_boost=0.3  # Boost when "authorization", "header", etc. nearby
     ),
 
     # Basic Auth (base64)
@@ -872,7 +875,9 @@ CONTEXT_KEYWORDS: Dict[EntityCategory, Dict[str, Set[str]]] = {
             "carteira de identidade", "documento", "identidade",
             "nome completo", "full name", "data de nascimento", "birth date",
             "endereço", "address", "telefone", "phone", "celular", "mobile",
-            "email", "e-mail", "correio eletrônico"
+            "email", "e-mail", "correio eletrônico",
+            # Abbreviated forms
+            "tel", "fone", "cel", "whatsapp", "whats", "zap",
         },
         "medium_confidence": {
             "cliente", "customer", "usuário", "user", "pessoa", "person",
@@ -961,13 +966,17 @@ CONTEXT_KEYWORDS: Dict[EntityCategory, Dict[str, Set[str]]] = {
             "private key", "chave privada", "access key", "secret key",
             "auth token", "bearer", "jwt", "oauth",
             "aws_access", "aws_secret", "openai", "anthropic",
-            "github_token", "gitlab", "stripe", "twilio"
+            "github_token", "gitlab", "stripe", "twilio",
+            # Portuguese terms
+            "autorização", "autorizacao", "chave de api", "chave api",
         },
         "medium_confidence": {
             "authorization", "autenticação", "authentication",
             "connection string", "database url", "redis url",
             "mongodb", "postgres", "mysql", "webhook",
-            "slack", "discord", "sendgrid", "mailchimp"
+            "slack", "discord", "sendgrid", "mailchimp",
+            # Portuguese terms
+            "header", "cabeçalho", "permissão", "permissao",
         },
         "low_confidence": {
             "config", "configuração", "environment", "env",
