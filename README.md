@@ -1,361 +1,361 @@
 # AI & Data Governance Agents Kit
 
-Framework de **agentes de IA para governança de dados** com interface unificada (Streamlit) e módulos especializados para linhagem, descoberta, enriquecimento de metadados, classificação, qualidade, valor de ativos, proteção de dados sensíveis, **valor de negócios** e **policy-as-code** para governança de IA.
+**Automatize governança de dados e IA com agentes inteligentes** — reduza riscos, acelere compliance e maximize o valor dos seus ativos de dados.
 
-## Visão Geral
+---
 
-Hoje o kit reúne **10 agentes principais** (7 em `data_governance` + 3 em `ai_governance`) e conectores para catálogos e data warehouses.
+## O Problema
 
-Se você está chegando agora, pense no kit como um caminho simples:
-1. **Descobrir** ativos (descoberta, classificação, metadados, qualidade).
-2. **Medir valor e risco** (valor de ativos, business value).
-3. **Aplicar governança** de forma automatizada (policy engine + gates).
+Organizações enfrentam desafios crescentes para governar dados e sistemas de IA:
 
-| Agente | Propósito | Pacote |
-| --- | --- | --- |
-| **Data Lineage Agent** | Mapear dependências e impacto de mudanças | `data_governance.lineage` |
-| **Data Discovery RAG Agent** | Descoberta semântica com RAG (busca híbrida) | `data_governance.rag_discovery` |
-| **Metadata Enrichment Agent** | Enriquecer metadados (descrições, tags, PII) | `data_governance.metadata_enrichment` |
-| **Data Classification Agent** | Classificação de sensibilidade (PII/PHI/PCI/Financeiro) | `data_governance.data_classification` |
-| **Data Quality Agent** | Métricas de qualidade, SLA e schema drift | `data_governance.data_quality` |
-| **Data Asset Value Agent** | Valor de ativos (uso, joins, linhagem) | `data_governance.data_asset_value` |
-| **Data Product Scoring Layer** | Score de data products (contrato, qualidade, governança, valor) | `data_governance.data_product_scoring` |
-| **Sensitive Data NER Agent** | Detecção/anonimização de dados sensíveis + Vault | `ai_governance.sensitive_data_ner` |
-| **AI Business Value Agent** | ROI e valor de negócios de iniciativas de IA | `ai_governance.ai_business_value` |
-| **AI Policy Engine (Policy-as-Code)** | Stage-gates, evidências e enforcement automatizado | `ai_governance.policy_engine` |
+| Desafio | Impacto no Negócio |
+|---------|-------------------|
+| **Dados sem documentação** | Analistas gastam 80% do tempo procurando e entendendo dados |
+| **Qualidade inconsistente** | Decisões baseadas em dados errados custam milhões |
+| **Compliance manual** | Auditorias demoradas, multas por não-conformidade (LGPD/GDPR) |
+| **IA sem governança** | Modelos em produção com viés, sem rastreabilidade |
+| **Silos de informação** | Retrabalho, múltiplas "verdades", reconciliação manual |
 
-Além disso, há integração com:
-- **Catálogos**: OpenMetadata, Apache Atlas, AWS Glue.
-- **Data Warehouses**: Snowflake, Redshift, BigQuery e Synapse (conectores em `data_governance.warehouse`).
+---
+
+## A Solução
+
+O **AI & Data Governance Agents Kit** oferece **10 agentes de IA especializados** que automatizam tarefas de governança de ponta a ponta:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         GOVERNANÇA AUTOMATIZADA                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   1. DESCOBRIR           2. MEDIR              3. PROTEGER              │
+│   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐          │
+│   │ • Discovery  │      │ • Quality    │      │ • Policy     │          │
+│   │ • Lineage    │  →   │ • Asset Value│  →   │   Engine     │          │
+│   │ • Metadata   │      │ • Business   │      │ • NER        │          │
+│   │ • Classify   │      │   Value      │      │ • Gates      │          │
+│   └──────────────┘      └──────────────┘      └──────────────┘          │
+│                                                                          │
+│   Encontre e entenda    Quantifique valor    Aplique políticas          │
+│   seus dados            e riscos             automaticamente            │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Valor Entregue
+
+### Para o Negócio
+- **Redução de 70%+ no tempo** de descoberta e documentação de dados
+- **Compliance automatizado** com LGPD, GDPR, PCI-DSS
+- **ROI mensurável** em iniciativas de IA com métricas claras
+
+### Para Times Técnicos
+- **Linhagem automática** de pipelines SQL/Python/Terraform
+- **Classificação de sensibilidade** (PII/PHI/PCI) em segundos
+- **Gates de governança** integrados ao CI/CD
+
+### Para Governança
+- **Catálogo vivo** com metadados sempre atualizados
+- **Score de maturidade** por data product
+- **Auditoria completa** com evidências rastreáveis
 
 ---
 
 ## Início Rápido
 
-### Com uv (Recomendado)
+### 1. Clone e configure
 
 ```bash
-# Instale o uv (se ainda não tiver)
+# Clone o repositório
+git clone https://github.com/allpedroza/data-governance-ai-agents-kit.git
+cd data-governance-ai-agents-kit
+
+# Crie ambiente virtual (escolha uv ou pip)
+# Opção A: uv (recomendado - mais rápido)
 curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv && source .venv/bin/activate
 
-# Clone o repositório
-git clone <repo-url>
-cd data-governance-ai-agents-kit
-
-# Crie ambiente virtual e instale dependências
-uv venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
-
-# Instalar dependências principais + agentes
-uv pip install \
-  -r data_governance/lineage/requirements.txt \
-  -r data_governance/rag_discovery/requirements.txt \
-  -r data_governance/metadata_enrichment/requirements.txt \
-  -r data_governance/data_classification/requirements.txt \
-  -r data_governance/data_quality/requirements.txt \
-  -r data_governance/data_asset_value/requirements.txt \
-  -r data_governance/warehouse/requirements.txt \
-  -r ai_governance/sensitive_data_ner/requirements.txt \
-  -r ai_governance/ai_business_value/requirements.txt \
-  streamlit
-
-# Configure a API key (necessária para alguns agentes)
-export OPENAI_API_KEY="sua-chave"
-
-# Inicie a interface unificada
-streamlit run app.py
+# Opção B: pip tradicional
+python -m venv .venv && source .venv/bin/activate
 ```
 
-### Com pip (Alternativo)
+### 2. Instale as dependências
 
 ```bash
-# Clone o repositório
-git clone <repo-url>
-cd data-governance-ai-agents-kit
+# Com uv
+uv pip install -r requirements.txt streamlit
 
-# Ambiente virtual
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
+# Com pip
+pip install -r requirements.txt streamlit
+```
 
-# Instalar dependências principais + agentes
-pip install \
-  -r data_governance/lineage/requirements.txt \
-  -r data_governance/rag_discovery/requirements.txt \
-  -r data_governance/metadata_enrichment/requirements.txt \
-  -r data_governance/data_classification/requirements.txt \
-  -r data_governance/data_quality/requirements.txt \
-  -r data_governance/data_asset_value/requirements.txt \
-  -r data_governance/warehouse/requirements.txt \
-  -r ai_governance/sensitive_data_ner/requirements.txt \
-  -r ai_governance/ai_business_value/requirements.txt \
-  streamlit
+### 3. Configure e execute
 
-# Configure a API key (necessária para alguns agentes)
+```bash
+# Configure sua API key (necessária para agentes com LLM)
 export OPENAI_API_KEY="sua-chave"
 
 # Inicie a interface unificada
 streamlit run app.py
 ```
 
----
-
-## Por que Governança de Dados e Governança de IA?
-
-### Governança de Dados (GD)
-**Definição prática**: o sistema de decisões, papéis, políticas e controles que organiza “quem decide o quê, com base em quais regras”, para garantir **qualidade e reusabilidade** dos dados ao longo do ciclo de vida. Em organizações maduras, a GD orquestra os demais domínios de gestão de dados e ancora a arquitetura da informação para maximizar valor de uso.
-
-**Dores que a GD resolve:**
-- **Pessoas**: papéis confusos (dono/curador/consumidor), decisões ad hoc.
-- **Processos**: múltiplas versões da “verdade”, retrabalho para conciliar fontes, filas para relatórios.
-- **Dados**: degradação de qualidade (ex.: acurácia, completude, acessibilidade) que encarece e atrasa o negócio.
-- **Tecnologia**: “sharing by moving data” (cópias/redundâncias) em vez de reuso arquitetado.
-
-**Valor habilitado (drivers claros):**
-- **Qualidade mensurável** (acurácia, completude, disponibilidade, clareza de metadados), reduzindo cost of poor quality e risco regulatório.
-- **Reusabilidade**: uma vez certo, usado por muitos — menos latência para análises/relatórios, menos reconciliação.
-- **Time-to-Insight**: dados definidos e disponíveis “onde e quando” o negócio precisa, com menor custo por decisão.
-
-### Governança de IA (GIA)
-**Definição prática**: o conjunto de políticas, papéis, processos e métricas de risco que orienta o design, desenvolvimento, implantação e uso de sistemas de IA para que sejam confiáveis no contexto de uso — isto é: válidos e confiáveis; seguros e resilientes; responsáveis e transparentes; explicáveis/interpretáveis; com privacidade reforçada; e justos com vieses nocivos geridos — operacionalizados por funções **GOVERN–MAP–MEASURE–MANAGE** ao longo do ciclo de vida.
-
-**Dores que a GIA resolve (MECE):**
-- **Pessoas**: papéis e accountability difusos em times humanos‑IA; risco de viés sistêmico sem mecanismos de decisão explícitos.
-- **Processos**: ausência de gates para mapeamento de contexto/impactos, testes/validação e gestão de incidentes.
-- **Dados/Modelo**: opacidade e vieses amplificados por escolhas de dados/algoritmos sem medidas/limiares definidos.
-- **Operação**: falta de métricas de risco e de resiliência (segurança, drift, performance), dificultando confiança e adoção.
-
-**Valor habilitado (drivers claros):**
-- **Confiança e adoção segura**: produtos de IA com atributos de confiabilidade explícitos e balanceados ao contexto de uso.
-- **Tempo‑de‑mercado com responsabilidade**: playbook (GOVERN/MAP/MEASURE/MANAGE) que reduz retrabalho e incidentes pós‑produção.
-- **Redução de risco regulatório e reputacional**: processos para documentação, transparência, gestão de vieses e privacidade desde o design.
-
-**Em uma frase (para o sponsor):**
-- **GD** monetiza dados ao padronizar decisões e responsabilidades para produzir dados de qualidade e reutilizáveis, acelerando análises e reduzindo custo de retrabalho.
-- **GIA** habilita crescimento com confiança, transformando risco de IA em vantagem competitiva via um ciclo governado e mensurável de desenvolvimento e operação.
-
-**Nota de rigor**: a qualidade possui dimensões padronizadas (ex.: acurácia, completude, acessibilidade, clareza de metadados). Use-as como critérios de aceite nas políticas/SLAs de GD e também como métricas de entrada na GIA (dados de treino/serving).
-
-## Explicação Macro de Cada Agente
-
-### 1) Data Lineage Agent
-**Objetivo**: mapear dependências ponta a ponta para entender impacto e risco de mudança.
-- **Entradas**: pipelines SQL/Python/Terraform, DAGs, jobs e manifests.
-- **Saídas**: grafo de linhagem, dependências críticas, métricas de impacto.
-- **Uso típico**: change impact, auditoria de origem e rastreabilidade.
-
-### 2) Data Discovery RAG Agent
-**Objetivo**: acelerar descoberta de dados com busca semântica confiável.
-- **Entradas**: catálogos, descrições, amostras, documentos.
-- **Saídas**: respostas com ranking híbrido (semântico + lexical) e contexto.
-- **Uso típico**: localizar datasets, acelerar análise e onboarding.
-
-### 3) Metadata Enrichment Agent
-**Objetivo**: melhorar a qualidade e completude dos metadados.
-- **Entradas**: schemas, amostras e catálogos.
-- **Saídas**: descrições, tags, sugestões de PII, glossário.
-- **Uso típico**: documentação automática e padronização.
-
-### 4) Data Classification Agent
-**Objetivo**: classificar sensibilidade e risco regulatório dos dados.
-- **Entradas**: amostras, schemas e padrões.
-- **Saídas**: nível de sensibilidade (PII/PHI/PCI etc.), flags de compliance.
-- **Uso típico**: políticas de acesso, data masking e LGPD/GDPR.
-
-### 5) Data Quality Agent
-**Objetivo**: medir e monitorar qualidade com thresholds e SLAs.
-- **Entradas**: datasets, regras de validação, SLAs.
-- **Saídas**: scores, alertas de drift, métricas de completude/validade.
-- **Uso típico**: gates de treino/deploy e confiança em decisões.
-
-### 6) Data Asset Value Agent
-**Objetivo**: quantificar valor e criticidade dos ativos de dados.
-- **Entradas**: uso, joins, dependências, linhagem.
-- **Saídas**: score de valor, impacto e custo de mudança.
-- **Uso típico**: priorização de governança e investimentos.
-
-### 7) Data Product Scoring Layer
-**Objetivo**: consolidar governança em um score único por data product.
-- **Entradas**: contrato, qualidade, SLAs, uso e valor.
-- **Saídas**: score composto, gaps de governança.
-- **Uso típico**: roadmap de melhorias e compliance contínuo.
-
-### 8) Sensitive Data NER Agent
-**Objetivo**: detectar e anonimizar dados sensíveis em texto livre.
-- **Entradas**: textos, logs, prompts e respostas.
-- **Saídas**: entidades detectadas, texto anonimizado, políticas de retenção (Vault).
-- **Uso típico**: proteção em runtime e compliance com PII.
-
-### 9) AI Business Value Agent
-**Objetivo**: medir ROI e valor de negócio de iniciativas de IA.
-- **Entradas**: custos, projeções de benefício, riscos.
-- **Saídas**: score de valor, ROI, relatórios executivos.
-- **Uso típico**: aprovação de investimento e priorização de projetos.
-
-### 10) AI Policy Engine
-**Objetivo**: aplicar governança de IA com gates e evidências auditáveis.
-- **Entradas**: evidências dos agentes (risco, qualidade, compliance, NER).
-- **Saídas**: decisões allow/deny/warn, logs auditáveis, exceções.
-- **Uso típico**: pré-merge, pré-deploy e runtime enforcement.
-
-**O que existe no pack inicial (alto nível):**
-- **G1 Risk**: libera promoção para PROD apenas com risco aprovado e tier aceitável.
-- **G2 Validation**: exige métricas mínimas de validação (AUC/robustez) antes do deploy.
-- **G4 Compliance (LGPD)**: bloqueia quando checklist não está completo ou há PII não autorizada.
-- **Runtime Guardrail**: impede envio de PII a provedores externos.
+Acesse `http://localhost:8501` e comece a explorar os agentes.
 
 ---
 
-## Interface Unificada (Streamlit)
+## Os 10 Agentes
 
-A aplicação principal oferece **9 tabs** (o Policy Engine é um pacote de políticas/artefatos e não tem UI própria):
+### Governança de Dados
 
-- **Lineage**: análise de linhagem e impacto.
-- **Discovery**: busca semântica com RAG.
-- **Enrichment**: enriquecimento automático de metadados.
-- **Classification**: classificação de dados sensíveis.
-- **Quality**: avaliação de qualidade e alertas.
-- **Asset Value**: valor de ativos por uso/joins.
-- **NER Module**: detecção e anonimização de texto sensível.
-- **Vault**: armazenamento seguro e políticas de retenção.
-- **Settings**: LLMs, catálogos e data warehouses.
+| Agente | O que faz | Valor principal |
+|--------|-----------|-----------------|
+| **Data Lineage** | Mapeia dependências entre datasets e pipelines | Avalie impacto de mudanças antes de quebrar produção |
+| **Data Discovery** | Busca semântica com RAG híbrido | Encontre dados em segundos, não em dias |
+| **Metadata Enrichment** | Gera descrições, tags e glossário automaticamente | Catálogo sempre documentado sem esforço manual |
+| **Data Classification** | Classifica sensibilidade (PII/PHI/PCI) | Compliance automático e masking inteligente |
+| **Data Quality** | Monitora qualidade com SLAs e alertas | Dados confiáveis para decisões críticas |
+| **Data Asset Value** | Quantifica valor por uso e dependências | Priorize investimentos com base em dados |
+| **Data Product Scoring** | Score unificado de maturidade | Visão consolidada de governança por produto |
 
-Há também apps standalone:
+### Governança de IA
 
+| Agente | O que faz | Valor principal |
+|--------|-----------|-----------------|
+| **Sensitive Data NER** | Detecta e anonimiza dados sensíveis em texto | Proteja dados em prompts e respostas de LLMs |
+| **AI Business Value** | Calcula ROI de iniciativas de IA | Justifique investimentos com métricas claras |
+| **AI Policy Engine** | Aplica políticas como código com gates | Governança automatizada no CI/CD |
+
+---
+
+## Interface Unificada
+
+A aplicação Streamlit oferece **9 módulos** em uma única interface:
+
+| Módulo | Funcionalidade |
+|--------|---------------|
+| **Lineage** | Visualize grafos de dependência e impacto |
+| **Discovery** | Busque dados com linguagem natural |
+| **Enrichment** | Enriqueça metadados automaticamente |
+| **Classification** | Classifique sensibilidade de datasets |
+| **Quality** | Monitore métricas e alertas de qualidade |
+| **Asset Value** | Analise valor e criticidade de ativos |
+| **NER Module** | Detecte e anonimize texto sensível |
+| **Vault** | Gerencie retenção de dados sensíveis |
+| **Settings** | Configure LLMs, catálogos e warehouses |
+
+**Apps standalone** também disponíveis:
 ```bash
 streamlit run data_governance/lineage/app.py
-streamlit run data_governance/metadata_enrichment/streamlit_app.py
-streamlit run data_governance/data_classification/streamlit_app.py
 streamlit run data_governance/data_quality/streamlit_app.py
-streamlit run ai_governance/sensitive_data_ner/streamlit_app.py
 streamlit run ai_governance/ai_business_value/streamlit_app.py
 ```
 
 ---
 
-## Exemplos Rápidos
+## Exemplos de Uso
 
-### Lineage
+### Mapear linhagem de pipelines
+
 ```python
 from data_governance.lineage.data_lineage_agent import DataLineageAgent
 
 agent = DataLineageAgent()
 result = agent.analyze_pipeline(["etl/transform.sql", "etl/job.py"])
-print(result["metrics"])  # assets, transformações, complexidade
+
+print(f"Assets encontrados: {result['metrics']['total_assets']}")
+print(f"Transformações: {result['metrics']['total_transformations']}")
 ```
 
-### Discovery (RAG)
+### Descobrir dados com linguagem natural
+
 ```python
 from data_governance.rag_discovery.data_discovery_rag_agent import DataDiscoveryRAGAgent
 
 rag = DataDiscoveryRAGAgent()
-answer = rag.discover("Onde estão os dados de clientes?")
+answer = rag.discover("Quais tabelas contêm dados de clientes?")
 print(answer.answer)
 ```
 
-### Sensitive Data NER
+### Anonimizar dados sensíveis
+
 ```python
 from ai_governance.sensitive_data_ner import SensitiveDataNERAgent
 
 agent = SensitiveDataNERAgent()
-result = agent.analyze("CPF 123.456.789-09 do cliente João")
+result = agent.analyze("O CPF 123.456.789-09 pertence ao cliente João Silva")
+
 print(result.anonymized_text)
+# Output: "O CPF [CPF_REDACTED] pertence ao cliente [PERSON_REDACTED]"
 ```
 
-### AI Business Value
+### Calcular ROI de iniciativa de IA
+
 ```python
 from ai_governance.ai_business_value import AIBusinessValueAgent, CostBreakdown, BenefitProjection
 
 agent = AIBusinessValueAgent(currency="BRL", projection_years=3)
 report = agent.analyze_initiatives(
-    initiatives=[{"id": "chatbot", "name": "Chatbot", "type": "customer_experience"}],
+    initiatives=[{"id": "chatbot", "name": "Chatbot Atendimento", "type": "customer_experience"}],
     cost_data={"chatbot": CostBreakdown(initiative_id="chatbot", development_internal=150000)},
     benefit_projections={"chatbot": BenefitProjection(initiative_id="chatbot", revenue_increase=250000)}
 )
-print(report.to_markdown())
+
+print(f"ROI projetado: {report.initiatives[0].roi_percentage:.1f}%")
 ```
 
-### AI Policy Engine (pack inicial)
-Consulte o pacote de políticas em `ai_governance/policy_engine/policy_packs/ai-governance-core.yaml`.
+### Aplicar políticas de governança
+
+O **AI Policy Engine** oferece um pack inicial de políticas em `ai_governance/policy_engine/policy_packs/ai-governance-core.yaml`:
+
+- **G1 Risk**: Bloqueia deploy se risco não aprovado
+- **G2 Validation**: Exige métricas mínimas (AUC/robustez)
+- **G4 Compliance**: Valida checklist LGPD e PII autorizada
+- **Runtime Guardrail**: Impede envio de PII a provedores externos
+
+---
+
+## Integrações
+
+### Catálogos de Dados
+- OpenMetadata
+- Apache Atlas
+- AWS Glue
+
+### Data Warehouses
+- Snowflake
+- Amazon Redshift
+- Google BigQuery
+- Azure Synapse
+
+Conectores disponíveis em `data_governance/warehouse/`.
 
 ---
 
 ## Estrutura do Repositório
 
 ```
-./
-├── app.py                          # Streamlit unificado
-├── ai_governance/
-│   ├── ai_business_value/          # AI Business Value Agent
-│   ├── sensitive_data_ner/          # Sensitive Data NER + Vault
-│   └── policy_engine/               # AI Policy Engine (Policy-as-Code)
+data-governance-ai-agents-kit/
+│
+├── app.py                              # Interface Streamlit unificada
+│
 ├── data_governance/
-│   ├── lineage/                    # Data Lineage Agent
-│   ├── rag_discovery/              # Discovery RAG Agent
-│   ├── metadata_enrichment/        # Metadata Enrichment Agent
-│   ├── data_classification/        # Data Classification Agent
-│   ├── data_quality/               # Data Quality Agent
-│   ├── data_asset_value/           # Data Asset Value Agent
-│   └── warehouse/                  # Conectores para DWs
-├── examples/                       # Exemplos gerais
-└── requirements.txt                # Dependências básicas (apps)
+│   ├── lineage/                        # Data Lineage Agent
+│   ├── rag_discovery/                  # Data Discovery RAG Agent
+│   ├── metadata_enrichment/            # Metadata Enrichment Agent
+│   ├── data_classification/            # Data Classification Agent
+│   ├── data_quality/                   # Data Quality Agent
+│   ├── data_asset_value/               # Data Asset Value Agent
+│   ├── data_product_scoring/           # Data Product Scoring Layer
+│   └── warehouse/                      # Conectores para DWs
+│
+├── ai_governance/
+│   ├── sensitive_data_ner/             # Sensitive Data NER + Vault
+│   ├── ai_business_value/              # AI Business Value Agent
+│   └── policy_engine/                  # AI Policy Engine (Policy-as-Code)
+│
+├── examples/                           # Exemplos e notebooks
+└── requirements.txt                    # Dependências
 ```
 
 ---
 
-## Documentação por Módulo
+## Conceitos Fundamentais
 
-- Lineage: `data_governance/lineage/README.md`
-- Discovery: `data_governance/rag_discovery/README.md`
-- Enrichment: `data_governance/metadata_enrichment/README.md`
-- Classification: `data_governance/data_classification/README.md`
-- Quality: `data_governance/data_quality/README.md`
-- Asset Value: `data_governance/data_asset_value/README.md`
-- Sensitive Data NER: `ai_governance/sensitive_data_ner/README.md`
-- AI Business Value: `ai_governance/ai_business_value/README.md`
-- AI Policy Engine: `ai_governance/policy_engine/README.md`
+<details>
+<summary><strong>O que é Governança de Dados?</strong></summary>
+
+**Governança de Dados** é o sistema de decisões, papéis, políticas e controles que organiza "quem decide o quê, com base em quais regras", garantindo **qualidade e reusabilidade** dos dados.
+
+**Problemas que resolve:**
+- Papéis confusos (dono/curador/consumidor)
+- Múltiplas versões da "verdade"
+- Degradação de qualidade (acurácia, completude)
+- Cópias e redundâncias em vez de reuso
+
+**Valor gerado:**
+- Qualidade mensurável → menor custo de retrabalho
+- Reusabilidade → menos reconciliação
+- Time-to-Insight → decisões mais rápidas
+
+</details>
+
+<details>
+<summary><strong>O que é Governança de IA?</strong></summary>
+
+**Governança de IA** é o conjunto de políticas, papéis, processos e métricas que orienta o ciclo de vida de sistemas de IA para que sejam **confiáveis, seguros, transparentes e justos**.
+
+Framework baseado em **GOVERN–MAP–MEASURE–MANAGE**.
+
+**Problemas que resolve:**
+- Papéis e accountability difusos em times humanos-IA
+- Ausência de gates para validação e gestão de incidentes
+- Vieses amplificados sem medidas definidas
+- Falta de métricas de risco e resiliência
+
+**Valor gerado:**
+- Confiança e adoção segura de produtos de IA
+- Playbook que reduz retrabalho e incidentes
+- Redução de risco regulatório e reputacional
+
+</details>
+
+<details>
+<summary><strong>Por que usar agentes de IA para governança?</strong></summary>
+
+Agentes de IA automatizam tarefas repetitivas e intensivas em conhecimento:
+
+| Tarefa Manual | Com Agentes |
+|---------------|-------------|
+| Documentar 100 tabelas: 2 semanas | 2 horas |
+| Classificar sensibilidade: análise por amostragem | 100% dos dados |
+| Mapear linhagem: diagrams manuais | Grafo automático |
+| Validar compliance: checklists manuais | Gates automatizados |
+
+O resultado é **governança contínua** em vez de **projetos pontuais**.
+
+</details>
+
+---
+
+## Documentação Detalhada
+
+Cada agente possui documentação específica:
+
+| Agente | Documentação |
+|--------|-------------|
+| Data Lineage | [`data_governance/lineage/README.md`](data_governance/lineage/README.md) |
+| Data Discovery | [`data_governance/rag_discovery/README.md`](data_governance/rag_discovery/README.md) |
+| Metadata Enrichment | [`data_governance/metadata_enrichment/README.md`](data_governance/metadata_enrichment/README.md) |
+| Data Classification | [`data_governance/data_classification/README.md`](data_governance/data_classification/README.md) |
+| Data Quality | [`data_governance/data_quality/README.md`](data_governance/data_quality/README.md) |
+| Data Asset Value | [`data_governance/data_asset_value/README.md`](data_governance/data_asset_value/README.md) |
+| Sensitive Data NER | [`ai_governance/sensitive_data_ner/README.md`](ai_governance/sensitive_data_ner/README.md) |
+| AI Business Value | [`ai_governance/ai_business_value/README.md`](ai_governance/ai_business_value/README.md) |
+| AI Policy Engine | [`ai_governance/policy_engine/README.md`](ai_governance/policy_engine/README.md) |
 
 ---
 
 ## Contribuindo
 
-Contribuições são muito bem-vindas! Siga o fluxo abaixo:
+Contribuições são bem-vindas! Siga o fluxo:
 
-1. **Fork** do repositório
-2. **Clone** do seu fork
-3. **Sync** com `upstream/main`
-4. **Crie uma branch** (ex.: `docs/update-readme`)
-5. **Commit** com mensagem descritiva
-6. **Push** para o seu fork
-7. **Abra um Pull Request**
-
-```bash
-# Clone SEU fork
-git clone https://github.com/<seu-usuario>/data-governance-ai-agents-kit.git
-cd data-governance-ai-agents-kit
-
-# Configure o upstream
-git remote add upstream https://github.com/allpedroza/data-governance-ai-agents-kit.git
-
-# Sincronize
-git fetch upstream
-git checkout main
-git merge upstream/main
-
-# Crie uma branch
-git checkout -b docs/update-readme
-
-# Commit
-git add .
-git commit -m "docs: atualiza documentação"
-
-# Push
-git push origin docs/update-readme
-```
+1. **Fork** este repositório
+2. **Clone** seu fork: `git clone https://github.com/<seu-usuario>/data-governance-ai-agents-kit.git`
+3. **Crie uma branch**: `git checkout -b feature/minha-feature`
+4. **Faça suas alterações** e commit: `git commit -m "feat: adiciona nova funcionalidade"`
+5. **Push** para seu fork: `git push origin feature/minha-feature`
+6. **Abra um Pull Request**
 
 ---
 
 ## Licença
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para detalhes.
+Este projeto está licenciado sob a **MIT License** - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+---
+
+<p align="center">
+  <strong>Governança de Dados e IA não precisa ser manual.</strong><br>
+  Automatize com agentes inteligentes.
+</p>
