@@ -1,0 +1,33 @@
+pack: ai-governance-core
+version: 1.0.0
+policies:
+  - id: gate-risk-approved
+    when: event == "registry.transition" && target.next_stage == "prod"
+    require:
+      - evidence: risk.assessment.status == "approved"
+      - evidence: risk.tier in ["low", "medium"]
+    on_fail: block
+
+  - id: gate-validation-baseline
+    when: event == "cicd.deploy" && env == "prod"
+    require:
+      - metric: validation.AUC >= 0.85
+      - metric: validation.robustness_score >= 0.70
+    on_fail: block
+
+  - id: gate-compliance-lgpd
+    when: event in ["train.start", "registry.transition"]
+    require:
+      - checklist: compliance.LGPD == "complete"
+      - flag: data.contains_pii == false
+    exceptions:
+      allowed: true
+      approvers: ["DPO", "CISO"]
+      max_valid_days: 30
+    on_fail: block
+
+  - id: runtime-no-external-llm-with-pii
+    when: event == "inference.request" && provider.type == "external_llm"
+    deny_if:
+      - input.contains_pii == true
+    on_fail: deny
