@@ -1,0 +1,16 @@
+# AI Model Registry Agent Dependencies
+# Core dependencies (standard library - no external packages required)
+# The agent uses only Python standard library modules:
+# - json
+# - hashlib
+# - uuid
+# - dataclasses
+# - datetime
+# - enum
+# - typing
+# - collections
+
+# Optional dependencies for enhanced functionality:
+# pydantic>=2.0.0  # For advanced data validation
+# sqlalchemy>=2.0.0  # For database storage backend
+# redis>=4.0.0  # For distributed caching
