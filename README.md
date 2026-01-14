@@ -17,6 +17,7 @@ Hoje o kit reúne **9 agentes principais** (7 em `data_governance` + 2 em `ai_go
 | **Data Product Scoring Layer** | Score de data products (contrato, qualidade, governança, valor) | `data_governance.data_product_scoring` |
 | **Sensitive Data NER Agent** | Detecção/anonimização de dados sensíveis + Vault | `ai_governance.sensitive_data_ner` |
 | **AI Business Value Agent** | ROI e valor de negócios de iniciativas de IA | `ai_governance.ai_business_value` |
+| **AI Policy Engine (Policy-as-Code)** | Stage-gates, evidências e enforcement automatizado | `ai_governance.policy_engine` |
 
 Além disso, há integração com:
 - **Catálogos**: OpenMetadata, Apache Atlas, AWS Glue.
@@ -124,6 +125,9 @@ Detecta e anonimiza dados sensíveis em texto livre; inclui Vault com criptograf
 ### 9) AI Business Value Agent
 Avalia o ROI e o valor de negócio de iniciativas de IA, considerando custos, benefícios e riscos.
 
+### 10) AI Policy Engine
+Policy-as-code para gates (risk/validation/compliance), evidências e guardrails runtime.
+
 ---
 
 ## Interface Unificada (Streamlit)
@@ -204,7 +208,8 @@ print(report.to_markdown())
 ├── app.py                          # Streamlit unificado
 ├── ai_governance/
 │   ├── ai_business_value/          # AI Business Value Agent
-│   └── sensitive_data_ner/          # Sensitive Data NER + Vault
+│   ├── sensitive_data_ner/          # Sensitive Data NER + Vault
+│   └── policy_engine/               # AI Policy Engine (Policy-as-Code)
 ├── data_governance/
 │   ├── lineage/                    # Data Lineage Agent
 │   ├── rag_discovery/              # Discovery RAG Agent
@@ -229,6 +234,7 @@ print(report.to_markdown())
 - Asset Value: `data_governance/data_asset_value/README.md`
 - Sensitive Data NER: `ai_governance/sensitive_data_ner/README.md`
 - AI Business Value: `ai_governance/ai_business_value/README.md`
+- AI Policy Engine: `ai_governance/policy_engine/README.md`
 
 ---
 

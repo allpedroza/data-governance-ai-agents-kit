@@ -1,0 +1,33 @@
+name: Policy Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  policy-evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Evaluate AI Policy Engine
+        env:
+          POLICY_ENGINE_URL: ${{ secrets.POLICY_ENGINE_URL }}
+        run: |
+          curl -sS -X POST "$POLICY_ENGINE_URL/evaluate" \
+            -H "Content-Type: application/json" \
+            -d @- <<'JSON'
+          {
+            "event": "cicd.deploy",
+            "env": "prod",
+            "artifact_id": "model:fraud-123",
+            "context": {
+              "risk": {"tier": "medium", "assessment": {"status": "approved"}},
+              "validation": {"AUC": 0.9, "robustness_score": 0.8},
+              "compliance": {"LGPD": "complete"},
+              "data": {"contains_pii": false}
+            }
+          }
+          JSON
