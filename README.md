@@ -103,9 +103,39 @@ streamlit run app.py
 
 ## Por que Governança de Dados e Governança de IA?
 
-**Governança de Dados** garante que dados sejam confiáveis, rastreáveis e bem descritos para suportar decisões e produtos de dados com segurança. É por isso que você vê agentes voltados a **classificação, qualidade, linhagem, descoberta e metadados**: eles reduzem risco operacional, aceleram acesso responsável, tomada de decisão orientada a dados, cultura Data-driven e sustentam compliance.
+### Governança de Dados (GD)
+**Definição prática**: o sistema de decisões, papéis, políticas e controles que organiza “quem decide o quê, com base em quais regras”, para garantir **qualidade e reusabilidade** dos dados ao longo do ciclo de vida. Em organizações maduras, a GD orquestra os demais domínios de gestão de dados e ancora a arquitetura da informação para maximizar valor de uso.
 
-**Governança de IA** foca no ciclo de vida do modelo (treino, deploy, uso em runtime) e nos riscos específicos de IA (ex.: uso indevido, compliance, performance em produção). Embora muitas vezes seja conduzida pelo mesmo time, **o objetivo é diferente**: dados validam a base; IA governa a tomada de decisão automatizada sobre modelos, com gates, evidências e políticas para fomentar eficiencia operacional e estratégica de IA. 
+**Dores que a GD resolve (MECE):**
+- **Pessoas**: papéis confusos (dono/curador/consumidor), decisões ad hoc.
+- **Processos**: múltiplas versões da “verdade”, retrabalho para conciliar fontes, filas para relatórios.
+- **Dados**: degradação de qualidade (ex.: acurácia, completude, acessibilidade) que encarece e atrasa o negócio.
+- **Tecnologia**: “sharing by moving data” (cópias/redundâncias) em vez de reuso arquitetado.
+
+**Valor habilitado (drivers claros):**
+- **Qualidade mensurável** (acurácia, completude, disponibilidade, clareza de metadados), reduzindo cost of poor quality e risco regulatório.
+- **Reusabilidade**: uma vez certo, usado por muitos — menos latência para análises/relatórios, menos reconciliação.
+- **Time-to-Insight**: dados definidos e disponíveis “onde e quando” o negócio precisa, com menor custo por decisão.
+
+### Governança de IA (GIA)
+**Definição prática**: o conjunto de políticas, papéis, processos e métricas de risco que orienta o design, desenvolvimento, implantação e uso de sistemas de IA para que sejam confiáveis no contexto de uso — isto é: válidos e confiáveis; seguros e resilientes; responsáveis e transparentes; explicáveis/interpretáveis; com privacidade reforçada; e justos com vieses nocivos geridos — operacionalizados por funções **GOVERN–MAP–MEASURE–MANAGE** ao longo do ciclo de vida.
+
+**Dores que a GIA resolve (MECE):**
+- **Pessoas**: papéis e accountability difusos em times humanos‑IA; risco de viés sistêmico sem mecanismos de decisão explícitos.
+- **Processos**: ausência de gates para mapeamento de contexto/impactos, testes/validação e gestão de incidentes.
+- **Dados/Modelo**: opacidade e vieses amplificados por escolhas de dados/algoritmos sem medidas/limiares definidos.
+- **Operação**: falta de métricas de risco e de resiliência (segurança, drift, performance), dificultando confiança e adoção.
+
+**Valor habilitado (drivers claros):**
+- **Confiança e adoção segura**: produtos de IA com atributos de confiabilidade explícitos e balanceados ao contexto de uso.
+- **Tempo‑de‑mercado com responsabilidade**: playbook (GOVERN/MAP/MEASURE/MANAGE) que reduz retrabalho e incidentes pós‑produção.
+- **Redução de risco regulatório e reputacional**: processos para documentação, transparência, gestão de vieses e privacidade desde o design.
+
+**Em uma frase (para o sponsor):**
+- **GD** monetiza dados ao padronizar decisões e responsabilidades para produzir dados de qualidade e reutilizáveis, acelerando análises e reduzindo custo de retrabalho.
+- **GIA** habilita crescimento com confiança, transformando risco de IA em vantagem competitiva via um ciclo governado e mensurável de desenvolvimento e operação.
+
+**Nota de rigor**: a qualidade possui dimensões padronizadas (ex.: acurácia, completude, acessibilidade, clareza de metadados). Use-as como critérios de aceite nas políticas/SLAs de GD e também como métricas de entrada na GIA (dados de treino/serving).
 
 ## Explicação Macro de Cada Agente
 
