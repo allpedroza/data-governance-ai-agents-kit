@@ -4,7 +4,7 @@ Framework de **agentes de IA para governança de dados** com interface unificada
 
 ## Visão Geral
 
-Hoje o kit reúne **8 agentes principais** (6 em `data_governance` + 2 em `ai_governance`) e conectores para catálogos e data warehouses.
+Hoje o kit reúne **9 agentes principais** (7 em `data_governance` + 2 em `ai_governance`) e conectores para catálogos e data warehouses.
 
 | Agente | Propósito | Pacote |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ Hoje o kit reúne **8 agentes principais** (6 em `data_governance` + 2 em `ai_go
 | **Data Classification Agent** | Classificação de sensibilidade (PII/PHI/PCI/Financeiro) | `data_governance.data_classification` |
 | **Data Quality Agent** | Métricas de qualidade, SLA e schema drift | `data_governance.data_quality` |
 | **Data Asset Value Agent** | Valor de ativos (uso, joins, linhagem) | `data_governance.data_asset_value` |
+| **Data Product Scoring Layer** | Score de data products (contrato, qualidade, governança, valor) | `data_governance.data_product_scoring` |
 | **Sensitive Data NER Agent** | Detecção/anonimização de dados sensíveis + Vault | `ai_governance.sensitive_data_ner` |
 | **AI Business Value Agent** | ROI e valor de negócios de iniciativas de IA | `ai_governance.ai_business_value` |
 
@@ -114,10 +115,13 @@ Mede qualidade em múltiplas dimensões (completude, validade, consistência, et
 ### 6) Data Asset Value Agent
 Calcula o valor de ativos baseado em padrões de uso, relações de JOIN e impacto na linhagem.
 
-### 7) Sensitive Data NER Agent
+### 7) Data Product Scoring Layer
+Pontua data products combinando contrato, qualidade, governança, forma de entrega e valor dos ativos.
+
+### 8) Sensitive Data NER Agent
 Detecta e anonimiza dados sensíveis em texto livre; inclui Vault com criptografia e política de retenção.
 
-### 8) AI Business Value Agent
+### 9) AI Business Value Agent
 Avalia o ROI e o valor de negócio de iniciativas de IA, considerando custos, benefícios e riscos.
 
 ---
