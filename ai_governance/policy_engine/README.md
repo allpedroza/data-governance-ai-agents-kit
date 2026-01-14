@@ -9,6 +9,37 @@ Este módulo inicia o **AI Policy Engine** como um pacote de políticas, regras 
 - **Evidence Store**: eventos imutáveis com hash e timestamp.
 - **Decision Log**: trilha de auditoria com racional e evidências anexas.
 
+## Pacote de políticas (detalhado)
+
+O pack inicial (`ai-governance-core.yaml`) cobre o essencial para bloquear risco, validação e compliance antes de promover modelos para produção:
+
+### 1) G1 — Risk Gate (registry.transition → prod)
+**Objetivo**: só permitir promoção para PROD se o risco foi avaliado e o tier não é alto.
+- Evidências esperadas:
+  - `risk.assessment.status == "approved"`
+  - `risk.tier in ["low","medium"]`
+- Decisão: `block` se faltar evidência.
+
+### 2) G2 — Validation Gate (cicd.deploy → prod)
+**Objetivo**: garantir métricas mínimas antes do deploy em PROD.
+- Evidências esperadas:
+  - `validation.AUC >= 0.85`
+  - `validation.robustness_score >= 0.70`
+- Decisão: `block` se faltar evidência.
+
+### 3) G4 — Compliance Gate (train.start / registry.transition)
+**Objetivo**: impedir uso de dados sensíveis sem checklist e autorização.
+- Evidências esperadas:
+  - `compliance.LGPD == "complete"`
+  - `data.contains_pii == false`
+- Exceções: permitidas com aprovação de DPO/CISO por até 30 dias.
+- Decisão: `block` se faltar evidência.
+
+### 4) Runtime Guardrail — PII com LLM externo
+**Objetivo**: evitar exfiltração de PII para provedores externos.
+- Condição: `event == "inference.request" && provider.type == "external_llm"`
+- Ação: `deny` quando `input.contains_pii == true`.
+
 ## Estrutura
 
 ```

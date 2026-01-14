@@ -1,10 +1,15 @@
 # Data Governance AI Agents Kit
 
-Framework de **agentes de IA para governança de dados** com interface unificada (Streamlit) e módulos especializados para linhagem, descoberta, enriquecimento de metadados, classificação, qualidade, valor de ativos, proteção de dados sensíveis e **valor de negócios de iniciativas de IA**.
+Framework de **agentes de IA para governança de dados** com interface unificada (Streamlit) e módulos especializados para linhagem, descoberta, enriquecimento de metadados, classificação, qualidade, valor de ativos, proteção de dados sensíveis, **valor de negócios** e **policy-as-code** para governança de IA.
 
 ## Visão Geral
 
-Hoje o kit reúne **9 agentes principais** (7 em `data_governance` + 2 em `ai_governance`) e conectores para catálogos e data warehouses.
+Hoje o kit reúne **10 agentes principais** (7 em `data_governance` + 3 em `ai_governance`) e conectores para catálogos e data warehouses.
+
+Se você está chegando agora, pense no kit como um caminho simples:
+1. **Descobrir** ativos (descoberta, classificação, metadados, qualidade).
+2. **Medir valor e risco** (valor de ativos, business value).
+3. **Aplicar governança** de forma automatizada (policy engine + gates).
 
 | Agente | Propósito | Pacote |
 | --- | --- | --- |
@@ -96,34 +101,79 @@ streamlit run app.py
 
 ---
 
+## Por que Governança de Dados e Governança de IA?
+
+**Governança de Dados** garante que dados sejam confiáveis, rastreáveis e bem descritos para suportar decisões e produtos de dados com segurança. É por isso que você vê agentes voltados a **classificação, qualidade, linhagem, descoberta e metadados**: eles reduzem risco operacional, aceleram acesso responsável e sustentam compliance.
+
+**Governança de IA** foca no ciclo de vida do modelo (treino, deploy, uso em runtime) e nos riscos específicos de IA (ex.: uso indevido, compliance, performance em produção). Embora muitas vezes seja conduzida pelo mesmo time, **o objetivo é diferente**: dados validam a base; IA governa a tomada de decisão automatizada sobre modelos, com gates, evidências e políticas.
+
 ## Explicação Macro de Cada Agente
 
 ### 1) Data Lineage Agent
-Analisa pipelines (SQL, Python, Terraform, etc.) para mapear dependências, identificar ciclos e avaliar impacto de mudanças em ativos de dados.
+**Objetivo**: mapear dependências ponta a ponta para entender impacto e risco de mudança.
+- **Entradas**: pipelines SQL/Python/Terraform, DAGs, jobs e manifests.
+- **Saídas**: grafo de linhagem, dependências críticas, métricas de impacto.
+- **Uso típico**: change impact, auditoria de origem e rastreabilidade.
 
 ### 2) Data Discovery RAG Agent
-Permite busca semântica sobre catálogos usando RAG e ranking híbrido (semântico + lexical), retornando tabelas e contexto relevantes.
+**Objetivo**: acelerar descoberta de dados com busca semântica confiável.
+- **Entradas**: catálogos, descrições, amostras, documentos.
+- **Saídas**: respostas com ranking híbrido (semântico + lexical) e contexto.
+- **Uso típico**: localizar datasets, acelerar análise e onboarding.
 
 ### 3) Metadata Enrichment Agent
-Gera descrições, tags e classificações a partir de padrões e dados de amostra, acelerando a documentação de tabelas e colunas.
+**Objetivo**: melhorar a qualidade e completude dos metadados.
+- **Entradas**: schemas, amostras e catálogos.
+- **Saídas**: descrições, tags, sugestões de PII, glossário.
+- **Uso típico**: documentação automática e padronização.
 
 ### 4) Data Classification Agent
-Classifica dados sensíveis (PII/PHI/PCI/Financeiro) e define níveis de sensibilidade e flags de compliance.
+**Objetivo**: classificar sensibilidade e risco regulatório dos dados.
+- **Entradas**: amostras, schemas e padrões.
+- **Saídas**: nível de sensibilidade (PII/PHI/PCI etc.), flags de compliance.
+- **Uso típico**: políticas de acesso, data masking e LGPD/GDPR.
 
 ### 5) Data Quality Agent
-Mede qualidade em múltiplas dimensões (completude, validade, consistência, etc.), com suporte a SLA de freshness e schema drift.
+**Objetivo**: medir e monitorar qualidade com thresholds e SLAs.
+- **Entradas**: datasets, regras de validação, SLAs.
+- **Saídas**: scores, alertas de drift, métricas de completude/validade.
+- **Uso típico**: gates de treino/deploy e confiança em decisões.
 
 ### 6) Data Asset Value Agent
-Calcula o valor de ativos baseado em padrões de uso, relações de JOIN e impacto na linhagem.
+**Objetivo**: quantificar valor e criticidade dos ativos de dados.
+- **Entradas**: uso, joins, dependências, linhagem.
+- **Saídas**: score de valor, impacto e custo de mudança.
+- **Uso típico**: priorização de governança e investimentos.
 
 ### 7) Data Product Scoring Layer
-Pontua data products combinando contrato, qualidade, governança, forma de entrega e valor dos ativos.
+**Objetivo**: consolidar governança em um score único por data product.
+- **Entradas**: contrato, qualidade, SLAs, uso e valor.
+- **Saídas**: score composto, gaps de governança.
+- **Uso típico**: roadmap de melhorias e compliance contínuo.
 
 ### 8) Sensitive Data NER Agent
-Detecta e anonimiza dados sensíveis em texto livre; inclui Vault com criptografia e política de retenção.
+**Objetivo**: detectar e anonimizar dados sensíveis em texto livre.
+- **Entradas**: textos, logs, prompts e respostas.
+- **Saídas**: entidades detectadas, texto anonimizado, políticas de retenção (Vault).
+- **Uso típico**: proteção em runtime e compliance com PII.
 
 ### 9) AI Business Value Agent
-Avalia o ROI e o valor de negócio de iniciativas de IA, considerando custos, benefícios e riscos.
+**Objetivo**: medir ROI e valor de negócio de iniciativas de IA.
+- **Entradas**: custos, projeções de benefício, riscos.
+- **Saídas**: score de valor, ROI, relatórios executivos.
+- **Uso típico**: aprovação de investimento e priorização de projetos.
+
+### 10) AI Policy Engine
+**Objetivo**: aplicar governança de IA com gates e evidências auditáveis.
+- **Entradas**: evidências dos agentes (risco, qualidade, compliance, NER).
+- **Saídas**: decisões allow/deny/warn, logs auditáveis, exceções.
+- **Uso típico**: pré-merge, pré-deploy e runtime enforcement.
+
+**O que existe no pack inicial (alto nível):**
+- **G1 Risk**: libera promoção para PROD apenas com risco aprovado e tier aceitável.
+- **G2 Validation**: exige métricas mínimas de validação (AUC/robustez) antes do deploy.
+- **G4 Compliance (LGPD)**: bloqueia quando checklist não está completo ou há PII não autorizada.
+- **Runtime Guardrail**: impede envio de PII a provedores externos.
 
 ### 10) AI Policy Engine
 Policy-as-code para gates (risk/validation/compliance), evidências e guardrails runtime.
@@ -132,7 +182,7 @@ Policy-as-code para gates (risk/validation/compliance), evidências e guardrails
 
 ## Interface Unificada (Streamlit)
 
-A aplicação principal oferece **9 tabs**:
+A aplicação principal oferece **9 tabs** (o Policy Engine é um pacote de políticas/artefatos e não tem UI própria):
 
 - **Lineage**: análise de linhagem e impacto.
 - **Discovery**: busca semântica com RAG.
@@ -198,6 +248,9 @@ report = agent.analyze_initiatives(
 )
 print(report.to_markdown())
 ```
+
+### AI Policy Engine (pack inicial)
+Consulte o pacote de políticas em `ai_governance/policy_engine/policy_packs/ai-governance-core.yaml`.
 
 ---
 
