@@ -1,4 +1,4 @@
-# Data Governance AI Agents Kit
+# AI & Data Governance Agents Kit
 
 Framework de **agentes de IA para governança de dados** com interface unificada (Streamlit) e módulos especializados para linhagem, descoberta, enriquecimento de metadados, classificação, qualidade, valor de ativos, proteção de dados sensíveis, **valor de negócios** e **policy-as-code** para governança de IA.
 
@@ -103,9 +103,9 @@ streamlit run app.py
 
 ## Por que Governança de Dados e Governança de IA?
 
-**Governança de Dados** garante que dados sejam confiáveis, rastreáveis e bem descritos para suportar decisões e produtos de dados com segurança. É por isso que você vê agentes voltados a **classificação, qualidade, linhagem, descoberta e metadados**: eles reduzem risco operacional, aceleram acesso responsável e sustentam compliance.
+**Governança de Dados** garante que dados sejam confiáveis, rastreáveis e bem descritos para suportar decisões e produtos de dados com segurança. É por isso que você vê agentes voltados a **classificação, qualidade, linhagem, descoberta e metadados**: eles reduzem risco operacional, aceleram acesso responsável, tomada de decisão orientada a dados, cultura Data-driven e sustentam compliance.
 
-**Governança de IA** foca no ciclo de vida do modelo (treino, deploy, uso em runtime) e nos riscos específicos de IA (ex.: uso indevido, compliance, performance em produção). Embora muitas vezes seja conduzida pelo mesmo time, **o objetivo é diferente**: dados validam a base; IA governa a tomada de decisão automatizada sobre modelos, com gates, evidências e políticas.
+**Governança de IA** foca no ciclo de vida do modelo (treino, deploy, uso em runtime) e nos riscos específicos de IA (ex.: uso indevido, compliance, performance em produção). Embora muitas vezes seja conduzida pelo mesmo time, **o objetivo é diferente**: dados validam a base; IA governa a tomada de decisão automatizada sobre modelos, com gates, evidências e políticas para fomentar eficiencia operacional e estratégica de IA. 
 
 ## Explicação Macro de Cada Agente
 
@@ -174,9 +174,6 @@ streamlit run app.py
 - **G2 Validation**: exige métricas mínimas de validação (AUC/robustez) antes do deploy.
 - **G4 Compliance (LGPD)**: bloqueia quando checklist não está completo ou há PII não autorizada.
 - **Runtime Guardrail**: impede envio de PII a provedores externos.
-
-### 10) AI Policy Engine
-Policy-as-code para gates (risk/validation/compliance), evidências e guardrails runtime.
 
 ---
 
