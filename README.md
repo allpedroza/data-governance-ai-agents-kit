@@ -175,6 +175,9 @@ streamlit run app.py
 - **G4 Compliance (LGPD)**: bloqueia quando checklist não está completo ou há PII não autorizada.
 - **Runtime Guardrail**: impede envio de PII a provedores externos.
 
+### 10) AI Policy Engine
+Policy-as-code para gates (risk/validation/compliance), evidências e guardrails runtime.
+
 ---
 
 ## Interface Unificada (Streamlit)
