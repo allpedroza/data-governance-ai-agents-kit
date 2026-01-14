@@ -1,6 +1,6 @@
 # AI & Data Governance Agents Kit
 
-**Automatize governança de dados e IA com agentes inteligentes** — reduza riscos, acelere compliance e maximize o valor dos seus ativos de dados.
+**Escale governança de dados e IA com agentes inteligentes** — reduza riscos, acelere compliance e maximize o valor dos seus ativos de dados.
 
 ---
 
