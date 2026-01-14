@@ -1,4 +1,4 @@
-# Data Governance AI Agents Kit
+# AI & Data Governance Agents Kit
 
 Framework de **agentes de IA para governança de dados** com interface unificada (Streamlit) e módulos especializados para linhagem, descoberta, enriquecimento de metadados, classificação, qualidade, valor de ativos, proteção de dados sensíveis, **valor de negócios** e **policy-as-code** para governança de IA.
 
