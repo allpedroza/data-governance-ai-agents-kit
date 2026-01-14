@@ -106,7 +106,7 @@ streamlit run app.py
 ### Governança de Dados (GD)
 **Definição prática**: o sistema de decisões, papéis, políticas e controles que organiza “quem decide o quê, com base em quais regras”, para garantir **qualidade e reusabilidade** dos dados ao longo do ciclo de vida. Em organizações maduras, a GD orquestra os demais domínios de gestão de dados e ancora a arquitetura da informação para maximizar valor de uso.
 
-**Dores que a GD resolve (MECE):**
+**Dores que a GD resolve:**
 - **Pessoas**: papéis confusos (dono/curador/consumidor), decisões ad hoc.
 - **Processos**: múltiplas versões da “verdade”, retrabalho para conciliar fontes, filas para relatórios.
 - **Dados**: degradação de qualidade (ex.: acurácia, completude, acessibilidade) que encarece e atrasa o negócio.
