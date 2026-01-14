@@ -24,7 +24,10 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from rag_discovery.providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider, LLMResponse
+try:
+    from rag_discovery.providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider, LLMResponse
+except ImportError:
+    from data_governance.rag_discovery.providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider, LLMResponse
 from .standards.standards_rag import StandardsRAG, StandardDocument
 from .sampling.data_sampler import DataSampler, SampleResult, ColumnProfile
 

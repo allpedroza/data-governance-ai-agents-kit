@@ -1,0 +1,4 @@
+# AI Business Value Agent Dependencies
+
+# Core dependencies (likely already installed)
+# No additional dependencies required beyond base Python

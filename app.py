@@ -13,11 +13,13 @@ import streamlit as st
 
 # Ensure repository modules are importable when running the app from repo root
 BASE_DIR = Path(__file__).resolve().parent
-sys.path.append(str(BASE_DIR / "lineage"))
-sys.path.append(str(BASE_DIR / "rag_discovery"))
+sys.path.append(str(BASE_DIR / "data_governance" / "lineage"))
+sys.path.append(str(BASE_DIR / "data_governance" / "rag_discovery"))
+sys.path.append(str(BASE_DIR / "data_governance"))
+sys.path.append(str(BASE_DIR / "ai_governance"))
 
 # External catalog connectors
-from rag_discovery.openmetadata_connector import (  # noqa: E402
+from data_governance.rag_discovery.openmetadata_connector import (  # noqa: E402
     OpenMetadataConnector,
     OpenMetadataConnectorError,
 )
@@ -31,64 +33,64 @@ if missing_core_modules:
         "using the same interpreter that runs Streamlit.".format(missing_list)
     )
 
-from lineage.data_lineage_agent import DataLineageAgent  # noqa: E402
-from rag_discovery.data_discovery_rag_agent import (  # noqa: E402
+from data_governance.lineage.data_lineage_agent import DataLineageAgent  # noqa: E402
+from data_governance.rag_discovery.data_discovery_rag_agent import (  # noqa: E402
     DataDiscoveryRAGAgent,
     TableMetadata,
 )
 
 # Metadata Enrichment Agent imports
-sys.path.append(str(BASE_DIR / "metadata_enrichment"))
+sys.path.append(str(BASE_DIR / "data_governance" / "metadata_enrichment"))
 ENRICHMENT_AVAILABLE = True
 try:
-    from metadata_enrichment.agent import MetadataEnrichmentAgent, EnrichmentResult
-    from rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
-    from rag_discovery.providers.llm import OpenAILLM
-    from rag_discovery.providers.vectorstore import ChromaStore
+    from data_governance.metadata_enrichment.agent import MetadataEnrichmentAgent, EnrichmentResult
+    from data_governance.rag_discovery.providers.embeddings import SentenceTransformerEmbeddings
+    from data_governance.rag_discovery.providers.llm import OpenAILLM
+    from data_governance.rag_discovery.providers.vectorstore import ChromaStore
 except ImportError:
     ENRICHMENT_AVAILABLE = False
 
 # Data Quality Agent imports
-sys.path.append(str(BASE_DIR / "data_quality"))
+sys.path.append(str(BASE_DIR / "data_governance" / "data_quality"))
 QUALITY_AVAILABLE = True
 try:
-    from data_quality.agent import DataQualityAgent, QualityReport
-    from data_quality.rules import QualityRule, AlertLevel
+    from data_governance.data_quality.agent import DataQualityAgent, QualityReport
+    from data_governance.data_quality.rules import QualityRule, AlertLevel
 except ImportError:
     QUALITY_AVAILABLE = False
 
 # Data Classification Agent imports
-sys.path.append(str(BASE_DIR / "data_classification"))
+sys.path.append(str(BASE_DIR / "data_governance" / "data_classification"))
 CLASSIFICATION_AVAILABLE = True
 try:
-    from data_classification.agent import DataClassificationAgent, ClassificationReport
+    from data_governance.data_classification.agent import DataClassificationAgent, ClassificationReport
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
 
 # Data Asset Value Agent imports
-sys.path.append(str(BASE_DIR / "data_asset_value"))
+sys.path.append(str(BASE_DIR / "data_governance" / "data_asset_value"))
 VALUE_AVAILABLE = True
 try:
-    from data_asset_value.agent import DataAssetValueAgent, AssetValueReport
+    from data_governance.data_asset_value.agent import DataAssetValueAgent, AssetValueReport
 except ImportError:
     VALUE_AVAILABLE = False
 
-# Sensitive Data NER Agent imports
-sys.path.append(str(BASE_DIR / "sensitive_data_ner"))
+# Sensitive Data NER Agent imports (now in ai_governance)
+sys.path.append(str(BASE_DIR / "ai_governance" / "sensitive_data_ner"))
 NER_AVAILABLE = True
 VAULT_AVAILABLE = False
 try:
-    from sensitive_data_ner.agent import (
+    from ai_governance.sensitive_data_ner.agent import (
         SensitiveDataNERAgent,
         NERResult,
         FilterPolicy,
         FilterAction,
         EntityCategory,
     )
-    from sensitive_data_ner.anonymizers import AnonymizationStrategy
+    from ai_governance.sensitive_data_ner.anonymizers import AnonymizationStrategy
     # Vault imports (optional - requires cryptography)
     try:
-        from sensitive_data_ner.vault import (
+        from ai_governance.sensitive_data_ner.vault import (
             SecureVault,
             VaultConfig,
             AccessLevel,
@@ -99,6 +101,19 @@ try:
         VAULT_AVAILABLE = False
 except ImportError:
     NER_AVAILABLE = False
+
+# AI Business Value Agent imports (new in ai_governance)
+AI_BUSINESS_VALUE_AVAILABLE = True
+try:
+    from ai_governance.ai_business_value.agent import (
+        AIBusinessValueAgent,
+        AIInitiativeReport,
+        CostBreakdown,
+        BenefitProjection,
+        RiskAssessment,
+    )
+except ImportError:
+    AI_BUSINESS_VALUE_AVAILABLE = False
 
 
 st.set_page_config(
@@ -179,7 +194,7 @@ def _initialize_rag_agent() -> None:
     """Initialize the RAG agent using the current environment variables."""
     try:
         st.session_state.rag_agent = DataDiscoveryRAGAgent(
-            persist_directory=str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+            persist_directory=str(BASE_DIR / "data_governance" / "rag_discovery" / ".chroma_ui"),
             collection_name="ui_catalog",
         )
         st.session_state.rag_agent_error = None
@@ -218,7 +233,7 @@ def init_session_state() -> None:
             "anthropic_model": os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620"),
             "atlas_host": os.environ.get("ATLAS_HOST", ""),
             "glue_region": os.environ.get("AWS_REGION", ""),
-            "chroma_persist": str(BASE_DIR / "rag_discovery" / ".chroma_ui"),
+            "chroma_persist": str(BASE_DIR / "data_governance" / "rag_discovery" / ".chroma_ui"),
             "openmetadata_host": os.environ.get("OPENMETADATA_HOST", ""),
             "openmetadata_api_token": os.environ.get("OPENMETADATA_API_TOKEN", ""),
         }

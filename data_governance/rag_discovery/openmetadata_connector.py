@@ -7,7 +7,10 @@ from typing import Dict, List, Optional
 
 import requests
 
-from rag_discovery.models import TableMetadata
+try:
+    from rag_discovery.models import TableMetadata
+except ImportError:
+    from .models import TableMetadata
 
 
 class OpenMetadataConnectorError(Exception):

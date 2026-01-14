@@ -12,7 +12,10 @@ from datetime import datetime
 import hashlib
 
 # Shared models (imported from separate module to avoid chromadb dependency chain)
-from rag_discovery.models import TableMetadata, SearchResult
+try:
+    from rag_discovery.models import TableMetadata, SearchResult
+except ImportError:
+    from .models import TableMetadata, SearchResult
 
 # Vector database - lazy import to avoid requiring chromadb at module load time
 # chromadb and Settings are imported in _initialize_chroma() when actually needed
