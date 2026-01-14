@@ -14,6 +14,8 @@ Agent specialized in identifying, analyzing, and visualizing data lineage in com
 - **Visualizações interativas**: Force, Hierarchical, Sankey, 3D, Radial.
 - **Detecção de ciclos e métricas de complexidade**.
 - **Exportação** para JSON, Markdown e HTML.
+- **Lineage de modelos de IA**: dataset → feature → modelo → endpoint.
+- **Integração com feature store** e registro de column/feature-level lineage.
 
 ## Instalação
 ```bash
@@ -40,6 +42,8 @@ Agent specialized in identifying, analyzing, and visualizing data lineage in com
 - **Interactive visuals**: Force, Hierarchical, Sankey, 3D, Radial.
 - **Cycle detection and complexity metrics**.
 - **Export** to JSON, Markdown, and HTML.
+- **AI model lineage**: dataset → feature → model → endpoint.
+- **Feature store integration** and column/feature-level lineage registration.
 
 ## Installation
 ```bash

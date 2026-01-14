@@ -17,6 +17,7 @@ Processa logs de consulta, configurações de data products e (opcionalmente) a 
 - **Impacto de linhagem** em caminhos upstream/downstream.
 - **Data products** com criticidade e impacto de receita.
 - **Recomendações de governança** e categorização (crítico, hub, órfão).
+- **Valor de modelos de IA** com custos (API/infra/pessoas), benefícios e tracking pós-deploy.
 
 ## Uso Rápido
 ```python
@@ -38,6 +39,24 @@ print(report.to_markdown())
 ```
 
 Ative `llm_review=True` e configure um `llm_provider` para revisar ranking e ações sugeridas.
+
+## Valor de Modelos/Use Cases de IA
+```python
+from data_asset_value import DataAssetValueAgent
+
+agent = DataAssetValueAgent()
+model_report = agent.analyze_model_value([
+    {
+        "model_name": "fraud_detector_v2",
+        "use_case": "detecção de fraude",
+        "costs": {"api_cost": 1200, "infra_cost": 800, "people_cost": 600},
+        "benefits": {"revenue_gain": 5000, "cost_savings": 2000},
+        "post_deploy_metrics": {"adoption_rate": 0.7, "requests_per_day": 1500, "quality_score": 0.88}
+    }
+])
+
+print(model_report.to_dict())
+```
 
 ## Exemplos
 Execute `python data_asset_value/examples/usage_example.py` para ver um fluxo completo com logs de exemplo.
@@ -61,6 +80,7 @@ Processes query logs, data product configurations, and optionally Data Lineage A
 - **Lineage impact** across upstream/downstream paths.
 - **Data products** with criticality and revenue impact.
 - **Governance recommendations** and categorization (critical, hub, orphan).
+- **AI model value** with costs (API/infra/people), benefits, and post-deploy tracking.
 
 ## Quickstart
 ```python
@@ -82,6 +102,24 @@ print(report.to_markdown())
 ```
 
 Enable `llm_review=True` and set an `llm_provider` to review rankings and suggested actions.
+
+## AI Model/Use Case Value
+```python
+from data_asset_value import DataAssetValueAgent
+
+agent = DataAssetValueAgent()
+model_report = agent.analyze_model_value([
+    {
+        "model_name": "fraud_detector_v2",
+        "use_case": "fraud detection",
+        "costs": {"api_cost": 1200, "infra_cost": 800, "people_cost": 600},
+        "benefits": {"revenue_gain": 5000, "cost_savings": 2000},
+        "post_deploy_metrics": {"adoption_rate": 0.7, "requests_per_day": 1500, "quality_score": 0.88}
+    }
+])
+
+print(model_report.to_dict())
+```
 
 ## Examples
 Run `python data_asset_value/examples/usage_example.py` to see a complete flow with sample logs.

@@ -39,6 +39,7 @@ Carregue padrões corporativos com `index_standards_from_json` para contextualiz
 - Envie metadados para o **Data Discovery RAG Agent** para busca semântica.
 - Combine com **Data Classification** para reforçar etiquetas de sensibilidade.
 - Utilize **Data Quality** para incluir status de qualidade nas tags.
+- Propague **classificação e owners** via linhagem para reduzir lacunas no catálogo.
 
 ---
 
@@ -76,3 +77,4 @@ Load corporate standards with `index_standards_from_json` to contextualize respo
 - Send metadata to the **Data Discovery RAG Agent** for semantic search.
 - Combine with **Data Classification** to strengthen sensitivity labels.
 - Use **Data Quality** to attach quality status in tags.
+- Propagate **classification and owners** across lineage to reduce catalog gaps.

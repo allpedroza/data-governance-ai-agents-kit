@@ -17,6 +17,7 @@ O agente mede completude, unicidade, validade, consistência, frescor e mudança
 - **Schema drift automático** com histórico de versões.
 - **Regras e alertas declarativos** com níveis de severidade.
 - **Suporte a CSV, Parquet, SQL, Delta Lake**.
+- **Quality gates para treino**: class balance, label noise, leakage checks e gold-set agreement.
 
 ## Instalação
 ```bash
@@ -39,6 +40,27 @@ print(report.schema_drift)
 ```
 
 Relatórios podem ser exportados com `to_markdown()` ou `to_json()`.
+
+## Quality Gates para Training Data
+```python
+from data_quality.agent import DataQualityAgent
+
+agent = DataQualityAgent()
+training_report = agent.evaluate_training_data(
+    data=training_rows,
+    label_column="label",
+    feature_columns=["f1", "f2", "f3"],
+    gold_set={"123": "positivo", "456": "negativo"},
+    gate_config={
+        "class_balance": {"min_class_ratio": 0.2},
+        "label_noise": {"threshold": 0.9},
+        "leakage_check": {"threshold": 0.95},
+        "gold_set_agreement": {"threshold": 0.9}
+    }
+)
+
+print(training_report.metadata["training_quality_gate"])
+```
 
 ## Regras e Alertas
 ```python
@@ -74,6 +96,7 @@ The agent measures completeness, uniqueness, validity, consistency, freshness, a
 - **Automatic schema drift tracking** with version history.
 - **Declarative rules and alerts** with severity levels.
 - **Support for CSV, Parquet, SQL, and Delta Lake.**
+- **Training quality gates**: class balance, label noise, leakage checks, and gold-set agreement.
 
 ## Installation
 ```bash
@@ -96,6 +119,27 @@ print(report.schema_drift)
 ```
 
 Reports can be exported via `to_markdown()` or `to_json()`.
+
+## Training Data Quality Gates
+```python
+from data_quality.agent import DataQualityAgent
+
+agent = DataQualityAgent()
+training_report = agent.evaluate_training_data(
+    data=training_rows,
+    label_column="label",
+    feature_columns=["f1", "f2", "f3"],
+    gold_set={"123": "positive", "456": "negative"},
+    gate_config={
+        "class_balance": {"min_class_ratio": 0.2},
+        "label_noise": {"threshold": 0.9},
+        "leakage_check": {"threshold": 0.95},
+        "gold_set_agreement": {"threshold": 0.9}
+    }
+)
+
+print(training_report.metadata["training_quality_gate"])
+```
 
 ## Rules and Alerts
 ```python

@@ -346,6 +346,80 @@ class AssetValueReport:
         return "\n".join(md)
 
 
+@dataclass
+class ModelCostProfile:
+    """Cost profile for model/use case."""
+    api_cost: float = 0.0
+    infra_cost: float = 0.0
+    people_cost: float = 0.0
+    other_cost: float = 0.0
+
+    @property
+    def total_cost(self) -> float:
+        return self.api_cost + self.infra_cost + self.people_cost + self.other_cost
+
+
+@dataclass
+class ModelBenefitProfile:
+    """Benefit profile for model/use case."""
+    revenue_gain: float = 0.0
+    cost_savings: float = 0.0
+    productivity_gain: float = 0.0
+    risk_reduction: float = 0.0
+
+    @property
+    def total_benefit(self) -> float:
+        return self.revenue_gain + self.cost_savings + self.productivity_gain + self.risk_reduction
+
+
+@dataclass
+class ModelValueScore:
+    """Value scores for a model or use case."""
+    model_name: str
+    use_case: str
+    total_cost: float
+    total_benefit: float
+    roi: float
+    business_value_score: float
+    cost_breakdown: Dict[str, float] = field(default_factory=dict)
+    benefit_breakdown: Dict[str, float] = field(default_factory=dict)
+    post_deploy_metrics: Dict[str, Any] = field(default_factory=dict)
+    recommendations: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "model_name": self.model_name,
+            "use_case": self.use_case,
+            "total_cost": round(self.total_cost, 2),
+            "total_benefit": round(self.total_benefit, 2),
+            "roi": round(self.roi, 3),
+            "business_value_score": round(self.business_value_score, 2),
+            "cost_breakdown": self.cost_breakdown,
+            "benefit_breakdown": self.benefit_breakdown,
+            "post_deploy_metrics": self.post_deploy_metrics,
+            "recommendations": self.recommendations
+        }
+
+
+@dataclass
+class ModelValueReport:
+    """Value analysis report for AI models/use cases."""
+    analysis_timestamp: datetime
+    models_analyzed: int
+    model_scores: List[ModelValueScore] = field(default_factory=list)
+    summary: Dict[str, Any] = field(default_factory=dict)
+    recommendations: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "analysis_timestamp": self.analysis_timestamp.isoformat(),
+            "models_analyzed": self.models_analyzed,
+            "model_scores": [m.to_dict() for m in self.model_scores],
+            "summary": self.summary,
+            "recommendations": self.recommendations
+        }
+
+
 class QueryLogParser:
     """Parses SQL query logs to extract asset usage information"""
 
@@ -934,6 +1008,50 @@ class ValueCalculator:
         score = overall_score * crit_factor * risk_factor * pii_factor * sla_factor
         return min(100, round(score, 2))
 
+    def calculate_model_value_score(
+        self,
+        cost_profile: ModelCostProfile,
+        benefit_profile: ModelBenefitProfile,
+        post_deploy_metrics: Optional[Dict[str, Any]] = None
+    ) -> Tuple[float, Dict[str, Any]]:
+        """
+        Calculate value score for an AI model/use case.
+
+        Returns:
+            Tuple of (score 0-100, metrics dict)
+        """
+        post_deploy_metrics = post_deploy_metrics or {}
+        total_cost = cost_profile.total_cost
+        total_benefit = benefit_profile.total_benefit
+
+        roi = (total_benefit - total_cost) / total_cost if total_cost else 0.0
+        adoption_rate = float(post_deploy_metrics.get("adoption_rate", 0))
+        requests_per_day = float(post_deploy_metrics.get("requests_per_day", 0))
+        quality_score = float(post_deploy_metrics.get("quality_score", 0.5))
+
+        roi_score = max(0.0, min(1.0, (roi + 1) / 2))
+        adoption_score = max(0.0, min(1.0, adoption_rate))
+        usage_score = max(0.0, min(1.0, requests_per_day / 1000))
+        quality_score = max(0.0, min(1.0, quality_score))
+
+        score = (
+            roi_score * 0.45 +
+            adoption_score * 0.25 +
+            usage_score * 0.15 +
+            quality_score * 0.15
+        ) * 100
+
+        metrics = {
+            "total_cost": total_cost,
+            "total_benefit": total_benefit,
+            "roi": roi,
+            "adoption_rate": adoption_rate,
+            "requests_per_day": requests_per_day,
+            "quality_score": quality_score
+        }
+
+        return round(score, 2), metrics
+
     def categorize_value(self, score: float) -> str:
         """Categorize asset value based on score"""
         if score >= self.CATEGORY_THRESHOLDS['critical']:
@@ -1134,6 +1252,97 @@ class DataAssetValueAgent:
             data_product_config=data_product_config,
             asset_metadata=asset_metadata,
             time_range_days=time_range_days
+        )
+
+    def analyze_model_value(
+        self,
+        models: List[Dict[str, Any]]
+    ) -> ModelValueReport:
+        """
+        Analyze AI model/use case value including costs and benefits.
+
+        Args:
+            models: List of model metadata dicts with costs, benefits, and post-deploy metrics
+
+        Returns:
+            ModelValueReport
+        """
+        model_scores = []
+
+        for model in models:
+            cost = model.get("costs", {})
+            benefit = model.get("benefits", {})
+            post_deploy = model.get("post_deploy_metrics", {})
+
+            cost_profile = ModelCostProfile(
+                api_cost=float(cost.get("api_cost", 0)),
+                infra_cost=float(cost.get("infra_cost", 0)),
+                people_cost=float(cost.get("people_cost", 0)),
+                other_cost=float(cost.get("other_cost", 0))
+            )
+            benefit_profile = ModelBenefitProfile(
+                revenue_gain=float(benefit.get("revenue_gain", 0)),
+                cost_savings=float(benefit.get("cost_savings", 0)),
+                productivity_gain=float(benefit.get("productivity_gain", 0)),
+                risk_reduction=float(benefit.get("risk_reduction", 0))
+            )
+
+            value_score, metrics = self.value_calculator.calculate_model_value_score(
+                cost_profile=cost_profile,
+                benefit_profile=benefit_profile,
+                post_deploy_metrics=post_deploy
+            )
+
+            recommendations = self._generate_model_recommendations(
+                value_score=value_score,
+                roi=metrics.get("roi", 0.0),
+                adoption_rate=metrics.get("adoption_rate", 0.0),
+                total_cost=metrics.get("total_cost", 0.0)
+            )
+
+            model_scores.append(ModelValueScore(
+                model_name=model.get("model_name", ""),
+                use_case=model.get("use_case", ""),
+                total_cost=metrics.get("total_cost", 0.0),
+                total_benefit=metrics.get("total_benefit", 0.0),
+                roi=metrics.get("roi", 0.0),
+                business_value_score=value_score,
+                cost_breakdown={
+                    "api_cost": cost_profile.api_cost,
+                    "infra_cost": cost_profile.infra_cost,
+                    "people_cost": cost_profile.people_cost,
+                    "other_cost": cost_profile.other_cost
+                },
+                benefit_breakdown={
+                    "revenue_gain": benefit_profile.revenue_gain,
+                    "cost_savings": benefit_profile.cost_savings,
+                    "productivity_gain": benefit_profile.productivity_gain,
+                    "risk_reduction": benefit_profile.risk_reduction
+                },
+                post_deploy_metrics=post_deploy,
+                recommendations=recommendations
+            ))
+
+        model_scores.sort(key=lambda x: x.business_value_score, reverse=True)
+
+        summary = {
+            "total_models": len(model_scores),
+            "avg_roi": round(sum(m.roi for m in model_scores) / len(model_scores), 3) if model_scores else 0,
+            "avg_value_score": round(sum(m.business_value_score for m in model_scores) / len(model_scores), 2) if model_scores else 0,
+            "high_value_models": len([m for m in model_scores if m.business_value_score >= 70])
+        }
+
+        recommendations = [
+            "Revisar modelos com ROI negativo para reavaliar custos ou estratégia de valor.",
+            "Priorizar modelos com alta adoção e alta qualidade para expansão."
+        ]
+
+        return ModelValueReport(
+            analysis_timestamp=datetime.now(),
+            models_analyzed=len(model_scores),
+            model_scores=model_scores,
+            summary=summary,
+            recommendations=recommendations
         )
 
     def analyze_with_lineage_agent(
@@ -1342,6 +1551,30 @@ class DataAssetValueAgent:
             recommendations.append(
                 f"Growing importance - consider scaling and optimization"
             )
+
+        return recommendations
+
+    def _generate_model_recommendations(
+        self,
+        value_score: float,
+        roi: float,
+        adoption_rate: float,
+        total_cost: float
+    ) -> List[str]:
+        """Generate recommendations for a model/use case."""
+        recommendations = []
+
+        if value_score >= 80:
+            recommendations.append("Modelo com alto valor de negócio - manter investimento e monitoramento.")
+
+        if roi < 0:
+            recommendations.append("ROI negativo - revisar custos de API/infra e hipóteses de benefício.")
+
+        if adoption_rate < 0.3:
+            recommendations.append("Baixa adoção - alinhar onboarding e comunicação com stakeholders.")
+
+        if total_cost > 0 and roi < 0.2:
+            recommendations.append("Custos altos vs valor - reavaliar arquitetura ou escopo do caso de uso.")
 
         return recommendations
 

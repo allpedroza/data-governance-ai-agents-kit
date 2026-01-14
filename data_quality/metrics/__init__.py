@@ -17,6 +17,10 @@ from .quality_metrics import (
     ValidityMetric,
     ConsistencyMetric,
     FreshnessMetric,
+    ClassBalanceMetric,
+    LabelNoiseMetric,
+    LeakageCheckMetric,
+    GoldSetAgreementMetric,
     MetricResult
 )
 
@@ -29,6 +33,10 @@ __all__ = [
     "ValidityMetric",
     "ConsistencyMetric",
     "FreshnessMetric",
+    "ClassBalanceMetric",
+    "LabelNoiseMetric",
+    "LeakageCheckMetric",
+    "GoldSetAgreementMetric",
     "MetricResult",
     "SchemaDriftDetector",
     "SchemaChange",

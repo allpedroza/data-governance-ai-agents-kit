@@ -88,7 +88,8 @@ class TableMetadata:
             'tags': self.tags,
             'location': self.location,
             'format': self.format,
-            'partition_keys': self.partition_keys
+            'partition_keys': self.partition_keys,
+            'asset_type': 'table'
         }
 
     @classmethod
@@ -111,12 +112,78 @@ class TableMetadata:
 
 
 @dataclass
+class ModelMetadata:
+    """Structured model metadata for discovery."""
+    name: str
+    description: str = ""
+    owner: str = ""
+    use_case: str = ""
+    endpoints: List[str] = field(default_factory=list)
+    input_datasets: List[str] = field(default_factory=list)
+    features: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    version: str = ""
+
+    def to_text(self) -> str:
+        parts = [f"Modelo: {self.name}"]
+
+        if self.description:
+            parts.append(f"Descrição: {self.description}")
+        if self.use_case:
+            parts.append(f"Caso de uso: {self.use_case}")
+        if self.owner:
+            parts.append(f"Owner: {self.owner}")
+        if self.endpoints:
+            parts.append(f"Endpoints: {', '.join(self.endpoints)}")
+        if self.input_datasets:
+            parts.append(f"Dados de entrada: {', '.join(self.input_datasets)}")
+        if self.features:
+            parts.append(f"Features: {', '.join(self.features)}")
+        if self.tags:
+            parts.append(f"Tags: {', '.join(self.tags)}")
+        if self.version:
+            parts.append(f"Versão: {self.version}")
+
+        return "\n".join(parts)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "owner": self.owner,
+            "use_case": self.use_case,
+            "endpoints": self.endpoints,
+            "input_datasets": self.input_datasets,
+            "features": self.features,
+            "tags": self.tags,
+            "version": self.version,
+            "asset_type": "model"
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelMetadata":
+        return cls(
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            owner=data.get("owner", ""),
+            use_case=data.get("use_case", ""),
+            endpoints=data.get("endpoints", []),
+            input_datasets=data.get("input_datasets", []),
+            features=data.get("features", []),
+            tags=data.get("tags", []),
+            version=data.get("version", "")
+        )
+
+
+@dataclass
 class DiscoveryResult:
     """Result of a discovery query"""
     query: str
     answer: str
     validated_tables: List[Dict[str, Any]]
     invalid_tables: List[Dict[str, Any]]
+    validated_models: List[Dict[str, Any]] = field(default_factory=list)
+    invalid_models: List[Dict[str, Any]] = field(default_factory=list)
     retrieval_results: List[RetrievalResult]
     confidence: float
     latency_ms: int
@@ -250,6 +317,73 @@ class DataDiscoveryAgent:
 
         return count
 
+    def index_models(
+        self,
+        models: List[ModelMetadata],
+        show_progress: bool = True
+    ) -> int:
+        """
+        Index model metadata for discovery.
+
+        Args:
+            models: List of ModelMetadata objects
+            show_progress: Show progress during indexing
+
+        Returns:
+            Number of models indexed
+        """
+        if not models:
+            return 0
+
+        documents = []
+        for model in models:
+            doc = {
+                "id": f"model::{model.name}",
+                "text": model.to_text(),
+                "metadata": model.to_dict()
+            }
+            documents.append(doc)
+
+        count = self.retriever.index_documents(documents, show_progress=show_progress)
+
+        self.logger.info(f"Indexed {count} models")
+        return count
+
+    def index_models_from_json(
+        self,
+        json_path: str,
+        show_progress: bool = True
+    ) -> int:
+        """
+        Index model metadata from JSON file.
+
+        Args:
+            json_path: Path to JSON file with model metadata
+
+        Returns:
+            Number of models indexed
+        """
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        models = [ModelMetadata.from_dict(item) for item in data]
+        return self.index_models(models, show_progress=show_progress)
+
+    def index_model_catalog(self, provider: Any, show_progress: bool = True) -> int:
+        """
+        Index model metadata using a provider/connector.
+
+        Args:
+            provider: Provider with load_models() returning a list of dicts
+            show_progress: Show progress during indexing
+
+        Returns:
+            Number of models indexed
+        """
+        model_cards = provider.load_models()
+        models = [ModelMetadata.from_dict(item) for item in model_cards]
+        return self.index_models(models, show_progress=show_progress)
+
     def index_from_json(
         self,
         json_path: str,
@@ -322,15 +456,50 @@ class DataDiscoveryAgent:
 
         return tables
 
+    def _extract_models_from_results(
+        self,
+        results: List[RetrievalResult]
+    ) -> List[Dict[str, Any]]:
+        """Extract model info from retrieval results."""
+        models = []
+        seen_models = set()
+
+        for r in results:
+            if r.metadata.get("asset_type") != "model":
+                continue
+
+            model_name = r.metadata.get("name", "")
+            if not model_name or model_name in seen_models:
+                continue
+
+            seen_models.add(model_name)
+            models.append({
+                "model_name": model_name,
+                "description": r.metadata.get("description", ""),
+                "owner": r.metadata.get("owner", ""),
+                "use_case": r.metadata.get("use_case", ""),
+                "endpoints": r.metadata.get("endpoints", []),
+                "input_datasets": r.metadata.get("input_datasets", []),
+                "features": r.metadata.get("features", []),
+                "relevance_score": r.combined_score,
+                "semantic_score": r.semantic_score,
+                "lexical_score": r.lexical_score,
+                "confidence": "high" if r.combined_score > 0.7 else "medium" if r.combined_score > 0.4 else "low"
+            })
+
+        return models
+
     def _generate_response(
         self,
         query: str,
         validated_tables: List[Dict[str, Any]],
-        invalid_tables: List[Dict[str, Any]]
+        invalid_tables: List[Dict[str, Any]],
+        validated_models: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """Generate response using LLM"""
-        if not validated_tables:
-            return "Não foram encontradas tabelas relevantes para sua consulta no catálogo disponível."
+        validated_models = validated_models or []
+        if not validated_tables and not validated_models:
+            return "Não foram encontradas tabelas ou modelos relevantes para sua consulta no catálogo disponível."
 
         # Build context from validated tables
         context_parts = []
@@ -339,23 +508,40 @@ class DataDiscoveryAgent:
 
         context = "\n".join(context_parts)
 
+        model_context = ""
+        if validated_models:
+            model_lines = []
+            for model in validated_models:
+                model_lines.append(
+                    f"- {model.get('model_name')}: {model.get('description', 'Sem descrição')} "
+                    f"(owner: {model.get('owner', 'N/A')})"
+                )
+                if model.get("input_datasets"):
+                    model_lines.append(
+                        f"  Dados consumidos: {', '.join(model.get('input_datasets', []))}"
+                    )
+            model_context = "\n".join(model_lines)
+
         system_prompt = """Você é um Assistente de Descoberta de Dados especializado em data lakes.
-Sua tarefa é recomendar tabelas baseado na consulta do usuário.
+Sua tarefa é recomendar tabelas e modelos baseado na consulta do usuário.
 
 Formate cada recomendação assim:
-- [nome_completo_da_tabela]
+- [nome_completo_da_tabela ou modelo]
   Descrição: Breve descrição
-  Relevância: Por que esta tabela é relevante para a consulta
+  Relevância: Por que este item é relevante para a consulta
 
 Seja conciso e informativo. Use português brasileiro.
-Inclua apenas tabelas que foram validadas no contexto fornecido."""
+Inclua apenas tabelas ou modelos que foram validados no contexto fornecido."""
 
         prompt = f"""Consulta do usuário: {query}
 
 Tabelas validadas encontradas:
 {context}
 
-Gere uma resposta recomendando as tabelas mais relevantes."""
+Modelos validados encontrados:
+{model_context if model_context else 'Nenhum modelo relevante encontrado.'}
+
+Gere uma resposta recomendando as tabelas e/ou modelos mais relevantes."""
 
         response = self.llm_provider.generate(
             prompt=prompt,
@@ -395,6 +581,7 @@ Gere uma resposta recomendando as tabelas mais relevantes."""
 
         # 2. Extract tables from results
         discovered_tables = self._extract_tables_from_results(retrieval_results)
+        discovered_models = self._extract_models_from_results(retrieval_results)
 
         # 3. Validate tables
         if validate and self.validator:
@@ -403,11 +590,14 @@ Gere uma resposta recomendando as tabelas mais relevantes."""
             validated_tables = discovered_tables
             invalid_tables = []
 
+        validated_models = discovered_models[:top_k]
+        invalid_models: List[Dict[str, Any]] = []
+
         # Limit to top_k validated
         validated_tables = validated_tables[:top_k]
 
         # 4. Generate response
-        answer = self._generate_response(query, validated_tables, invalid_tables)
+        answer = self._generate_response(query, validated_tables, invalid_tables, validated_models)
 
         # 5. Calculate confidence
         if retrieval_results:
@@ -437,6 +627,8 @@ Gere uma resposta recomendando as tabelas mais relevantes."""
             answer=answer,
             validated_tables=validated_tables,
             invalid_tables=invalid_tables,
+            validated_models=validated_models,
+            invalid_models=invalid_models,
             retrieval_results=retrieval_results,
             confidence=confidence,
             latency_ms=latency_ms,

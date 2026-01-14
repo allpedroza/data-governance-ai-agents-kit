@@ -69,6 +69,8 @@ class DataLineageAgent:
         self.transformations: List[Transformation] = []
         self.graph = nx.DiGraph()
         self.impact_analysis_cache = {}
+        self.column_lineage: List[Dict[str, Any]] = []
+        self.model_lineage: List[Dict[str, Any]] = []
         # Modelo padrão: gpt-5.1 suporta reasoning="none", gpt-5 usa "minimal"
         # Modelos tradicionais (gpt-4o, gpt-4-turbo) usam chat.completions API
         self.llm_model = os.getenv("DATA_LINEAGE_LLM_MODEL", "gpt-5.1")
@@ -99,6 +101,8 @@ class DataLineageAgent:
         self.assets.clear()
         self.transformations.clear()
         self.graph.clear()
+        self.column_lineage.clear()
+        self.model_lineage.clear()
         
         # Processa cada arquivo
         for file_path in file_paths:
@@ -123,8 +127,165 @@ class DataLineageAgent:
             'metrics': metrics,
             'critical_components': critical_components,
             'insights': insights,
-            'graph': self.graph
+            'graph': self.graph,
+            'column_lineage': self.column_lineage,
+            'model_lineage': self.model_lineage
         }
+
+    def _ensure_asset(
+        self,
+        name: str,
+        asset_type: str,
+        source_file: str = "manual",
+        line_number: int = 0,
+        metadata: Optional[Dict[str, Any]] = None,
+        schema: Optional[Dict[str, str]] = None
+    ) -> DataAsset:
+        """Create or retrieve an asset for manual lineage registration."""
+        asset = self.assets.get(name)
+        if asset:
+            if metadata:
+                asset.metadata.update(metadata)
+            if schema:
+                asset.schema.update(schema)
+            return asset
+
+        asset = DataAsset(
+            name=name,
+            type=asset_type,
+            source_file=source_file,
+            line_number=line_number,
+            metadata=metadata or {},
+            schema=schema or {}
+        )
+        self.assets[name] = asset
+        return asset
+
+    def add_column_lineage(
+        self,
+        source_asset: str,
+        source_column: str,
+        target_asset: str,
+        target_column: str,
+        transformation_logic: str = "",
+        source_file: str = "manual",
+        line_number: int = 0,
+        confidence_score: float = 1.0
+    ) -> None:
+        """
+        Register column-level lineage for a transformation.
+        """
+        self.column_lineage.append({
+            "source_asset": source_asset,
+            "source_column": source_column,
+            "target_asset": target_asset,
+            "target_column": target_column,
+            "transformation_logic": transformation_logic,
+            "source_file": source_file,
+            "line_number": line_number,
+            "confidence_score": confidence_score
+        })
+
+    def add_model_lineage(
+        self,
+        dataset: str,
+        features: List[str],
+        model: str,
+        endpoint: str,
+        feature_store: Optional[str] = None,
+        owners: Optional[List[str]] = None,
+        classification: Optional[str] = None,
+        source_file: str = "model_registry"
+    ) -> None:
+        """
+        Register model lineage: dataset -> feature -> model -> endpoint.
+        """
+        dataset_asset = self._ensure_asset(
+            dataset,
+            "dataset",
+            source_file=source_file,
+            metadata={"classification": classification, "owners": owners or []}
+        )
+
+        feature_store_asset = None
+        if feature_store:
+            feature_store_asset = self._ensure_asset(
+                feature_store,
+                "feature_store",
+                source_file=source_file,
+                metadata={"owners": owners or []}
+            )
+            self.transformations.append(Transformation(
+                source=dataset_asset,
+                target=feature_store_asset,
+                operation="FEATURE_STORE_PUBLISH",
+                transformation_logic="publish_features",
+                source_file=source_file
+            ))
+
+        feature_assets = []
+        for feature in features:
+            feature_asset = self._ensure_asset(
+                feature,
+                "feature",
+                source_file=source_file,
+                metadata={"source_dataset": dataset}
+            )
+            feature_assets.append(feature_asset)
+            self.transformations.append(Transformation(
+                source=dataset_asset,
+                target=feature_asset,
+                operation="FEATURE_ENGINEERING",
+                transformation_logic=f"derive_feature({feature})",
+                source_file=source_file
+            ))
+            if feature_store_asset:
+                self.transformations.append(Transformation(
+                    source=feature_store_asset,
+                    target=feature_asset,
+                    operation="FEATURE_STORE_READ",
+                    transformation_logic=f"load_feature({feature})",
+                    source_file=source_file
+                ))
+
+        model_asset = self._ensure_asset(
+            model,
+            "model",
+            source_file=source_file,
+            metadata={"owners": owners or [], "classification": classification}
+        )
+        for feature_asset in feature_assets:
+            self.transformations.append(Transformation(
+                source=feature_asset,
+                target=model_asset,
+                operation="MODEL_TRAINING",
+                transformation_logic="train_model",
+                source_file=source_file
+            ))
+
+        endpoint_asset = self._ensure_asset(
+            endpoint,
+            "endpoint",
+            source_file=source_file,
+            metadata={"owners": owners or [], "classification": classification}
+        )
+        self.transformations.append(Transformation(
+            source=model_asset,
+            target=endpoint_asset,
+            operation="MODEL_DEPLOYMENT",
+            transformation_logic="deploy_model",
+            source_file=source_file
+        ))
+
+        self.model_lineage.append({
+            "dataset": dataset,
+            "features": features,
+            "model": model,
+            "endpoint": endpoint,
+            "feature_store": feature_store,
+            "owners": owners or [],
+            "classification": classification
+        })
     
     def _process_file(self, file_path: str):
         """Processa um arquivo individual"""

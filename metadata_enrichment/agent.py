@@ -204,6 +204,13 @@ class MetadataEnrichmentAgent:
         "restricted": "Dados altamente restritos (PII, financeiro sensível)"
     }
 
+    CLASSIFICATION_LEVELS = {
+        "public": 1,
+        "internal": 2,
+        "confidential": 3,
+        "restricted": 4
+    }
+
     def __init__(
         self,
         embedding_provider: EmbeddingProvider,
@@ -665,6 +672,73 @@ Gere o array JSON com enriquecimento para cada coluna:"""
             "embedding_model": self.embedding_provider.model_name,
             "llm_model": self.llm_provider.model_name,
             "language": self.language
+        }
+
+    def propagate_classification_owners(
+        self,
+        lineage_data: Dict[str, Any],
+        metadata_map: Dict[str, Dict[str, Any]],
+        propagate_owner: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Propagate classification and ownership through lineage.
+
+        Args:
+            lineage_data: Output from lineage agent (transformations list)
+            metadata_map: Mapping asset_name -> metadata dict
+            propagate_owner: Whether to propagate owner to downstream assets
+
+        Returns:
+            Dict with updated metadata and propagation log
+        """
+        transformations = lineage_data.get("transformations", [])
+        propagation_log = []
+
+        for transformation in transformations:
+            source = transformation.get("source") if isinstance(transformation, dict) else getattr(transformation, "source", None)
+            target = transformation.get("target") if isinstance(transformation, dict) else getattr(transformation, "target", None)
+
+            source_name = source.get("name") if isinstance(source, dict) else getattr(source, "name", None)
+            target_name = target.get("name") if isinstance(target, dict) else getattr(target, "name", None)
+
+            if not source_name or not target_name:
+                continue
+
+            source_meta = metadata_map.get(source_name, {})
+            target_meta = metadata_map.get(target_name, {})
+
+            source_class = source_meta.get("classification")
+            target_class = target_meta.get("classification")
+
+            if source_class:
+                source_level = self.CLASSIFICATION_LEVELS.get(source_class, 0)
+                target_level = self.CLASSIFICATION_LEVELS.get(target_class, 0)
+
+                if source_level > target_level:
+                    target_meta["classification"] = source_class
+                    propagation_log.append({
+                        "asset": target_name,
+                        "field": "classification",
+                        "value": source_class,
+                        "source": source_name
+                    })
+
+            if propagate_owner:
+                source_owner = source_meta.get("owner") or source_meta.get("owner_suggestion")
+                if source_owner and not target_meta.get("owner"):
+                    target_meta["owner"] = source_owner
+                    propagation_log.append({
+                        "asset": target_name,
+                        "field": "owner",
+                        "value": source_owner,
+                        "source": source_name
+                    })
+
+            metadata_map[target_name] = target_meta
+
+        return {
+            "metadata": metadata_map,
+            "propagation_log": propagation_log
         }
 
     def export_catalog(

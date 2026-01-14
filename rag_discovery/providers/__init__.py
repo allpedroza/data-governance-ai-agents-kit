@@ -10,11 +10,13 @@ from .base import (
     LLMResponse,
     VectorStoreProvider
 )
+from .model_catalog import ModelCatalogProvider
 
 __all__ = [
     "EmbeddingProvider",
     "EmbeddingResult",
     "LLMProvider",
     "LLMResponse",
-    "VectorStoreProvider"
+    "VectorStoreProvider",
+    "ModelCatalogProvider"
 ]

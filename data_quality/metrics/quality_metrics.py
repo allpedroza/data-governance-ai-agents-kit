@@ -854,6 +854,321 @@ class FreshnessMetric(QualityMetric):
         )
 
 
+class ClassBalanceMetric(QualityMetric):
+    """
+    Class Balance - Measures label distribution balance for training data.
+
+    Checks:
+    - Minority vs majority ratio
+    - Optional per-class minimum representation
+    """
+
+    @property
+    def dimension(self) -> str:
+        return "training_data"
+
+    def evaluate(
+        self,
+        data: List[Dict[str, Any]],
+        label_column: str,
+        threshold: float = 0.8,
+        min_class_ratio: float = 0.2,
+        **kwargs
+    ) -> MetricResult:
+        if not data or not label_column:
+            return MetricResult(
+                metric_name="class_balance",
+                dimension=self.dimension,
+                column=label_column,
+                value=0.0,
+                status=QualityStatus.SKIPPED,
+                threshold=threshold,
+                message="No data or label column provided"
+            )
+
+        labels = [row.get(label_column) for row in data if row.get(label_column) is not None]
+        if not labels:
+            return MetricResult(
+                metric_name="class_balance",
+                dimension=self.dimension,
+                column=label_column,
+                value=0.0,
+                status=QualityStatus.FAILED,
+                threshold=threshold,
+                message="No labels available for balance check"
+            )
+
+        counts: Dict[Any, int] = {}
+        for label in labels:
+            counts[label] = counts.get(label, 0) + 1
+
+        min_count = min(counts.values())
+        max_count = max(counts.values())
+        ratio = min_count / max_count if max_count else 0.0
+        balance_score = min(1.0, ratio / min_class_ratio) if min_class_ratio > 0 else ratio
+
+        if ratio >= min_class_ratio and balance_score >= threshold:
+            status = QualityStatus.PASSED
+            message = f"Class balance ratio {ratio:.2f} meets minimum {min_class_ratio:.2f}"
+        elif ratio >= min_class_ratio * 0.7:
+            status = QualityStatus.WARNING
+            message = f"Class balance ratio {ratio:.2f} slightly below target"
+        else:
+            status = QualityStatus.FAILED
+            message = f"Class balance ratio {ratio:.2f} below minimum {min_class_ratio:.2f}"
+
+        return MetricResult(
+            metric_name="class_balance",
+            dimension=self.dimension,
+            column=label_column,
+            value=balance_score,
+            status=status,
+            threshold=threshold,
+            message=message,
+            details={
+                "label_counts": {str(k): v for k, v in counts.items()},
+                "total_labels": len(labels),
+                "min_class_ratio": min_class_ratio,
+                "observed_ratio": round(ratio, 4)
+            }
+        )
+
+
+class LabelNoiseMetric(QualityMetric):
+    """
+    Label Noise - Detects conflicting labels for identical feature signatures.
+    """
+
+    @property
+    def dimension(self) -> str:
+        return "label_quality"
+
+    def evaluate(
+        self,
+        data: List[Dict[str, Any]],
+        label_column: str,
+        feature_columns: Optional[List[str]] = None,
+        threshold: float = 0.9,
+        **kwargs
+    ) -> MetricResult:
+        if not data or not label_column:
+            return MetricResult(
+                metric_name="label_noise",
+                dimension=self.dimension,
+                column=label_column,
+                value=0.0,
+                status=QualityStatus.SKIPPED,
+                threshold=threshold,
+                message="No data or label column provided"
+            )
+
+        feature_columns = feature_columns or [
+            col for col in data[0].keys() if col != label_column
+        ]
+
+        signature_labels: Dict[str, Set[Any]] = {}
+        for row in data:
+            label = row.get(label_column)
+            if label is None:
+                continue
+            signature = "|".join(str(row.get(col, "")) for col in feature_columns)
+            signature_hash = hashlib.md5(signature.encode("utf-8")).hexdigest()
+            signature_labels.setdefault(signature_hash, set()).add(label)
+
+        conflicting = sum(1 for labels in signature_labels.values() if len(labels) > 1)
+        total_signatures = len(signature_labels)
+        noise_rate = conflicting / total_signatures if total_signatures else 0
+        score = 1 - noise_rate
+
+        if score >= threshold:
+            status = QualityStatus.PASSED
+            message = f"Label consistency score {score:.2%} meets threshold"
+        elif score >= threshold * 0.9:
+            status = QualityStatus.WARNING
+            message = f"Label consistency score {score:.2%} slightly below threshold"
+        else:
+            status = QualityStatus.FAILED
+            message = f"Label consistency score {score:.2%} below threshold"
+
+        return MetricResult(
+            metric_name="label_noise",
+            dimension=self.dimension,
+            column=label_column,
+            value=score,
+            status=status,
+            threshold=threshold,
+            message=message,
+            details={
+                "feature_columns": feature_columns,
+                "total_signatures": total_signatures,
+                "conflicting_signatures": conflicting,
+                "noise_rate": round(noise_rate, 4)
+            }
+        )
+
+
+class LeakageCheckMetric(QualityMetric):
+    """
+    Leakage Check - Flags features that duplicate the label or known leakage patterns.
+    """
+
+    @property
+    def dimension(self) -> str:
+        return "training_data"
+
+    def evaluate(
+        self,
+        data: List[Dict[str, Any]],
+        label_column: str,
+        feature_columns: Optional[List[str]] = None,
+        leakage_keywords: Optional[List[str]] = None,
+        threshold: float = 0.95,
+        **kwargs
+    ) -> MetricResult:
+        if not data or not label_column:
+            return MetricResult(
+                metric_name="leakage_check",
+                dimension=self.dimension,
+                column=label_column,
+                value=0.0,
+                status=QualityStatus.SKIPPED,
+                threshold=threshold,
+                message="No data or label column provided"
+            )
+
+        feature_columns = feature_columns or [
+            col for col in data[0].keys() if col != label_column
+        ]
+        leakage_keywords = leakage_keywords or ["target", "label", "outcome", "y", "class"]
+
+        potential_leaks = [
+            col for col in feature_columns
+            if col.lower() == label_column.lower()
+            or any(keyword in col.lower() for keyword in leakage_keywords)
+        ]
+
+        leak_matches = 0
+        total_rows = 0
+        for row in data:
+            label_value = row.get(label_column)
+            if label_value is None:
+                continue
+            total_rows += 1
+            for col in feature_columns:
+                if col == label_column:
+                    continue
+                if row.get(col) == label_value:
+                    leak_matches += 1
+                    break
+
+        leakage_rate = leak_matches / total_rows if total_rows else 0
+        score = 1 - leakage_rate
+
+        if score >= threshold and not potential_leaks:
+            status = QualityStatus.PASSED
+            message = "No leakage detected"
+        elif score >= threshold * 0.9:
+            status = QualityStatus.WARNING
+            message = "Potential leakage patterns detected"
+        else:
+            status = QualityStatus.FAILED
+            message = "Leakage detected between features and label"
+
+        return MetricResult(
+            metric_name="leakage_check",
+            dimension=self.dimension,
+            column=label_column,
+            value=score,
+            status=status,
+            threshold=threshold,
+            message=message,
+            details={
+                "feature_columns": feature_columns,
+                "potential_leakage_columns": potential_leaks,
+                "leakage_rate": round(leakage_rate, 4),
+                "rows_checked": total_rows
+            }
+        )
+
+
+class GoldSetAgreementMetric(QualityMetric):
+    """
+    Gold Set Agreement - Compares labels against a gold-set reference.
+    """
+
+    @property
+    def dimension(self) -> str:
+        return "label_quality"
+
+    def evaluate(
+        self,
+        data: List[Dict[str, Any]],
+        label_column: str,
+        gold_set: Optional[Dict[str, Any]] = None,
+        id_column: str = "id",
+        threshold: float = 0.9,
+        **kwargs
+    ) -> MetricResult:
+        if not data or not label_column or not gold_set:
+            return MetricResult(
+                metric_name="gold_set_agreement",
+                dimension=self.dimension,
+                column=label_column,
+                value=0.0,
+                status=QualityStatus.SKIPPED,
+                threshold=threshold,
+                message="No gold set provided for agreement check"
+            )
+
+        agreements = 0
+        total = 0
+        mismatches = []
+
+        for row in data:
+            identifier = row.get(id_column)
+            if identifier is None:
+                continue
+            if str(identifier) not in gold_set:
+                continue
+            total += 1
+            gold_label = gold_set.get(str(identifier))
+            if row.get(label_column) == gold_label:
+                agreements += 1
+            else:
+                mismatches.append({
+                    "id": identifier,
+                    "label": row.get(label_column),
+                    "gold_label": gold_label
+                })
+
+        agreement_rate = agreements / total if total else 0
+
+        if agreement_rate >= threshold:
+            status = QualityStatus.PASSED
+            message = f"Gold-set agreement {agreement_rate:.2%} meets threshold"
+        elif agreement_rate >= threshold * 0.9:
+            status = QualityStatus.WARNING
+            message = f"Gold-set agreement {agreement_rate:.2%} slightly below threshold"
+        else:
+            status = QualityStatus.FAILED
+            message = f"Gold-set agreement {agreement_rate:.2%} below threshold"
+
+        return MetricResult(
+            metric_name="gold_set_agreement",
+            dimension=self.dimension,
+            column=label_column,
+            value=agreement_rate,
+            status=status,
+            threshold=threshold,
+            message=message,
+            details={
+                "checked": total,
+                "agreements": agreements,
+                "mismatches_sample": mismatches[:5]
+            }
+        )
+
+
 class QualityMetrics:
     """
     Aggregator for all quality metrics
@@ -867,6 +1182,10 @@ class QualityMetrics:
         self.validity = ValidityMetric()
         self.consistency = ConsistencyMetric()
         self.freshness = FreshnessMetric()
+        self.class_balance = ClassBalanceMetric()
+        self.label_noise = LabelNoiseMetric()
+        self.leakage_check = LeakageCheckMetric()
+        self.gold_set_agreement = GoldSetAgreementMetric()
 
     def evaluate_all(
         self,

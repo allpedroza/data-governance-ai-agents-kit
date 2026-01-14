@@ -176,6 +176,52 @@ class FilterPolicy:
         return mapping.get(category, FilterAction.WARN)
 
 
+@dataclass
+class PromptFirewallPolicy:
+    """Policy for prompt injection firewall."""
+    action_on_match: FilterAction = FilterAction.BLOCK
+    risk_score_threshold: float = 0.6
+    regex_patterns: List[str] = field(default_factory=lambda: [
+        r"ignore\s+(all|previous)\s+instructions",
+        r"disregard\s+.*system\s+prompt",
+        r"reveal\s+the\s+system\s+prompt",
+        r"jailbreak",
+        r"developer\s+message",
+        r"system\s+prompt",
+        r"do\s+anything\s+now",
+        r"act\s+as\s+.*assistant",
+        r"override\s+.*policy"
+    ])
+    heuristic_keywords: List[str] = field(default_factory=lambda: [
+        "ignore previous",
+        "system prompt",
+        "developer message",
+        "jailbreak",
+        "bypass",
+        "override",
+        "disable safety",
+        "exfiltrate",
+        "leak"
+    ])
+
+
+@dataclass
+class PromptFirewallResult:
+    """Result of prompt injection firewall analysis."""
+    action: FilterAction
+    risk_score: float
+    matches: List[str]
+    reasons: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "action": self.action.value,
+            "risk_score": round(self.risk_score, 3),
+            "matches": self.matches,
+            "reasons": self.reasons
+        }
+
+
 class SensitiveDataNERAgent:
     """
     Named Entity Recognition agent for sensitive data detection.
@@ -196,6 +242,9 @@ class SensitiveDataNERAgent:
         locales: Optional[List[str]] = None,
         vault_config: Optional[Any] = None,
         enable_vault: bool = False,
+        prompt_firewall_policy: Optional[PromptFirewallPolicy] = None,
+        prompt_firewall_heuristic: Optional[Callable[[str], Dict[str, Any]]] = None,
+        enable_prompt_firewall: bool = True,
     ):
         """
         Initialize the NER agent.
@@ -208,10 +257,17 @@ class SensitiveDataNERAgent:
             locales: List of locales to enable (e.g., ["br", "us"])
             vault_config: Configuration for secure vault (VaultConfig)
             enable_vault: Enable vault for storing original/anonymized mappings
+            prompt_firewall_policy: Optional policy for prompt injection detection
+            prompt_firewall_heuristic: Optional LLM heuristic callable for prompt injection scoring
+            enable_prompt_firewall: Enable prompt firewall layer
         """
         self.filter_policy = filter_policy or FilterPolicy()
         self.strict_mode = strict_mode
         self.locales = set(locales) if locales else None
+
+        self.prompt_firewall_policy = prompt_firewall_policy or PromptFirewallPolicy()
+        self.prompt_firewall_heuristic = prompt_firewall_heuristic
+        self.enable_prompt_firewall = enable_prompt_firewall
 
         # Initialize patterns
         self._patterns: Dict[str, EntityPatternConfig] = {}
@@ -641,7 +697,18 @@ class SensitiveDataNERAgent:
         Raises:
             ValueError: If the request is blocked by policy
         """
+        if self.enable_prompt_firewall:
+            firewall_result = self._run_prompt_firewall(prompt)
+            if firewall_result.action == FilterAction.BLOCK:
+                raise ValueError(
+                    f"Request blocked by prompt firewall: {firewall_result.reasons}"
+                )
+
         result = self.analyze(prompt, anonymize=auto_anonymize)
+
+        if self.enable_prompt_firewall and firewall_result.action == FilterAction.WARN:
+            result.warnings.append("Prompt firewall warning: potential prompt injection detected.")
+            result.warnings.extend(firewall_result.reasons)
 
         if result.filter_action == FilterAction.BLOCK:
             raise ValueError(
@@ -652,6 +719,55 @@ class SensitiveDataNERAgent:
             return result.anonymized_text, result
 
         return prompt, result
+
+    def _run_prompt_firewall(self, prompt: str) -> PromptFirewallResult:
+        """Run regex + heuristic prompt injection checks."""
+        policy = self.prompt_firewall_policy
+        matches = []
+        reasons = []
+
+        for pattern in policy.regex_patterns:
+            if re.search(pattern, prompt, flags=re.IGNORECASE):
+                matches.append(pattern)
+
+        keyword_hits = [
+            keyword for keyword in policy.heuristic_keywords
+            if keyword.lower() in prompt.lower()
+        ]
+
+        heuristic_score = min(1.0, len(keyword_hits) / max(1, len(policy.heuristic_keywords)))
+        regex_score = min(1.0, len(matches) / max(1, len(policy.regex_patterns)))
+        risk_score = max(regex_score * 0.7 + heuristic_score * 0.3, 0.0)
+
+        if self.prompt_firewall_heuristic:
+            try:
+                llm_result = self.prompt_firewall_heuristic(prompt)
+                if isinstance(llm_result, dict):
+                    risk_score = max(risk_score, float(llm_result.get("risk_score", 0)))
+                    if llm_result.get("reasons"):
+                        reasons.extend(llm_result.get("reasons", []))
+                elif isinstance(llm_result, (int, float)):
+                    risk_score = max(risk_score, float(llm_result))
+            except Exception as exc:
+                reasons.append(f"Prompt firewall heuristic error: {exc}")
+
+        if keyword_hits:
+            reasons.append(f"Heuristic keywords detected: {', '.join(keyword_hits)}")
+
+        if matches:
+            reasons.append("Prompt injection patterns matched.")
+
+        if risk_score >= policy.risk_score_threshold:
+            action = policy.action_on_match if matches else FilterAction.WARN
+        else:
+            action = FilterAction.ALLOW
+
+        return PromptFirewallResult(
+            action=action,
+            risk_score=risk_score,
+            matches=matches,
+            reasons=reasons
+        )
 
     def create_safe_prompt(self, prompt: str) -> str:
         """

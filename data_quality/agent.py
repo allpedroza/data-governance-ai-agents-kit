@@ -28,7 +28,11 @@ from .metrics.quality_metrics import (
     UniquenessMetric,
     ValidityMetric,
     ConsistencyMetric,
-    FreshnessMetric
+    FreshnessMetric,
+    ClassBalanceMetric,
+    LabelNoiseMetric,
+    LeakageCheckMetric,
+    GoldSetAgreementMetric
 )
 from .metrics.schema_drift import SchemaDriftDetector, DriftReport, SchemaSnapshot
 from .rules.quality_rules import (
@@ -53,6 +57,8 @@ class QualityDimension(Enum):
     CONSISTENCY = "consistency"
     FRESHNESS = "freshness"
     SCHEMA = "schema"
+    TRAINING_DATA = "training_data"
+    LABEL_QUALITY = "label_quality"
 
 
 @dataclass
@@ -367,6 +373,115 @@ class DataQualityAgent:
             metadata={
                 "sample_size": len(data),
                 "schema": schema
+            }
+        )
+
+        self._reports.append(report)
+        return report
+
+    def evaluate_training_data(
+        self,
+        data: List[Dict[str, Any]],
+        label_column: str,
+        feature_columns: Optional[List[str]] = None,
+        gold_set: Optional[Dict[str, Any]] = None,
+        gate_config: Optional[Dict[str, Any]] = None,
+        source_name: str = "training_dataset"
+    ) -> QualityReport:
+        """
+        Evaluate training data quality with ML-specific gates.
+
+        Args:
+            data: List of row dictionaries
+            label_column: Target/label column name
+            feature_columns: Optional list of feature columns
+            gold_set: Optional gold-set mapping of id->label
+            gate_config: Threshold configuration for training metrics
+            source_name: Name for report metadata
+
+        Returns:
+            QualityReport with training-specific metrics
+        """
+        start_time = time.time()
+        gate_config = gate_config or {}
+
+        metric_results = []
+
+        class_balance_config = gate_config.get("class_balance", {})
+        metric_results.append(
+            ClassBalanceMetric().evaluate(
+                data=data,
+                label_column=label_column,
+                **class_balance_config
+            )
+        )
+
+        label_noise_config = gate_config.get("label_noise", {})
+        metric_results.append(
+            LabelNoiseMetric().evaluate(
+                data=data,
+                label_column=label_column,
+                feature_columns=feature_columns,
+                **label_noise_config
+            )
+        )
+
+        leakage_config = gate_config.get("leakage_check", {})
+        metric_results.append(
+            LeakageCheckMetric().evaluate(
+                data=data,
+                label_column=label_column,
+                feature_columns=feature_columns,
+                **leakage_config
+            )
+        )
+
+        gold_config = gate_config.get("gold_set_agreement", {})
+        metric_results.append(
+            GoldSetAgreementMetric().evaluate(
+                data=data,
+                label_column=label_column,
+                gold_set=gold_set,
+                **gold_config
+            )
+        )
+
+        dimensions = self._calculate_dimension_scores(metric_results)
+        overall_score = self._calculate_overall_score(metric_results)
+        overall_status = self._determine_status(metric_results, [], None)
+
+        failed_checks = [r.metric_name for r in metric_results if r.status == QualityStatus.FAILED]
+        warning_checks = [r.metric_name for r in metric_results if r.status == QualityStatus.WARNING]
+
+        gate_status = "passed"
+        if failed_checks:
+            gate_status = "failed"
+        elif warning_checks:
+            gate_status = "warning"
+
+        processing_time = int((time.time() - start_time) * 1000)
+
+        report = QualityReport(
+            source_name=source_name,
+            source_type="training_data",
+            timestamp=datetime.now().isoformat(),
+            overall_score=overall_score,
+            overall_status=overall_status,
+            dimensions=dimensions,
+            metrics=[r.to_dict() for r in metric_results],
+            alerts=[],
+            schema_drift=None,
+            row_count=len(data),
+            columns_checked=len(data[0].keys()) if data else 0,
+            processing_time_ms=processing_time,
+            metadata={
+                "label_column": label_column,
+                "feature_columns": feature_columns or [],
+                "training_quality_gate": {
+                    "status": gate_status,
+                    "failed_checks": failed_checks,
+                    "warning_checks": warning_checks
+                }
             }
         )
 

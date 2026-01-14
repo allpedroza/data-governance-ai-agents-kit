@@ -14,6 +14,7 @@ AI agent for semantic data discovery with hybrid RAG (semantic + lexical), catal
 - **Providers plugáveis** para embeddings, LLM e vector stores (ChromaDB, FAISS, etc.).
 - **Validação de tabelas** contra catálogos existentes.
 - **Integração** com Lineage, Enrichment e Classification para enriquecer respostas.
+- **Discovery de modelos** com cards, endpoints e owners no mesmo índice.
 
 ## Uso Rápido
 ```python
@@ -35,6 +36,29 @@ print(result.answer)
 
 Combine com metadados enriquecidos para melhorar contexto e relevância.
 
+## Discovery de Modelos
+```python
+from rag_discovery.agent import DataDiscoveryAgent, ModelMetadata
+from rag_discovery.providers.model_catalog import ModelCatalogProvider
+
+agent.index_models([
+    ModelMetadata(
+        name="churn_predictor",
+        use_case="retencao",
+        owner="ml-team",
+        endpoints=["/v1/churn"],
+        input_datasets=["warehouse.crm.customers"],
+        features=["tenure", "plan_type"]
+    )
+])
+
+provider = ModelCatalogProvider("./model_cards")
+agent.index_model_catalog(provider)
+
+result = agent.discover("Quais modelos usam dados de clientes?")
+print(result.answer)
+```
+
 ---
 
 ## Summary
@@ -46,6 +70,7 @@ AI agent for semantic data discovery with hybrid RAG (semantic + lexical), catal
 - **Pluggable providers** for embeddings, LLMs, and vector stores (ChromaDB, FAISS, etc.).
 - **Table validation** against existing catalogs.
 - **Integration** with Lineage, Enrichment, and Classification to enrich answers.
+- **Model discovery** with model cards, endpoints, and owners in the same index.
 
 ## Quickstart
 ```python
@@ -66,3 +91,26 @@ print(result.answer)
 ```
 
 Combine with enriched metadata to improve context and relevance.
+
+## Model Discovery
+```python
+from rag_discovery.agent import DataDiscoveryAgent, ModelMetadata
+from rag_discovery.providers.model_catalog import ModelCatalogProvider
+
+agent.index_models([
+    ModelMetadata(
+        name="churn_predictor",
+        use_case="retention",
+        owner="ml-team",
+        endpoints=["/v1/churn"],
+        input_datasets=["warehouse.crm.customers"],
+        features=["tenure", "plan_type"]
+    )
+])
+
+provider = ModelCatalogProvider("./model_cards")
+agent.index_model_catalog(provider)
+
+result = agent.discover("Which models use customer data?")
+print(result.answer)
+```

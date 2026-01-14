@@ -25,6 +25,8 @@ from .agent import (
     DetectedEntity,
     FilterAction,
     FilterPolicy,
+    PromptFirewallPolicy,
+    PromptFirewallResult,
     AnonymizationConfig,
     EntityCategory,
     analyze_text,
@@ -61,6 +63,8 @@ __all__ = [
     "DetectedEntity",
     "FilterAction",
     "FilterPolicy",
+    "PromptFirewallPolicy",
+    "PromptFirewallResult",
     "EntityCategory",
     "analyze_text",
     # Anonymization
