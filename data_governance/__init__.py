@@ -8,6 +8,7 @@ This package contains agents focused on data governance, including:
 - Data Classification: Classifying data by sensitivity level
 - Data Quality: Monitoring and analyzing data quality
 - Data Asset Value: Analyzing business value of data assets
+- Data Product Scoring: Scoring layer for data products
 
 These agents help organizations implement comprehensive data governance
 practices across their data ecosystem.
@@ -54,6 +55,16 @@ try:
 except ImportError:
     _asset_value_available = False
 
+from .data_product_scoring import (
+    DataProductScoringAgent,
+    DataProductScoringReport,
+    DataProductScore,
+    DataProductDefinition,
+    DataProductContract,
+    DataProductGovernance,
+    DataProductScoringWeights,
+)
+
 __all__ = []
 
 if _lineage_available:
@@ -77,5 +88,15 @@ if _asset_value_available:
         'AssetValueReport',
         'AssetValueScore',
     ])
+
+__all__.extend([
+    'DataProductScoringAgent',
+    'DataProductScoringReport',
+    'DataProductScore',
+    'DataProductDefinition',
+    'DataProductContract',
+    'DataProductGovernance',
+    'DataProductScoringWeights',
+])
 
 __version__ = '1.0.0'
