@@ -16,7 +16,10 @@ parent_dir = Path(__file__).parent.parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from rag_discovery.providers.base import EmbeddingProvider, VectorStoreProvider
+try:
+    from rag_discovery.providers.base import EmbeddingProvider, VectorStoreProvider
+except ImportError:
+    from data_governance.rag_discovery.providers.base import EmbeddingProvider, VectorStoreProvider
 
 
 @dataclass

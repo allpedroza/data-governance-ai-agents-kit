@@ -24,7 +24,10 @@ import sqlparse
 from sqlparse.sql import IdentifierList, Identifier, Where, Comparison
 from sqlparse.tokens import Keyword, DML
 
-from rag_discovery.providers.base import LLMProvider
+try:
+    from rag_discovery.providers.base import LLMProvider
+except ImportError:
+    from data_governance.rag_discovery.providers.base import LLMProvider
 
 
 class ValueCategory(Enum):

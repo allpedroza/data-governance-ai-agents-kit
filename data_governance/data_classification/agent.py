@@ -18,7 +18,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set, Tuple
-from rag_discovery.providers.base import LLMProvider
+try:
+    from rag_discovery.providers.base import LLMProvider
+except ImportError:
+    from data_governance.rag_discovery.providers.base import LLMProvider
 from dataclasses import dataclass, field
 from enum import Enum
 
