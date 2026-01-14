@@ -46,6 +46,12 @@ except ImportError:
     _quality_available = False
 
 try:
+    from .data_contracts import DataContractAgent
+    _contracts_available = True
+except ImportError:
+    _contracts_available = False
+
+try:
     from .data_asset_value import (
         DataAssetValueAgent,
         AssetValueReport,
@@ -81,6 +87,9 @@ if _classification_available:
 
 if _quality_available:
     __all__.append('DataQualityAgent')
+
+if _contracts_available:
+    __all__.append('DataContractAgent')
 
 if _asset_value_available:
     __all__.extend([

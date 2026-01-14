@@ -59,6 +59,20 @@ try:
 except ImportError:
     QUALITY_AVAILABLE = False
 
+# Data Contracts Agent imports
+sys.path.append(str(BASE_DIR / "data_governance" / "data_contracts"))
+CONTRACTS_AVAILABLE = True
+try:
+    from data_governance.data_contracts.agent import DataContractAgent
+    from data_governance.data_contracts.models import (
+        ContractField,
+        DataContract,
+        DataContractSLA,
+        DataQualityRule,
+    )
+except ImportError:
+    CONTRACTS_AVAILABLE = False
+
 # Data Classification Agent imports
 sys.path.append(str(BASE_DIR / "data_governance" / "data_classification"))
 CLASSIFICATION_AVAILABLE = True
@@ -1664,6 +1678,369 @@ def render_quality_tab() -> None:
                 file_name=f"{report.source_name}_quality_report.md",
                 mime="text/markdown"
             )
+
+
+def _initialize_contract_agent():
+    """Initialize the Data Contract Agent."""
+    if not CONTRACTS_AVAILABLE:
+        return None
+
+    try:
+        return DataContractAgent(
+            contract_store=str(BASE_DIR / "data_governance" / "data_contracts" / ".contracts")
+        )
+    except Exception:
+        return None
+
+
+def render_contracts_tab() -> None:
+    """UI for Data Contracts and the contract creator feature."""
+    st.subheader("📜 Data Contracts")
+    st.markdown(
+        "Crie contratos de dados e valide ingestões com schema, regras de qualidade e SLAs."
+    )
+
+    if not CONTRACTS_AVAILABLE:
+        st.error(
+            "⚠️ Data Contracts module não disponível. "
+            "Verifique se as dependências estão instaladas."
+        )
+        return
+
+    if "contracts_agent" not in st.session_state:
+        with st.spinner("Inicializando agente de contratos..."):
+            st.session_state.contracts_agent = _initialize_contract_agent()
+
+    agent = st.session_state.get("contracts_agent")
+    if not agent:
+        st.error("Não foi possível inicializar o agente.")
+        return
+
+    if "contract_schema_rows" not in st.session_state:
+        st.session_state.contract_schema_rows = []
+    if "contract_rules_rows" not in st.session_state:
+        st.session_state.contract_rules_rows = []
+
+    creator_tab, validator_tab = st.tabs(["🧩 Criador de Contratos", "✅ Validador"])
+
+    with creator_tab:
+        st.markdown("### Definição do contrato")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            contract_name = st.text_input("Nome do contrato", value="dataset_contract")
+        with col2:
+            contract_version = st.text_input("Versão", value="1.0.0")
+        with col3:
+            contract_owner = st.text_input("Owner", value="data-team")
+
+        col4, col5 = st.columns(2)
+        with col4:
+            contract_domain = st.text_input("Domínio", value="finance")
+        with col5:
+            contract_tags = st.text_input("Tags (separadas por vírgula)", value="core, ingestion")
+
+        contract_description = st.text_area(
+            "Descrição",
+            value="Contrato de dados para ingestão e governança.",
+            height=80,
+        )
+
+        col6, col7 = st.columns(2)
+        with col6:
+            contract_source = st.text_input("Fonte", value="pipeline_ingestion")
+        with col7:
+            contract_destination = st.text_input("Destino", value="warehouse")
+
+        st.markdown("### Schema")
+        schema_file = st.file_uploader(
+            "Opcional: carregar CSV/Parquet para inferir schema",
+            type=["csv", "parquet"],
+            key="contract_schema_file",
+        )
+
+        if schema_file and st.button("Inferir schema", key="infer_schema"):
+            suffix = ".csv" if schema_file.name.endswith(".csv") else ".parquet"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(schema_file.read())
+                temp_path = f.name
+            try:
+                inferred = agent.infer_schema_from_file(temp_path)
+                st.session_state.contract_schema_rows = [
+                    {
+                        "name": field.name,
+                        "data_type": field.data_type,
+                        "required": field.required,
+                        "description": field.description,
+                        "pii": field.pii,
+                        "classification": field.classification,
+                        "min": "",
+                        "max": "",
+                        "regex": "",
+                    }
+                    for field in inferred
+                ]
+                st.success("Schema inferido com sucesso.")
+            except Exception as exc:
+                st.error(f"Erro ao inferir schema: {exc}")
+            finally:
+                os.unlink(temp_path)
+
+        schema_rows = st.data_editor(
+            st.session_state.contract_schema_rows,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="contract_schema_editor",
+        )
+        st.session_state.contract_schema_rows = schema_rows
+
+        st.markdown("### Regras de Qualidade")
+        rule_rows = st.data_editor(
+            st.session_state.contract_rules_rows,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="contract_rules_editor",
+        )
+        st.session_state.contract_rules_rows = rule_rows
+
+        with st.expander("📈 SLA (opcional)"):
+            enable_sla = st.checkbox("Definir SLA", value=False, key="enable_sla")
+            if enable_sla:
+                sla_freshness = st.number_input(
+                    "Freshness (horas)", min_value=1, max_value=720, value=24, key="sla_fresh"
+                )
+                sla_latency = st.number_input(
+                    "Latência (minutos)", min_value=1, max_value=1440, value=60, key="sla_latency"
+                )
+                sla_availability = st.number_input(
+                    "Disponibilidade (%)", min_value=90.0, max_value=100.0, value=99.5, key="sla_avail"
+                )
+            else:
+                sla_freshness = None
+                sla_latency = None
+                sla_availability = None
+
+        def _parse_number(value):
+            if value in (None, ""):
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return value
+
+        def _build_fields(rows: List[Dict[str, Any]]) -> List[ContractField]:
+            fields: List[ContractField] = []
+            for row in rows:
+                name = row.get("name")
+                if not name:
+                    continue
+                constraints = {}
+                min_val = _parse_number(row.get("min"))
+                max_val = _parse_number(row.get("max"))
+                regex = row.get("regex")
+                if min_val is not None:
+                    constraints["min"] = min_val
+                if max_val is not None:
+                    constraints["max"] = max_val
+                if regex:
+                    constraints["regex"] = regex
+                fields.append(
+                    ContractField(
+                        name=name,
+                        data_type=row.get("data_type", "string"),
+                        required=bool(row.get("required", False)),
+                        description=row.get("description", ""),
+                        pii=bool(row.get("pii", False)),
+                        classification=row.get("classification") or None,
+                        constraints=constraints,
+                    )
+                )
+            return fields
+
+        def _build_quality_rules(rows: List[Dict[str, Any]]) -> List[DataQualityRule]:
+            rules: List[DataQualityRule] = []
+            for row in rows:
+                name = row.get("name")
+                rule_type = row.get("rule_type")
+                column = row.get("column")
+                if not name or not rule_type or not column:
+                    continue
+                params: Dict[str, Any] = {}
+                if rule_type == "not_null":
+                    max_null = _parse_number(row.get("max_null_pct"))
+                    if max_null is not None:
+                        params["max_null_pct"] = max_null
+                elif rule_type == "unique":
+                    max_dup = _parse_number(row.get("max_duplicate_pct"))
+                    if max_dup is not None:
+                        params["max_duplicate_pct"] = max_dup
+                elif rule_type == "range":
+                    min_value = _parse_number(row.get("min"))
+                    max_value = _parse_number(row.get("max"))
+                    if min_value is not None:
+                        params["min"] = min_value
+                    if max_value is not None:
+                        params["max"] = max_value
+                elif rule_type == "regex":
+                    pattern = row.get("pattern") or row.get("regex")
+                    if pattern:
+                        params["pattern"] = pattern
+                elif rule_type == "allowed_values":
+                    values = row.get("values") or row.get("allowed_values")
+                    if values:
+                        params["values"] = [value.strip() for value in str(values).split(",") if value.strip()]
+
+                rules.append(
+                    DataQualityRule(
+                        name=name,
+                        rule_type=rule_type,
+                        column=column,
+                        severity=row.get("severity", "warning"),
+                        parameters=params,
+                    )
+                )
+            return rules
+
+        if st.button("🚀 Gerar contrato", type="primary", key="generate_contract"):
+            sla = None
+            if sla_freshness or sla_latency or sla_availability:
+                sla = DataContractSLA(
+                    freshness_hours=int(sla_freshness) if sla_freshness else None,
+                    latency_minutes=int(sla_latency) if sla_latency else None,
+                    availability_pct=sla_availability,
+                )
+
+            fields = _build_fields(schema_rows)
+            rules = _build_quality_rules(rule_rows)
+
+            contract = agent.create_contract(
+                name=contract_name,
+                version=contract_version,
+                owner=contract_owner,
+                domain=contract_domain,
+                description=contract_description,
+                source=contract_source,
+                destination=contract_destination,
+                fields=fields,
+                quality_rules=rules,
+                sla=sla,
+                tags=[tag.strip() for tag in contract_tags.split(",") if tag.strip()],
+            )
+
+            st.session_state.created_contract = contract
+            st.success("Contrato criado com sucesso.")
+
+        if "created_contract" in st.session_state:
+            contract = st.session_state.created_contract
+            st.markdown("### Pré-visualização")
+            st.code(contract.to_json(), language="json")
+
+            col_download_1, col_download_2 = st.columns(2)
+            with col_download_1:
+                st.download_button(
+                    "📥 Baixar JSON",
+                    contract.to_json(),
+                    file_name=f"{contract.name}_v{contract.version}.json",
+                    mime="application/json",
+                )
+            with col_download_2:
+                st.download_button(
+                    "📥 Baixar Markdown",
+                    contract.to_markdown(),
+                    file_name=f"{contract.name}_v{contract.version}.md",
+                    mime="text/markdown",
+                )
+
+            save_name = st.text_input(
+                "Salvar contrato localmente (nome do arquivo)",
+                value=f"{contract.name}_v{contract.version}",
+                key="contract_save_name",
+            )
+            if st.button("💾 Salvar contrato", key="save_contract"):
+                path = agent.save_contract(contract, filename=save_name)
+                st.success(f"Contrato salvo em {path}")
+
+    with validator_tab:
+        st.markdown("### Validar contrato contra dados")
+        contract_file = st.file_uploader(
+            "Carregar contrato (JSON)",
+            type=["json"],
+            key="contract_validator_file",
+        )
+        data_file = st.file_uploader(
+            "Carregar dados (CSV/Parquet)",
+            type=["csv", "parquet"],
+            key="contract_validator_data",
+        )
+
+        if contract_file and data_file and st.button("✅ Validar", key="validate_contract"):
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as cf:
+                    cf.write(contract_file.read())
+                    contract_path = cf.name
+
+                suffix = ".csv" if data_file.name.endswith(".csv") else ".parquet"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as df:
+                    df.write(data_file.read())
+                    data_path = df.name
+
+                try:
+                    contract = agent.load_contract(contract_path)
+                    try:
+                        import pandas as pd
+                    except ImportError as exc:
+                        raise ImportError(
+                            "pandas é necessário para validar dados. Instale com: pip install pandas"
+                        ) from exc
+
+                    if suffix == ".csv":
+                        df_data = pd.read_csv(data_path)
+                    else:
+                        df_data = pd.read_parquet(data_path)
+
+                    report = agent.validate_dataframe(contract, df_data)
+                    st.session_state.contract_validation_report = report
+                finally:
+                    os.unlink(contract_path)
+                    os.unlink(data_path)
+            except Exception as exc:
+                st.error(f"Erro na validação: {exc}")
+
+        if "contract_validation_report" in st.session_state:
+            report = st.session_state.contract_validation_report
+            st.markdown("### Resultado")
+
+            status_emoji = "✅" if report.status == "passed" else "⚠️" if report.status == "warning" else "❌"
+            st.metric("Status", f"{status_emoji} {report.status.upper()}")
+            st.metric("Linhas", report.row_count)
+            st.metric("Colunas", report.column_count)
+
+            if report.findings:
+                st.markdown("#### Achados")
+                for finding in report.findings:
+                    if finding.level == "error":
+                        st.error(f"{finding.message}")
+                    else:
+                        st.warning(f"{finding.message}")
+            else:
+                st.success("Nenhum problema encontrado.")
+
+            st.markdown("#### Exportar")
+            col_val1, col_val2 = st.columns(2)
+            with col_val1:
+                st.download_button(
+                    "📥 Baixar JSON",
+                    report.to_json(),
+                    file_name=f"{report.contract_name}_validation.json",
+                    mime="application/json",
+                )
+            with col_val2:
+                st.download_button(
+                    "📥 Baixar Markdown",
+                    report.to_markdown(),
+                    file_name=f"{report.contract_name}_validation.md",
+                    mime="text/markdown",
+                )
 
 
 def _initialize_classification_agent():
@@ -3812,8 +4189,17 @@ def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
 
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-    "Lineage", "Discovery", "Enrichment", "Classification", "Quality", "Asset Value", "NER Module", "Vault", "⚙️ Settings"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+    "Lineage",
+    "Discovery",
+    "Enrichment",
+    "Classification",
+    "Quality",
+    "Contracts",
+    "Asset Value",
+    "NER Module",
+    "Vault",
+    "⚙️ Settings",
 ])
 with tab1:
     render_lineage_tab()
@@ -3826,11 +4212,12 @@ with tab4:
 with tab5:
     render_quality_tab()
 with tab6:
-    render_value_tab()
+    render_contracts_tab()
 with tab7:
-    render_ner_tab()
+    render_value_tab()
 with tab8:
-    render_vault_tab()
+    render_ner_tab()
 with tab9:
+    render_vault_tab()
+with tab10:
     render_settings_tab()
-
