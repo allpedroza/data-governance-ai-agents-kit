@@ -70,6 +70,8 @@ from visualization_engine import DataLineageVisualizer
 from lineage_system import DataLineageSystem
 from parsers.terraform_parser import parse_terraform_directory
 from parsers.databricks_parser import parse_databricks_workspace
+from parsers.openlineage_parser import OpenLineageParser
+from openlineage_emitter import OpenLineageEmitter
 
 # Configure logging
 logging.basicConfig(
@@ -790,6 +792,223 @@ GROUP BY category;
     
     for filename, content in files.items():
         (directory / filename).write_text(content)
+
+
+@cli.group()
+def openlineage():
+    """
+    Comandos para integração com o padrão OpenLineage.
+
+    OpenLineage (https://openlineage.io/) é um padrão aberto para rastreamento
+    de linhagem de dados, suportado por Spark, dbt, Airflow, Flink e outros.
+    """
+    pass
+
+
+@openlineage.command("import")
+@click.option(
+    "--file", "-f",
+    type=click.Path(exists=True),
+    help="Arquivo NDJSON com eventos OpenLineage (emitidos por Spark, dbt, Airflow, etc.)",
+)
+@click.option(
+    "--url", "-u",
+    help="URL do backend OpenLineage (ex: http://localhost:5000 para Marquez).",
+)
+@click.option(
+    "--namespace", "-n",
+    default=None,
+    help="Filtra por namespace específico ao buscar da API.",
+)
+@click.option(
+    "--api-key", "-k",
+    default=None,
+    help="Token de autenticação para o backend (opcional).",
+)
+@click.option(
+    "--output", "-o",
+    default=None,
+    help="Arquivo de saída para os resultados (JSON).",
+)
+@click.option("--visualize", "-v", is_flag=True, help="Gerar visualização HTML após importar.")
+@click.option("--verbose", is_flag=True, help="Saída detalhada.")
+def openlineage_import(file, url, namespace, api_key, output, visualize, verbose):
+    """
+    Importa linhagem de dados a partir do padrão OpenLineage.
+
+    Exemplos:
+
+    \b
+        # Importar de arquivo NDJSON gerado pelo Spark/dbt/Airflow
+        lineage openlineage import -f events.ndjson
+
+    \b
+        # Importar diretamente do Marquez
+        lineage openlineage import -u http://localhost:5000 -n my_namespace
+
+    \b
+        # Importar e gerar visualização
+        lineage openlineage import -f events.ndjson -v -o results.json
+    """
+    if not file and not url:
+        click.echo("Forneça --file ou --url como fonte OpenLineage.", err=True)
+        raise click.Abort()
+
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    agent = DataLineageAgent()
+
+    if file:
+        click.echo(f"Importando eventos OpenLineage de: {file}")
+        results = agent.load_from_openlineage_file(file)
+    else:
+        click.echo(f"Conectando à API OpenLineage: {url}")
+        results = agent.load_from_openlineage_api(url, namespace=namespace, api_key=api_key)
+
+    assets = results.get("assets", [])
+    transforms = results.get("transformations", [])
+
+    click.echo(f"\n📊 Resultados da Importação OpenLineage:")
+    click.echo(f"  • Assets: {len(assets)}")
+    click.echo(f"  • Transformações: {len(transforms)}")
+
+    if assets:
+        click.echo(f"\n🗂️  Tipos de Assets:")
+        from collections import Counter
+        type_counts = Counter(a.type for a in assets)
+        for t, c in type_counts.most_common():
+            click.echo(f"  • {t}: {c}")
+
+    if output:
+        export_data = {
+            "source": file or url,
+            "timestamp": datetime.now().isoformat(),
+            "assets": [
+                {"name": a.name, "type": a.type, "namespace": a.metadata.get("namespace", "")}
+                for a in assets
+            ],
+            "transformations": [
+                {"source": t.source.name, "target": t.target.name, "operation": t.operation}
+                for t in transforms
+            ],
+            "metrics": results.get("metrics", {}),
+        }
+        Path(output).write_text(json.dumps(export_data, indent=2, default=str))
+        click.echo(f"\n✅ Resultados salvos em: {output}")
+
+    if visualize and results.get("graph"):
+        from visualization_engine import DataLineageVisualizer
+        viz = DataLineageVisualizer(results["graph"])
+        fig = viz.visualize_force_directed()
+        out_html = f"openlineage_lineage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        fig.write_html(out_html)
+        click.echo(f"📊 Visualização salva em: {out_html}")
+
+
+@openlineage.command("emit")
+@click.argument("files", nargs=-1, type=click.Path(exists=True), required=True)
+@click.option(
+    "--backend", "-b",
+    default=None,
+    help="URL do backend OpenLineage para envio (ex: http://localhost:5000).",
+)
+@click.option(
+    "--namespace", "-n",
+    default="default",
+    help="Namespace a usar nos eventos emitidos.",
+)
+@click.option(
+    "--api-key", "-k",
+    default=None,
+    help="Token de autenticação para o backend (opcional).",
+)
+@click.option(
+    "--output", "-o",
+    default="openlineage_events.ndjson",
+    help="Arquivo NDJSON de saída (default: openlineage_events.ndjson).",
+)
+@click.option("--verbose", is_flag=True, help="Saída detalhada.")
+def openlineage_emit(files, backend, namespace, api_key, output, verbose):
+    """
+    Analisa arquivos de pipeline e emite a linhagem no formato OpenLineage.
+
+    Gera eventos COMPLETE com inputs/outputs para cada transformação detectada
+    e os salva em um arquivo NDJSON e/ou envia para um backend compatível.
+
+    Exemplos:
+
+    \b
+        # Analisar e salvar eventos OpenLineage localmente
+        lineage openlineage emit *.py *.sql -o events.ndjson
+
+    \b
+        # Analisar e enviar para Marquez
+        lineage openlineage emit *.py *.sql -b http://localhost:5000 -n meu_projeto
+    """
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    click.echo(f"Analisando {len(files)} arquivo(s) e emitindo como OpenLineage…")
+
+    agent = DataLineageAgent()
+    agent.analyze_pipeline(list(files))
+
+    saved = agent.emit_openlineage(
+        backend_url=backend,
+        namespace=namespace,
+        api_key=api_key,
+        output_file=output,
+    )
+
+    click.echo(f"\n✅ Eventos OpenLineage salvos em: {saved}")
+    if backend:
+        click.echo(f"   Enviados para: {backend}")
+
+
+@openlineage.command("validate")
+@click.argument("file", type=click.Path(exists=True))
+def openlineage_validate(file):
+    """
+    Valida a estrutura de um arquivo NDJSON de eventos OpenLineage.
+
+    Verifica se cada linha é um JSON válido com os campos obrigatórios
+    (eventType, eventTime, job, run).
+
+    Exemplo:
+
+    \b
+        lineage openlineage validate events.ndjson
+    """
+    path = Path(file)
+    errors = []
+    valid = 0
+    required_fields = {"eventType", "eventTime", "job", "run"}
+
+    with path.open(encoding="utf-8") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+                missing = required_fields - set(event.keys())
+                if missing:
+                    errors.append(f"Linha {lineno}: campos ausentes: {missing}")
+                else:
+                    valid += 1
+            except json.JSONDecodeError as exc:
+                errors.append(f"Linha {lineno}: JSON inválido — {exc}")
+
+    click.echo(f"\n✅ Eventos válidos: {valid}")
+    if errors:
+        click.echo(f"❌ Erros encontrados ({len(errors)}):")
+        for err in errors[:20]:
+            click.echo(f"  • {err}")
+        if len(errors) > 20:
+            click.echo(f"  ... e {len(errors) - 20} outros erros.")
+    else:
+        click.echo("Arquivo OpenLineage válido!")
 
 
 if __name__ == '__main__':

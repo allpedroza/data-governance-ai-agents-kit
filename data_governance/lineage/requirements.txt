@@ -13,6 +13,10 @@ openai>=1.0.0
 sqlparse>=0.4.0
 requests>=2.31.0
 
+# OpenLineage integration - padrão aberto para rastreamento de linhagem
+# https://openlineage.io/
+openlineage-python>=1.0.0
+
 # Visualization
 kaleido>=0.2.0  # For static image export
 python-igraph>=0.10.0  # Advanced graph algorithms (optional)

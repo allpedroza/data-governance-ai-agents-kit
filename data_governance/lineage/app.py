@@ -80,6 +80,8 @@ from lineage_system import DataLineageSystem
 from parsers.terraform_parser import TerraformParser, parse_terraform_directory
 from parsers.databricks_parser import DatabricksParser, parse_databricks_workspace
 from parsers.airflow_parser import AirflowParser, parse_airflow_dags_folder
+from parsers.openlineage_parser import OpenLineageParser
+from openlineage_emitter import OpenLineageEmitter
 
 
 # Page configuration
@@ -197,18 +199,19 @@ def sidebar_configuration():
     
     upload_type = st.sidebar.selectbox(
         "Tipo de Upload",
-        ["Arquivos Individuais", "Diretório ZIP", "Exemplos Pré-carregados"]
+        ["Arquivos Individuais", "Diretório ZIP", "Exemplos Pré-carregados", "OpenLineage (NDJSON / API)"]
     )
-    
+
     uploaded_files = []
-    
+    openlineage_config = {}
+
     if upload_type == "Arquivos Individuais":
         uploaded_files = st.sidebar.file_uploader(
             "Selecione arquivos do pipeline",
             type=['py', 'sql', 'tf', 'json', 'scala', 'ipynb'],
             accept_multiple_files=True
         )
-    
+
     elif upload_type == "Diretório ZIP":
         zip_file = st.sidebar.file_uploader(
             "Upload de arquivo ZIP",
@@ -222,13 +225,69 @@ def sidebar_configuration():
                     zip_ref.extractall(temp_dir)
                 # Process extracted files
                 uploaded_files = list(Path(temp_dir).glob('**/*'))
-    
+
+    elif upload_type == "OpenLineage (NDJSON / API)":
+        st.sidebar.markdown(
+            "**[OpenLineage](https://openlineage.io/)** é um padrão aberto para "
+            "rastreamento de linhagem de dados, suportado por Spark, dbt, Airflow e outros."
+        )
+        ol_source = st.sidebar.radio(
+            "Fonte dos eventos",
+            ["Arquivo NDJSON", "API Marquez / Backend"],
+            key="ol_source",
+        )
+
+        if ol_source == "Arquivo NDJSON":
+            ol_file = st.sidebar.file_uploader(
+                "Arquivo de eventos OpenLineage (.ndjson ou .json)",
+                type=["ndjson", "json"],
+                key="ol_ndjson_upload",
+            )
+            openlineage_config["mode"] = "file"
+            openlineage_config["file"] = ol_file
+
+        else:
+            ol_url = st.sidebar.text_input(
+                "URL do backend (Marquez)",
+                value="http://localhost:5000",
+                key="ol_api_url",
+            )
+            ol_namespace = st.sidebar.text_input(
+                "Namespace (opcional)",
+                value="",
+                key="ol_namespace",
+            )
+            ol_api_key = st.sidebar.text_input(
+                "API Key (opcional)",
+                value="",
+                type="password",
+                key="ol_api_key",
+            )
+            openlineage_config["mode"] = "api"
+            openlineage_config["url"] = ol_url
+            openlineage_config["namespace"] = ol_namespace or None
+            openlineage_config["api_key"] = ol_api_key or None
+
+        # Opção de emitir linhagem no formato OpenLineage
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Emitir como OpenLineage")
+        openlineage_config["emit_backend"] = st.sidebar.text_input(
+            "Enviar para backend (URL, opcional)",
+            value="",
+            key="ol_emit_backend",
+        )
+        openlineage_config["emit_namespace"] = st.sidebar.text_input(
+            "Namespace de emissão",
+            value="default",
+            key="ol_emit_namespace",
+        )
+
     else:  # Exemplos Pré-carregados
         example = st.sidebar.selectbox(
             "Escolha um exemplo",
             ["E-commerce Pipeline", "Financial Data Lake", "IoT Streaming", "ML Feature Store"]
         )
-        
+
         if st.sidebar.button("Carregar Exemplo"):
             uploaded_files = load_example_pipeline(example)
     
@@ -264,6 +323,8 @@ def sidebar_configuration():
     
     return {
         'files': uploaded_files,
+        'upload_type': upload_type,
+        'openlineage_config': openlineage_config,
         'analysis_depth': analysis_depth,
         'include_terraform': include_terraform,
         'include_databricks': include_databricks,
@@ -351,12 +412,84 @@ resource "databricks_cluster" "etl_cluster" {
             (directory / filename).write_text(content)
 
 
+def process_openlineage(config: Dict):
+    """
+    Carrega linhagem a partir de fonte OpenLineage (arquivo NDJSON ou API Marquez)
+    e retorna os resultados no mesmo formato que process_files.
+    """
+    ol_cfg = config.get("openlineage_config", {})
+    mode = ol_cfg.get("mode")
+
+    with st.spinner("🔄 Carregando eventos OpenLineage..."):
+        agent = st.session_state.lineage_agent
+        # Limpa estado anterior
+        agent.assets.clear()
+        agent.transformations.clear()
+        agent.graph.clear()
+
+        if mode == "file":
+            ol_file = ol_cfg.get("file")
+            if ol_file is None:
+                st.warning("Faça upload de um arquivo NDJSON OpenLineage para continuar.")
+                return None
+            with tempfile.NamedTemporaryFile(
+                suffix=".ndjson", delete=False, mode="wb"
+            ) as tmp:
+                tmp.write(ol_file.read())
+                tmp_path = tmp.name
+            try:
+                results = agent.load_from_openlineage_file(tmp_path)
+            finally:
+                import os as _os
+                _os.unlink(tmp_path)
+
+        elif mode == "api":
+            url = ol_cfg.get("url", "http://localhost:5000")
+            namespace = ol_cfg.get("namespace")
+            api_key = ol_cfg.get("api_key")
+            try:
+                results = agent.load_from_openlineage_api(url, namespace=namespace, api_key=api_key)
+            except Exception as exc:
+                st.error(f"Erro ao conectar com a API OpenLineage: {exc}")
+                return None
+        else:
+            st.warning("Configure a fonte OpenLineage no painel lateral.")
+            return None
+
+        if not results or not results.get("assets"):
+            st.warning("Nenhum asset encontrado nos eventos OpenLineage.")
+            return None
+
+        analysis_results = {"data_lineage": results}
+        st.session_state.analysis_results = analysis_results
+
+        # Emite linhagem se um backend foi configurado
+        emit_backend = ol_cfg.get("emit_backend", "").strip()
+        emit_namespace = ol_cfg.get("emit_namespace", "default")
+        if emit_backend:
+            try:
+                saved = agent.emit_openlineage(
+                    backend_url=emit_backend,
+                    namespace=emit_namespace,
+                    output_file="openlineage_emitted.ndjson",
+                )
+                st.success(f"Linhagem emitida com sucesso para {emit_backend} e salva em {saved}.")
+            except Exception as exc:
+                st.warning(f"Falha ao emitir para o backend: {exc}")
+
+        st.success(
+            f"OpenLineage: {len(results['assets'])} assets e "
+            f"{len(results['transformations'])} transformações carregadas."
+        )
+        return analysis_results
+
+
 def process_files(config: Dict):
     """Process uploaded files and run analysis"""
     if not config['files']:
         st.warning("Por favor, faça upload de arquivos para análise.")
         return None
-    
+
     with st.spinner("🔄 Processando arquivos..."):
         # Save files to temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1248,7 +1381,10 @@ def main():
     
     with tab1:
         if st.button("🚀 Executar Análise", type="primary", use_container_width=True):
-            results = process_files(config)
+            if config.get("upload_type") == "OpenLineage (NDJSON / API)":
+                results = process_openlineage(config)
+            else:
+                results = process_files(config)
             if results:
                 st.success("✅ Análise concluída com sucesso!")
         
