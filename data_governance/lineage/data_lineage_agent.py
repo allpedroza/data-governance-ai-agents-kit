@@ -137,6 +137,7 @@ class DataLineageAgent:
             '.json': self._parse_terraform,  # terraform json
             '.scala': self._parse_databricks,
             '.dag': self._parse_airflow,  # Airflow DAG files
+            '.ndjson': self._parse_openlineage,  # OpenLineage events
         }
         self.airflow_dags = []  # Store Airflow DAGs separately
         
@@ -367,6 +368,124 @@ class DataLineageAgent:
                         )
                         self.transformations.append(transform)
     
+    def _parse_openlineage(self, content: str, file_path: str):
+        """Parser para arquivos OpenLineage (NDJSON)"""
+        from parsers.openlineage_parser import OpenLineageParser
+        parser = OpenLineageParser()
+        assets, transformations = parser.parse_events_file(file_path)
+        for asset in assets:
+            self.assets[asset.name] = asset
+        self.transformations.extend(transformations)
+        print(f"  OpenLineage: {len(assets)} assets, {len(transformations)} transformações carregadas de {file_path}")
+
+    def load_from_openlineage_file(self, file_path: str) -> Dict:
+        """
+        Carrega linhagem a partir de um arquivo de eventos OpenLineage (NDJSON).
+
+        Aceita arquivos com um evento JSON por linha (NDJSON) ou um array JSON.
+        Suporta eventos emitidos por Spark, dbt, Airflow, Flink e qualquer
+        integração compatível com https://openlineage.io/.
+
+        Args:
+            file_path: Caminho para o arquivo de eventos OpenLineage.
+
+        Returns:
+            Dicionário com assets, transformations, metrics, critical_components, insights e graph.
+        """
+        print(f"📥 Carregando eventos OpenLineage de: {file_path}")
+        from parsers.openlineage_parser import OpenLineageParser
+        parser = OpenLineageParser()
+        assets, transformations = parser.parse_events_file(file_path)
+        for asset in assets:
+            self.assets[asset.name] = asset
+        self.transformations.extend(transformations)
+        self._build_lineage_graph()
+        metrics = self._calculate_metrics()
+        critical = self._identify_critical_components()
+        insights = self._generate_graph_insights(metrics, critical)
+        print(f"✅ OpenLineage: {len(assets)} assets e {len(transformations)} transformações carregadas.")
+        return {
+            'assets': list(self.assets.values()),
+            'transformations': self.transformations,
+            'metrics': metrics,
+            'critical_components': critical,
+            'insights': insights,
+            'graph': self.graph,
+        }
+
+    def load_from_openlineage_api(
+        self,
+        base_url: str,
+        namespace: str = None,
+        api_key: str = None,
+    ) -> Dict:
+        """
+        Carrega linhagem diretamente da API REST de um backend OpenLineage (ex: Marquez).
+
+        Args:
+            base_url:  URL base do backend, ex: "http://localhost:5000".
+            namespace: Filtra por namespace específico. None busca todos.
+            api_key:   Token de autenticação (opcional).
+
+        Returns:
+            Dicionário com assets, transformations, metrics, critical_components, insights e graph.
+        """
+        print(f"🌐 Conectando à API OpenLineage: {base_url}")
+        from parsers.openlineage_parser import OpenLineageParser
+        parser = OpenLineageParser()
+        assets, transformations = parser.fetch_from_api(
+            base_url, namespace=namespace, api_key=api_key
+        )
+        for asset in assets:
+            self.assets[asset.name] = asset
+        self.transformations.extend(transformations)
+        self._build_lineage_graph()
+        metrics = self._calculate_metrics()
+        critical = self._identify_critical_components()
+        insights = self._generate_graph_insights(metrics, critical)
+        print(f"✅ OpenLineage API: {len(assets)} assets e {len(transformations)} transformações.")
+        return {
+            'assets': list(self.assets.values()),
+            'transformations': self.transformations,
+            'metrics': metrics,
+            'critical_components': critical,
+            'insights': insights,
+            'graph': self.graph,
+        }
+
+    def emit_openlineage(
+        self,
+        backend_url: str = None,
+        namespace: str = "default",
+        api_key: str = None,
+        output_file: str = "openlineage_events.ndjson",
+    ) -> str:
+        """
+        Emite a linhagem atual como eventos OpenLineage.
+
+        Envia para um backend compatível (Marquez, Atlan, etc.) e/ou
+        salva em um arquivo NDJSON local.
+
+        Args:
+            backend_url:  URL do backend OpenLineage (opcional).
+            namespace:    Namespace a usar nos eventos emitidos.
+            api_key:      Token de autenticação (opcional).
+            output_file:  Caminho do arquivo NDJSON de saída.
+
+        Returns:
+            Caminho do arquivo NDJSON gerado.
+        """
+        from openlineage_emitter import OpenLineageEmitter
+        emitter = OpenLineageEmitter(
+            backend_url=backend_url,
+            namespace=namespace,
+            api_key=api_key,
+        )
+        emitter.emit_from_analysis(self.assets, self.transformations)
+        saved_path = emitter.save_to_file(output_file)
+        print(f"✅ Eventos OpenLineage salvos em: {saved_path}")
+        return saved_path
+
     def _parse_sql(self, content: str, file_path: str):
         """Parser para arquivos SQL"""
         statements = sqlparse.split(content)

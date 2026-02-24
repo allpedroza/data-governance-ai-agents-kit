@@ -3,3 +3,7 @@
 -r rag_discovery/requirements.txt
 -r warehouse/requirements.txt
 streamlit>=1.32.0
+
+# OpenLineage integration - padrão aberto para linhagem de dados
+# https://openlineage.io/
+openlineage-python>=1.0.0
