@@ -64,6 +64,7 @@ _DEFAULTS: Dict[str, Any] = {
     "diagnosis_results": [],        # List[TableMetadataDiagnosis]
     "selected_for_enrichment": [],  # List[str] table names selected by user
     "original_metadata": {},        # Dict[table_name, {description, owner, tags, classification, columns}]
+    "pii_diagnosis_results": [],    # List[PIITableDiagnosis]
     "wh_scan_db": "",
     "wh_scan_schema": "",
     # Step 4 — Dataset (file or manual warehouse selection)
@@ -776,9 +777,15 @@ def _run_warehouse_diagnosis() -> None:
     progress.progress(1.0)
     status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
 
+    # PII estimation from column names (fast, no sampling)
+    from metadata_enrichment.pii_classifier import PIIClassifier
+    pii_clf = PIIClassifier()
+    pii_results = pii_clf.classify_batch_from_names(table_dicts)
+
     # Pre-select absent + poor tables
     pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
     st.session_state["diagnosis_results"] = results
+    st.session_state["pii_diagnosis_results"] = pii_results
     st.session_state["selected_for_enrichment"] = pre_selected
 
 
@@ -871,107 +878,135 @@ def _run_openmetadata_diagnosis() -> None:
     progress.progress(1.0)
     status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
 
+    # PII estimation from column names (fast, no sampling)
+    from metadata_enrichment.pii_classifier import PIIClassifier
+    pii_clf = PIIClassifier()
+    pii_results = pii_clf.classify_batch_from_names(table_dicts)
+
     pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
     st.session_state["diagnosis_results"] = results
+    st.session_state["pii_diagnosis_results"] = pii_results
     st.session_state["selected_for_enrichment"] = pre_selected
 
 
 def _render_diagnosis_panel() -> None:
-    """Render the triage dashboard: KPIs, filterable table list, selection controls."""
+    """Render the triage dashboard: KPIs, filterable table list, selection controls, PII audit."""
     results = st.session_state.get("diagnosis_results", [])
     if not results:
         return
+
+    pii_results = st.session_state.get("pii_diagnosis_results", [])
+    pii_by_name = {p.table_name: p for p in pii_results}
 
     # --- KPIs ---
     n_absent = sum(1 for r in results if r.status == "absent")
     n_poor = sum(1 for r in results if r.status == "poor")
     n_ok = sum(1 for r in results if r.status == "sufficient")
     avg_score = sum(r.quality_score for r in results) / len(results) if results else 0.0
+    n_pii_high = sum(1 for p in pii_results if p.risk_level == "high")
+    n_pii_any = sum(1 for p in pii_results if p.has_pii)
 
     st.divider()
     st.subheader("Resultado do Diagnóstico")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Total de tabelas", len(results))
-    c2.metric("🔴 Ausente", n_absent)
-    c3.metric("🟡 Pobre", n_poor)
-    c4.metric("🟢 Suficiente", n_ok)
-    c5.metric("Score médio", f"{avg_score:.0%}")
 
-    st.divider()
+    tab_quality, tab_pii = st.tabs(["Qualidade de Metadados", "Auditoria PII / LGPD"])
 
-    # --- Filters ---
-    fc1, fc2 = st.columns([2, 1])
-    with fc1:
-        search = st.text_input("Buscar tabela", placeholder="nome...", key="diag_search")
-    with fc2:
-        filter_status = st.multiselect(
-            "Filtrar por status",
-            ["🔴 Ausente", "🟡 Pobre", "🟢 Suficiente"],
-            default=["🔴 Ausente", "🟡 Pobre"],
-            key="diag_filter_status",
-        )
+    with tab_quality:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Total de tabelas", len(results))
+        c2.metric("🔴 Ausente", n_absent)
+        c3.metric("🟡 Pobre", n_poor)
+        c4.metric("🟢 Suficiente", n_ok)
+        c5.metric("Score médio", f"{avg_score:.0%}")
 
-    status_map = {"🔴 Ausente": "absent", "🟡 Pobre": "poor", "🟢 Suficiente": "sufficient"}
-    allowed = {status_map[s] for s in filter_status}
-    filtered = [
-        r for r in results
-        if r.status in allowed
-        and (not search or search.lower() in r.table_name.lower())
-    ]
-    filtered.sort(key=lambda r: r.quality_score)
+        st.divider()
 
-    # --- Selection buttons ---
-    sel_state = st.session_state.get("selected_for_enrichment", [])
-    bc1, bc2, bc3, bc4 = st.columns(4)
-    with bc1:
-        if st.button("Selecionar Ausentes", use_container_width=True):
-            st.session_state["selected_for_enrichment"] = [
-                r.table_name for r in results if r.status == "absent"
-            ]
-            st.rerun()
-    with bc2:
-        if st.button("Selecionar Pobres", use_container_width=True):
-            st.session_state["selected_for_enrichment"] = [
-                r.table_name for r in results if r.status == "poor"
-            ]
-            st.rerun()
-    with bc3:
-        if st.button("Selecionar Tudo", use_container_width=True):
-            st.session_state["selected_for_enrichment"] = [r.table_name for r in results]
-            st.rerun()
-    with bc4:
-        if st.button("Limpar seleção", use_container_width=True):
-            st.session_state["selected_for_enrichment"] = []
-            st.rerun()
-
-    # --- Table list ---
-    _STATUS_ICON = {"absent": "🔴", "poor": "🟡", "sufficient": "🟢"}
-    for r in filtered:
-        is_selected = r.table_name in sel_state
-        c_check, c_name, c_score, c_status, c_cols = st.columns([0.5, 3, 1.5, 1.5, 2])
-        with c_check:
-            checked = st.checkbox(
-                "", value=is_selected, key=f"diag_sel_{r.table_name}",
-                label_visibility="collapsed",
+        # Filters
+        fc1, fc2 = st.columns([2, 1])
+        with fc1:
+            search = st.text_input("Buscar tabela", placeholder="nome...", key="diag_search")
+        with fc2:
+            filter_status = st.multiselect(
+                "Filtrar por status",
+                ["🔴 Ausente", "🟡 Pobre", "🟢 Suficiente"],
+                default=["🔴 Ausente", "🟡 Pobre"],
+                key="diag_filter_status",
             )
-            if checked and r.table_name not in sel_state:
-                sel_state = sel_state + [r.table_name]
-                st.session_state["selected_for_enrichment"] = sel_state
-            elif not checked and r.table_name in sel_state:
-                sel_state = [t for t in sel_state if t != r.table_name]
-                st.session_state["selected_for_enrichment"] = sel_state
-        with c_name:
-            st.markdown(f"`{r.table_name}`")
-            if r.schema:
-                st.caption(r.schema)
-        with c_score:
-            st.markdown(f"**{r.quality_score:.0%}**")
-        with c_status:
-            st.markdown(_STATUS_ICON.get(r.status, "") + f" {r.status.capitalize()}")
-        with c_cols:
-            n_enrich = len(r.columns_to_enrich)
-            n_total = len(r.column_qualities)
-            st.caption(f"{n_enrich}/{n_total} colunas a enriquecer")
+
+        status_map = {"🔴 Ausente": "absent", "🟡 Pobre": "poor", "🟢 Suficiente": "sufficient"}
+        allowed = {status_map[s] for s in filter_status}
+        filtered = [
+            r for r in results
+            if r.status in allowed
+            and (not search or search.lower() in r.table_name.lower())
+        ]
+        filtered.sort(key=lambda r: r.quality_score)
+
+        # Selection buttons
+        sel_state = st.session_state.get("selected_for_enrichment", [])
+        bc1, bc2, bc3, bc4 = st.columns(4)
+        with bc1:
+            if st.button("Selecionar Ausentes", use_container_width=True):
+                st.session_state["selected_for_enrichment"] = [
+                    r.table_name for r in results if r.status == "absent"
+                ]
+                st.rerun()
+        with bc2:
+            if st.button("Selecionar Pobres", use_container_width=True):
+                st.session_state["selected_for_enrichment"] = [
+                    r.table_name for r in results if r.status == "poor"
+                ]
+                st.rerun()
+        with bc3:
+            if st.button("Selecionar Tudo", use_container_width=True):
+                st.session_state["selected_for_enrichment"] = [r.table_name for r in results]
+                st.rerun()
+        with bc4:
+            if st.button("Limpar seleção", use_container_width=True):
+                st.session_state["selected_for_enrichment"] = []
+                st.rerun()
+
+        # Table list with PII column
+        _STATUS_ICON = {"absent": "🔴", "poor": "🟡", "sufficient": "🟢"}
+        _PII_ICON = {"high": "🔒 Alto", "medium": "🟠 Médio", "low": "🔵 Baixo", "none": ""}
+        for r in filtered:
+            is_selected = r.table_name in sel_state
+            pii_d = pii_by_name.get(r.table_name)
+            c_check, c_name, c_score, c_status, c_cols, c_pii = st.columns(
+                [0.5, 2.5, 1.2, 1.5, 1.5, 1.5]
+            )
+            with c_check:
+                checked = st.checkbox(
+                    "", value=is_selected, key=f"diag_sel_{r.table_name}",
+                    label_visibility="collapsed",
+                )
+                if checked and r.table_name not in sel_state:
+                    sel_state = sel_state + [r.table_name]
+                    st.session_state["selected_for_enrichment"] = sel_state
+                elif not checked and r.table_name in sel_state:
+                    sel_state = [t for t in sel_state if t != r.table_name]
+                    st.session_state["selected_for_enrichment"] = sel_state
+            with c_name:
+                st.markdown(f"`{r.table_name}`")
+                if r.schema:
+                    st.caption(r.schema)
+            with c_score:
+                st.markdown(f"**{r.quality_score:.0%}**")
+            with c_status:
+                st.markdown(_STATUS_ICON.get(r.status, "") + f" {r.status.capitalize()}")
+            with c_cols:
+                n_enrich = len(r.columns_to_enrich)
+                n_total = len(r.column_qualities)
+                st.caption(f"{n_enrich}/{n_total} colunas")
+            with c_pii:
+                if pii_d and pii_d.has_pii:
+                    icon = _PII_ICON.get(pii_d.risk_level, "")
+                    st.markdown(icon)
+                    if pii_d.lgpd_sensitive_columns:
+                        st.caption("Sensível LGPD")
+
+    with tab_pii:
+        _render_pii_audit_panel(pii_results, n_pii_high, n_pii_any)
 
     # --- Enrich button ---
     st.divider()
@@ -989,6 +1024,73 @@ def _render_diagnosis_panel() -> None:
             st.session_state["step_completed"][3] = True
             st.session_state["wizard_step"] = 4
             st.rerun()
+
+
+def _render_pii_audit_panel(pii_results: list, n_high: int, n_any: int) -> None:
+    """Render the PII / LGPD audit tab content."""
+    if not pii_results:
+        st.info("Execute o diagnóstico para ver a auditoria PII.")
+        return
+
+    _RISK_ICON = {"high": "🔒", "medium": "🟠", "low": "🔵", "none": "⬜"}
+    _LGPD_LABEL = {
+        "pessoal_ordinario": "Pessoal ordinário",
+        "pessoal_sensivel": "Pessoal sensível (Art. 5 IX)",
+        "nao_pessoal": "Não pessoal",
+    }
+
+    # KPIs
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tabelas analisadas", len(pii_results))
+    c2.metric("🔒 Risco alto", n_high)
+    c3.metric("Com PII detectado", n_any)
+    c4.metric("Sem PII estimado", len(pii_results) - n_any)
+
+    if n_high:
+        st.error(
+            f"**{n_high} tabela(s) com risco alto** — contêm dados pessoais sensíveis (LGPD Art. 5 IX) "
+            "ou identificadores diretos (CPF, cartão). Revise a classificação antes de publicar."
+        )
+    elif n_any:
+        st.warning(
+            f"**{n_any} tabela(s) com PII detectado** — verifique classificação e controles de acesso."
+        )
+    else:
+        st.success("Nenhuma coluna com indicadores PII detectada nos nomes de coluna.")
+
+    st.caption(
+        "Detecção baseada em nomes de coluna (sem acesso aos dados). "
+        "Execute o enriquecimento para confirmação por amostragem."
+    )
+
+    # Per-table PII detail
+    pii_tables = [p for p in pii_results if p.has_pii]
+    pii_tables.sort(key=lambda p: {"high": 0, "medium": 1, "low": 2, "none": 3}.get(p.risk_level, 3))
+
+    for p in pii_tables:
+        risk_icon = _RISK_ICON.get(p.risk_level, "")
+        label = f"{risk_icon} `{p.table_name}` — risco {p.risk_level}"
+        if p.lgpd_sensitive_columns:
+            label += " — ⚠️ Sensível LGPD"
+        with st.expander(label, expanded=(p.risk_level == "high")):
+            st.caption(
+                f"Classificação recomendada: **{p.recommended_classification.upper()}**  |  "
+                f"Método de detecção: {p.detection_method}"
+            )
+
+            # Per-column PII details
+            for cd in p.pii_columns:
+                col_risk_icon = _RISK_ICON.get(cd.risk_level, "")
+                lgpd_labels = [_LGPD_LABEL.get(cat, cat) for cat in cd.lgpd_categories]
+                st.markdown(
+                    f"- **`{cd.column_name}`** — "
+                    f"{col_risk_icon} {', '.join(cd.pii_labels)}  "
+                    f"| LGPD: _{', '.join(lgpd_labels)}_"
+                )
+                st.caption(f"  Evidência: {cd.evidence}")
+
+    if not pii_tables:
+        st.info("Nenhuma tabela com PII detectado.")
 
 
 def _handle_enrich_from_diagnosis() -> None:
@@ -1063,6 +1165,39 @@ def _handle_enrich_from_diagnosis() -> None:
             from metadata_enrichment.sampling.data_sampler import SQLSampler
             sampler = SQLSampler(conn_str)
             sample_result = sampler.sample(tbl_name, sample_size=sample_size, schema=schema)
+
+            # Upgrade PII diagnosis with data-based evidence and append to context
+            from metadata_enrichment.pii_classifier import PIIClassifier
+            pii_clf = PIIClassifier()
+            name_diag = next(
+                (p for p in st.session_state.get("pii_diagnosis_results", [])
+                 if p.table_name == table_name),
+                None,
+            )
+            data_pii_diag = pii_clf.classify_from_sample(sample_result)
+            final_pii_diag = (
+                pii_clf.merge_diagnoses(name_diag, data_pii_diag)
+                if name_diag else data_pii_diag
+            )
+
+            # Update session state with refined PII diagnosis
+            pii_list = st.session_state.get("pii_diagnosis_results", [])
+            pii_list = [p for p in pii_list if p.table_name != table_name]
+            pii_list.append(final_pii_diag)
+            st.session_state["pii_diagnosis_results"] = pii_list
+
+            # Inject confirmed PII columns into enrichment context
+            if final_pii_diag.has_pii:
+                pii_col_strs = [
+                    f"  - {cd.column_name}: {', '.join(cd.pii_labels)}"
+                    for cd in final_pii_diag.pii_columns
+                ]
+                pii_ctx = (
+                    f"Colunas com PII confirmado por amostragem (classifique como is_pii=true):\n"
+                    + "\n".join(pii_col_strs)
+                )
+                full_context = "\n\n".join(filter(None, [full_context, pii_ctx]))
+
             result = agent.enrich(sample_result, additional_context=full_context)
             enrichment_results.append(result)
         except Exception as e:
@@ -2012,6 +2147,12 @@ def _render_impact_report() -> None:
             elif orig_col_desc.strip() != col.description.strip():
                 cols_improved += 1
 
+    pii_results = st.session_state.get("pii_diagnosis_results", [])
+    pii_high = sum(1 for p in pii_results if p.risk_level == "high")
+    pii_sensitive_cols = sum(
+        len(p.lgpd_sensitive_columns) for p in pii_results if p.lgpd_sensitive_columns
+    )
+
     with st.expander("Relatório de Impacto", expanded=True):
         st.subheader("Impacto do Enriquecimento")
         c1, c2, c3, c4 = st.columns(4)
@@ -2019,6 +2160,18 @@ def _render_impact_report() -> None:
         c2.metric("Descrições novas (tabelas)", tables_new_desc + tables_improved_desc)
         c3.metric("Descrições novas (colunas)", cols_new)
         c4.metric("Descrições melhoradas (colunas)", cols_improved)
+
+        if pii_found or pii_high:
+            st.divider()
+            pc1, pc2, pc3 = st.columns(3)
+            pc1.metric("Tabelas com PII", pii_found)
+            pc2.metric("🔒 Risco alto (LGPD)", pii_high)
+            pc3.metric("Colunas sensíveis LGPD", pii_sensitive_cols)
+            if pii_high:
+                st.warning(
+                    "Tabelas com risco alto contêm dados pessoais sensíveis (LGPD Art. 5 IX). "
+                    "Verifique a classificação **restricted** e os controles de acesso antes de publicar."
+                )
 
         if pii_found:
             st.warning(f"PII detectado em {pii_found} tabela(s). Verifique a classificação antes de publicar.")
