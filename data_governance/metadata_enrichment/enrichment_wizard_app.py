@@ -1,13 +1,14 @@
 """
 Metadata Enrichment Wizard
-Fluxo guiado de 5 etapas para enriquecimento de metadados com IA.
+Fluxo guiado de 6 etapas para enriquecimento de metadados com IA.
 
 Etapas:
   1. Conectores — Cloud DWH, MDM, LLM provider
   2. Base de Conhecimento — indexação de normativos
-  3. Seleção de Dataset — arquivo ou warehouse
-  4. Validação & Edição — revisão coluna a coluna
-  5. Publicação — DDL SQL, BQ CLI, AWS Glue, Synapse, JSON, Markdown, OpenMetadata
+  3. Diagnóstico — leitura e avaliação semântica dos metadados existentes
+  4. Seleção de Dataset — arquivo ou warehouse (enriquecimento)
+  5. Validação & Edição — revisão coluna a coluna com comparação antes/depois
+  6. Publicação — DDL SQL, BQ CLI, AWS Glue, Synapse, JSON, Markdown, OpenMetadata
 """
 
 import os
@@ -31,7 +32,7 @@ if str(parent_dir) not in sys.path:
 _DEFAULTS: Dict[str, Any] = {
     # Navigation
     "wizard_step": 1,
-    "step_completed": {1: False, 2: False, 3: False, 4: False, 5: False},
+    "step_completed": {1: False, 2: False, 3: False, 4: False, 5: False, 6: False},
     # Step 1 — LLM / Embeddings / Vector Store
     "llm_provider_name": "OpenAI",
     "llm_model": "gpt-4o-mini",
@@ -59,7 +60,13 @@ _DEFAULTS: Dict[str, Any] = {
     "standards_indexed": False,
     "standards_stats": {},
     "indexed_files": [],
-    # Step 3 — Dataset
+    # Step 3 — Diagnosis
+    "diagnosis_results": [],        # List[TableMetadataDiagnosis]
+    "selected_for_enrichment": [],  # List[str] table names selected by user
+    "original_metadata": {},        # Dict[table_name, {description, owner, tags, classification, columns}]
+    "wh_scan_db": "",
+    "wh_scan_schema": "",
+    # Step 4 — Dataset (file or manual warehouse selection)
     "source_type_radio": "CSV",
     "uploaded_file_bytes": None,
     "uploaded_file_name": "",
@@ -73,14 +80,16 @@ _DEFAULTS: Dict[str, Any] = {
     "selected_table": "",
     "sample_size": 100,
     "additional_context": "",
-    # Step 4 — Validation
+    # Step 5 — Validation (multi-table)
     "enrichment_result": None,
+    "enrichment_results_list": [],  # List[EnrichmentResult] for multi-table
+    "current_enrichment_idx": 0,
     "sample_result": None,
     "edited_table_fields": {},
     "edited_columns": {},
     "regenerating_column": None,
     "validation_dirty": False,
-    # Step 5 — Publish config
+    # Step 6 — Publish config
     "pub_ddl_schema": "dbo",
     "pub_bq_project": "",
     "pub_bq_dataset": "",
@@ -101,14 +110,20 @@ def init_session_state() -> None:
 # Progress bar
 # ---------------------------------------------------------------------------
 
-STEP_LABELS = {1: "Conectores", 2: "Base de Conhecimento", 3: "Dataset",
-               4: "Validar & Editar", 5: "Publicar"}
+STEP_LABELS = {
+    1: "Conectores",
+    2: "Base de Conhecimento",
+    3: "Diagnóstico",
+    4: "Dataset",
+    5: "Validar & Editar",
+    6: "Publicar",
+}
 
 
 def render_progress_bar(current_step: int) -> None:
     completed = st.session_state.get("step_completed", {})
-    cols = st.columns(5)
-    for col, num in zip(cols, range(1, 6)):
+    cols = st.columns(6)
+    for col, num in zip(cols, range(1, 7)):
         label = STEP_LABELS[num]
         with col:
             if completed.get(num) and num != current_step:
@@ -224,7 +239,7 @@ def _build_warehouse_connector():
 # ---------------------------------------------------------------------------
 
 def render_step1_connectors() -> None:
-    st.header("Etapa 1 de 5 — Conectores")
+    st.header("Etapa 1 de 6 — Conectores")
     st.info(
         "Configure o provedor de IA e, opcionalmente, uma conexão com Data Warehouse e catálogo MDM."
     )
@@ -434,7 +449,7 @@ def _handle_test_save() -> None:
 # ---------------------------------------------------------------------------
 
 def render_step2_knowledge_base() -> None:
-    st.header("Etapa 2 de 5 — Base de Conhecimento")
+    st.header("Etapa 2 de 6 — Base de Conhecimento")
     st.info(
         "Indexe normativos, convenções de nomenclatura e glossários para guiar "
         "a geração de metadados com IA. Esta etapa é opcional mas recomendada."
@@ -575,11 +590,530 @@ def _render_standards_stats() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 3 — Seleção de Dataset
+# Step 3 — Diagnóstico de Metadados (NEW)
 # ---------------------------------------------------------------------------
 
-def render_step3_dataset_selection() -> None:
-    st.header("Etapa 3 de 5 — Seleção de Dataset")
+def render_step3_diagnosis() -> None:
+    st.header("Etapa 3 de 6 — Diagnóstico de Metadados")
+    st.info(
+        "O sistema lê os metadados existentes no seu catálogo ou warehouse e avalia "
+        "semanticamente a qualidade de cada descrição. Tabelas com metadados ausentes "
+        "ou pobres são identificadas e priorizadas para enriquecimento."
+    )
+
+    has_warehouse = st.session_state.get("warehouse_connector") is not None
+    has_openmetadata = (
+        st.session_state.get("openmetadata_enabled")
+        and st.session_state.get("openmetadata_url", "")
+    )
+
+    c_back, _, c_skip = st.columns([1, 2, 1])
+    with c_back:
+        if st.button("← Voltar", use_container_width=True):
+            st.session_state["wizard_step"] = 2
+            st.rerun()
+    with c_skip:
+        if st.button("Usar arquivo →", use_container_width=True,
+                     help="Pula o diagnóstico e vai para seleção manual de arquivo/tabela"):
+            st.session_state["step_completed"][3] = True
+            st.session_state["wizard_step"] = 4
+            st.rerun()
+
+    st.divider()
+
+    if not has_warehouse and not has_openmetadata:
+        st.warning(
+            "Nenhum warehouse ou OpenMetadata configurado. "
+            "O diagnóstico automático requer uma fonte conectada. "
+            "Use o botão **'Usar arquivo →'** para selecionar um dataset manualmente."
+        )
+        return
+
+    # --- Source selection for scan ---
+    scan_sources = []
+    if has_warehouse:
+        scan_sources.append("Warehouse")
+    if has_openmetadata:
+        scan_sources.append("OpenMetadata")
+
+    scan_source = st.radio(
+        "Fonte para diagnóstico",
+        scan_sources,
+        horizontal=True,
+        key="diagnosis_scan_source",
+    )
+
+    if scan_source == "Warehouse":
+        _render_diagnosis_warehouse_scan()
+    else:
+        _render_diagnosis_openmetadata_scan()
+
+
+def _render_diagnosis_warehouse_scan() -> None:
+    """Scan warehouse tables, read existing metadata, run quality evaluation."""
+    connector = st.session_state.get("warehouse_connector")
+    if not connector:
+        st.error("Conector de warehouse não disponível.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        try:
+            dbs = connector.list_databases()
+            st.selectbox("Database", dbs, key="wh_scan_db")
+        except Exception:
+            st.text_input("Database", key="wh_scan_db")
+    with c2:
+        try:
+            schemas = connector.list_schemas(
+                database=st.session_state.get("wh_scan_db")) or []
+            st.selectbox("Schema", schemas, key="wh_scan_schema")
+        except Exception:
+            st.text_input("Schema", key="wh_scan_schema")
+
+    with st.expander("Opções de enriquecimento", expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("Tamanho da amostra (linhas)", 10, 5000, 100, key="sample_size")
+        with c2:
+            st.text_area(
+                "Contexto adicional (opcional)",
+                placeholder="Domínio de negócio, instruções especiais...",
+                key="additional_context",
+                height=80,
+            )
+
+    if st.button("Escanear Catálogo e Diagnosticar", type="primary"):
+        _run_warehouse_diagnosis()
+
+    _render_diagnosis_panel()
+
+
+def _run_warehouse_diagnosis() -> None:
+    """Read metadata from warehouse and run LLM quality evaluation."""
+    connector = st.session_state.get("warehouse_connector")
+    agent = st.session_state.get("agent")
+    if not agent or not connector:
+        st.error("Configure e teste as conexões na Etapa 1.")
+        return
+
+    scan_schema = st.session_state.get("wh_scan_schema") or None
+    scan_db = st.session_state.get("wh_scan_db") or None
+
+    with st.spinner("Listando tabelas..."):
+        try:
+            table_list = connector.list_tables(schema=scan_schema, database=scan_db) or []
+        except Exception as e:
+            st.error(f"Erro ao listar tabelas: {e}")
+            return
+
+    if not table_list:
+        st.warning("Nenhuma tabela encontrada no schema selecionado.")
+        return
+
+    progress = st.progress(0)
+    status_text = st.empty()
+    table_dicts = []
+
+    for i, tbl in enumerate(table_list):
+        tbl_name = getattr(tbl, "name", str(tbl))
+        tbl_schema = getattr(tbl, "schema", scan_schema) or scan_schema or ""
+        tbl_db = getattr(tbl, "database", scan_db) or scan_db or ""
+        status_text.text(f"Lendo metadados: {tbl_name} ({i+1}/{len(table_list)})")
+        progress.progress((i + 1) / len(table_list) * 0.5)
+
+        description = ""
+        row_count = getattr(tbl, "row_count", None)
+        last_modified = getattr(tbl, "last_modified", None)
+        columns = []
+
+        try:
+            # Read table-level description (BigQuery exposes it via get_table_info)
+            info = connector.get_table_info(tbl_name, tbl_schema, tbl_db)
+            if info:
+                meta = getattr(info, "metadata", {}) or {}
+                description = meta.get("description", "") or ""
+                row_count = row_count or getattr(info, "row_count", None)
+                last_modified = last_modified or getattr(info, "last_modified", None)
+        except Exception:
+            pass
+
+        try:
+            schema_cols = connector.get_table_schema(tbl_name, tbl_schema, tbl_db) or []
+            for col in schema_cols:
+                columns.append({
+                    "name": col.get("name", ""),
+                    "description": col.get("comment", "") or "",
+                })
+        except Exception:
+            pass
+
+        table_dicts.append({
+            "name": tbl_name,
+            "schema": tbl_schema,
+            "database": tbl_db,
+            "description": description,
+            "owner": "",
+            "tags": [],
+            "classification": "",
+            "columns": columns,
+            "row_count": row_count,
+            "last_modified": str(last_modified) if last_modified else None,
+            "source": "warehouse",
+        })
+
+    status_text.text("Avaliando qualidade dos metadados com IA...")
+    from metadata_enrichment.scorer import MetadataQualityEvaluator
+
+    evaluator = MetadataQualityEvaluator(agent.llm_provider)
+    results = []
+    total = len(table_dicts)
+    for i, td in enumerate(table_dicts):
+        status_text.text(f"Avaliando: {td['name']} ({i+1}/{total})")
+        progress.progress(0.5 + (i + 1) / total * 0.5)
+        results.append(evaluator.evaluate(td))
+
+    progress.progress(1.0)
+    status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
+
+    # Pre-select absent + poor tables
+    pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
+    st.session_state["diagnosis_results"] = results
+    st.session_state["selected_for_enrichment"] = pre_selected
+
+
+def _render_diagnosis_openmetadata_scan() -> None:
+    """Fetch tables from OpenMetadata and run quality evaluation."""
+    with st.expander("Opções de enriquecimento", expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("Tamanho da amostra (linhas)", 10, 5000, 100, key="sample_size")
+        with c2:
+            st.text_area(
+                "Contexto adicional (opcional)",
+                placeholder="Domínio de negócio, instruções especiais...",
+                key="additional_context",
+                height=80,
+            )
+
+    if st.button("Escanear OpenMetadata e Diagnosticar", type="primary"):
+        _run_openmetadata_diagnosis()
+
+    _render_diagnosis_panel()
+
+
+def _run_openmetadata_diagnosis() -> None:
+    """Fetch tables from OpenMetadata and evaluate metadata quality."""
+    agent = st.session_state.get("agent")
+    url = st.session_state.get("openmetadata_url", "").rstrip("/")
+    token = st.session_state.get("openmetadata_token", "")
+    if not agent or not url:
+        st.error("Configure o agente e o OpenMetadata na Etapa 1.")
+        return
+
+    try:
+        from rag_discovery.openmetadata_connector import OpenMetadataConnector
+    except ImportError:
+        from data_governance.rag_discovery.openmetadata_connector import OpenMetadataConnector
+
+    with st.spinner("Buscando tabelas no OpenMetadata..."):
+        try:
+            omd = OpenMetadataConnector(server_url=url, bearer_token=token)
+            tables = omd.fetch_tables()
+        except Exception as e:
+            st.error(f"Erro ao buscar tabelas: {e}")
+            return
+
+    if not tables:
+        st.warning("Nenhuma tabela encontrada no OpenMetadata.")
+        return
+
+    table_dicts = []
+    for tm in tables:
+        columns = []
+        for col in (tm.columns or []):
+            if isinstance(col, dict):
+                columns.append({
+                    "name": col.get("name", ""),
+                    "description": col.get("description", "") or "",
+                })
+            else:
+                columns.append({
+                    "name": getattr(col, "name", ""),
+                    "description": getattr(col, "description", "") or "",
+                })
+        table_dicts.append({
+            "name": tm.name,
+            "schema": tm.schema,
+            "database": tm.database,
+            "description": tm.description or "",
+            "owner": tm.owner or "",
+            "tags": list(tm.tags or []),
+            "classification": "",
+            "columns": columns,
+            "row_count": tm.row_count,
+            "last_modified": tm.updated_at,
+            "source": "openmetadata",
+        })
+
+    from metadata_enrichment.scorer import MetadataQualityEvaluator
+    evaluator = MetadataQualityEvaluator(agent.llm_provider)
+
+    progress = st.progress(0)
+    status_text = st.empty()
+    results = []
+    total = len(table_dicts)
+    for i, td in enumerate(table_dicts):
+        status_text.text(f"Avaliando: {td['name']} ({i+1}/{total})")
+        progress.progress((i + 1) / total)
+        results.append(evaluator.evaluate(td))
+
+    progress.progress(1.0)
+    status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
+
+    pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
+    st.session_state["diagnosis_results"] = results
+    st.session_state["selected_for_enrichment"] = pre_selected
+
+
+def _render_diagnosis_panel() -> None:
+    """Render the triage dashboard: KPIs, filterable table list, selection controls."""
+    results = st.session_state.get("diagnosis_results", [])
+    if not results:
+        return
+
+    # --- KPIs ---
+    n_absent = sum(1 for r in results if r.status == "absent")
+    n_poor = sum(1 for r in results if r.status == "poor")
+    n_ok = sum(1 for r in results if r.status == "sufficient")
+    avg_score = sum(r.quality_score for r in results) / len(results) if results else 0.0
+
+    st.divider()
+    st.subheader("Resultado do Diagnóstico")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total de tabelas", len(results))
+    c2.metric("🔴 Ausente", n_absent)
+    c3.metric("🟡 Pobre", n_poor)
+    c4.metric("🟢 Suficiente", n_ok)
+    c5.metric("Score médio", f"{avg_score:.0%}")
+
+    st.divider()
+
+    # --- Filters ---
+    fc1, fc2 = st.columns([2, 1])
+    with fc1:
+        search = st.text_input("Buscar tabela", placeholder="nome...", key="diag_search")
+    with fc2:
+        filter_status = st.multiselect(
+            "Filtrar por status",
+            ["🔴 Ausente", "🟡 Pobre", "🟢 Suficiente"],
+            default=["🔴 Ausente", "🟡 Pobre"],
+            key="diag_filter_status",
+        )
+
+    status_map = {"🔴 Ausente": "absent", "🟡 Pobre": "poor", "🟢 Suficiente": "sufficient"}
+    allowed = {status_map[s] for s in filter_status}
+    filtered = [
+        r for r in results
+        if r.status in allowed
+        and (not search or search.lower() in r.table_name.lower())
+    ]
+    filtered.sort(key=lambda r: r.quality_score)
+
+    # --- Selection buttons ---
+    sel_state = st.session_state.get("selected_for_enrichment", [])
+    bc1, bc2, bc3, bc4 = st.columns(4)
+    with bc1:
+        if st.button("Selecionar Ausentes", use_container_width=True):
+            st.session_state["selected_for_enrichment"] = [
+                r.table_name for r in results if r.status == "absent"
+            ]
+            st.rerun()
+    with bc2:
+        if st.button("Selecionar Pobres", use_container_width=True):
+            st.session_state["selected_for_enrichment"] = [
+                r.table_name for r in results if r.status == "poor"
+            ]
+            st.rerun()
+    with bc3:
+        if st.button("Selecionar Tudo", use_container_width=True):
+            st.session_state["selected_for_enrichment"] = [r.table_name for r in results]
+            st.rerun()
+    with bc4:
+        if st.button("Limpar seleção", use_container_width=True):
+            st.session_state["selected_for_enrichment"] = []
+            st.rerun()
+
+    # --- Table list ---
+    _STATUS_ICON = {"absent": "🔴", "poor": "🟡", "sufficient": "🟢"}
+    for r in filtered:
+        is_selected = r.table_name in sel_state
+        c_check, c_name, c_score, c_status, c_cols = st.columns([0.5, 3, 1.5, 1.5, 2])
+        with c_check:
+            checked = st.checkbox(
+                "", value=is_selected, key=f"diag_sel_{r.table_name}",
+                label_visibility="collapsed",
+            )
+            if checked and r.table_name not in sel_state:
+                sel_state = sel_state + [r.table_name]
+                st.session_state["selected_for_enrichment"] = sel_state
+            elif not checked and r.table_name in sel_state:
+                sel_state = [t for t in sel_state if t != r.table_name]
+                st.session_state["selected_for_enrichment"] = sel_state
+        with c_name:
+            st.markdown(f"`{r.table_name}`")
+            if r.schema:
+                st.caption(r.schema)
+        with c_score:
+            st.markdown(f"**{r.quality_score:.0%}**")
+        with c_status:
+            st.markdown(_STATUS_ICON.get(r.status, "") + f" {r.status.capitalize()}")
+        with c_cols:
+            n_enrich = len(r.columns_to_enrich)
+            n_total = len(r.column_qualities)
+            st.caption(f"{n_enrich}/{n_total} colunas a enriquecer")
+
+    # --- Enrich button ---
+    st.divider()
+    n_sel = len(st.session_state.get("selected_for_enrichment", []))
+    if n_sel:
+        if st.button(
+            f"Enriquecer Selecionadas ({n_sel} tabelas) →",
+            type="primary",
+            use_container_width=True,
+        ):
+            _handle_enrich_from_diagnosis()
+    else:
+        st.info("Selecione ao menos uma tabela para enriquecer.")
+        if st.button("Ir para Seleção Manual →", use_container_width=True):
+            st.session_state["step_completed"][3] = True
+            st.session_state["wizard_step"] = 4
+            st.rerun()
+
+
+def _handle_enrich_from_diagnosis() -> None:
+    """Enrich all selected tables from diagnosis results (warehouse source)."""
+    agent = st.session_state.get("agent")
+    if not agent:
+        st.error("Configure e teste as conexões na Etapa 1.")
+        return
+
+    selected = st.session_state.get("selected_for_enrichment", [])
+    if not selected:
+        st.error("Selecione ao menos uma tabela.")
+        return
+
+    diagnosis_results = st.session_state.get("diagnosis_results", [])
+    diag_by_name = {d.table_name: d for d in diagnosis_results}
+
+    sample_size = int(st.session_state.get("sample_size", 100))
+    base_context = st.session_state.get("additional_context") or None
+    conn_str = _build_connection_string()
+
+    enrichment_results = []
+    original_metadata: Dict[str, Any] = {}
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i, table_name in enumerate(selected):
+        status_text.text(f"Enriquecendo: {table_name} ({i+1}/{len(selected)})")
+        diag = diag_by_name.get(table_name)
+
+        # Build context enriched with existing metadata so LLM improves rather than replaces
+        existing_ctx_parts = []
+        if diag:
+            if diag.existing_description:
+                existing_ctx_parts.append(f'Descrição atual: "{diag.existing_description}"')
+            if diag.existing_owner:
+                existing_ctx_parts.append(f'Owner: "{diag.existing_owner}"')
+            if diag.existing_tags:
+                existing_ctx_parts.append(f"Tags existentes: {diag.existing_tags}")
+            cols_with_desc = [cq.name for cq in diag.column_qualities if cq.existing_value]
+            if cols_with_desc:
+                existing_ctx_parts.append(
+                    f"Colunas que já têm descrição (melhore apenas se necessário): "
+                    f"{', '.join(cols_with_desc)}"
+                )
+
+        if existing_ctx_parts:
+            existing_ctx = (
+                "Metadados existentes encontrados — melhore-os sem substituir o que já está adequado:\n"
+                + "\n".join(f"  - {p}" for p in existing_ctx_parts)
+            )
+        else:
+            existing_ctx = None
+
+        full_context = "\n\n".join(filter(None, [base_context, existing_ctx])) or None
+
+        # Save original metadata snapshot
+        original_metadata[table_name] = {
+            "description": diag.existing_description if diag else "",
+            "owner": diag.existing_owner if diag else "",
+            "tags": list(diag.existing_tags) if diag else [],
+            "classification": diag.existing_classification if diag else "",
+            "columns": {
+                cq.name: cq.existing_value for cq in diag.column_qualities
+            } if diag else {},
+        }
+
+        try:
+            schema = diag.schema if diag else st.session_state.get("wh_scan_schema") or None
+            tbl_name = table_name.split(".")[-1] if "." in table_name else table_name
+            from metadata_enrichment.sampling.data_sampler import SQLSampler
+            sampler = SQLSampler(conn_str)
+            sample_result = sampler.sample(tbl_name, sample_size=sample_size, schema=schema)
+            result = agent.enrich(sample_result, additional_context=full_context)
+            enrichment_results.append(result)
+        except Exception as e:
+            st.error(f"Erro ao enriquecer {table_name}: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+        progress_bar.progress((i + 1) / len(selected))
+
+    if enrichment_results:
+        st.session_state["enrichment_results_list"] = enrichment_results
+        st.session_state["enrichment_result"] = enrichment_results[0]
+        st.session_state["original_metadata"] = original_metadata
+        st.session_state["current_enrichment_idx"] = 0
+        _populate_edited_fields(enrichment_results[0])
+        st.session_state["sample_result"] = None  # not available for multi-table from diagnosis
+        st.session_state["validation_dirty"] = False
+        st.session_state["step_completed"][3] = True
+        st.session_state["step_completed"][4] = True  # dataset selection was done via diagnosis
+        st.session_state["wizard_step"] = 5
+        st.rerun()
+
+
+def _populate_edited_fields(result) -> None:
+    """Populate session state edit dicts from an EnrichmentResult."""
+    st.session_state["edited_table_fields"] = {
+        "description": result.description,
+        "business_name": result.business_name,
+        "domain": result.domain,
+        "tags": ", ".join(result.tags),
+        "classification": result.classification,
+        "owner_suggestion": result.owner_suggestion,
+    }
+    st.session_state["edited_columns"] = {
+        col.name: {
+            "description": col.description,
+            "business_name": col.business_name,
+            "tags": ", ".join(col.tags),
+            "classification": col.classification,
+            "is_pii": col.is_pii,
+        }
+        for col in result.columns
+    }
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — Seleção de Dataset (previously Step 3)
+# ---------------------------------------------------------------------------
+
+def render_step4_dataset_selection() -> None:
+    st.header("Etapa 4 de 6 — Seleção de Dataset")
     st.info("Escolha a fonte de dados a enriquecer.")
 
     source = st.radio(
@@ -617,7 +1151,7 @@ def render_step3_dataset_selection() -> None:
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("← Voltar", use_container_width=True):
-            st.session_state["wizard_step"] = 2
+            st.session_state["wizard_step"] = 3
             st.rerun()
     with c3:
         if st.button("Enriquecer Dataset →", type="primary", use_container_width=True):
@@ -770,29 +1304,27 @@ def _handle_enrich() -> None:
 
             result = agent.enrich(sample_result, additional_context=context)
 
+            # Snapshot existing metadata as "before" for Before/After comparison in Step 5
+            # (for file sources there are no pre-existing descriptions)
+            orig_meta: Dict[str, Any] = st.session_state.get("original_metadata", {})
+            if result.table_name not in orig_meta:
+                orig_meta[result.table_name] = {
+                    "description": "",
+                    "owner": "",
+                    "tags": [],
+                    "classification": "",
+                    "columns": {},
+                }
+            st.session_state["original_metadata"] = orig_meta
+
             st.session_state["sample_result"] = sample_result
             st.session_state["enrichment_result"] = result
-            st.session_state["edited_table_fields"] = {
-                "description": result.description,
-                "business_name": result.business_name,
-                "domain": result.domain,
-                "tags": ", ".join(result.tags),
-                "classification": result.classification,
-                "owner_suggestion": result.owner_suggestion,
-            }
-            st.session_state["edited_columns"] = {
-                col.name: {
-                    "description": col.description,
-                    "business_name": col.business_name,
-                    "tags": ", ".join(col.tags),
-                    "classification": col.classification,
-                    "is_pii": col.is_pii,
-                }
-                for col in result.columns
-            }
+            st.session_state["enrichment_results_list"] = [result]
+            st.session_state["current_enrichment_idx"] = 0
+            _populate_edited_fields(result)
             st.session_state["validation_dirty"] = False
-            st.session_state["step_completed"][3] = True
-            st.session_state["wizard_step"] = 4
+            st.session_state["step_completed"][4] = True
+            st.session_state["wizard_step"] = 5
             st.rerun()
 
         except Exception as e:
@@ -828,21 +1360,41 @@ def _build_connection_string() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — Validação & Edição
+# Step 5 — Validação & Edição (previously Step 4) — with Before/After badges
 # ---------------------------------------------------------------------------
 
-def render_step4_validation() -> None:
-    st.header("Etapa 4 de 5 — Validação & Edição")
+def render_step5_validation() -> None:
+    st.header("Etapa 5 de 6 — Validação & Edição")
 
+    results_list = st.session_state.get("enrichment_results_list", [])
     result = st.session_state.get("enrichment_result")
     if not result:
-        st.error("Nenhum resultado disponível. Volte para a Etapa 3.")
+        st.error("Nenhum resultado disponível. Volte para a Etapa 4.")
         return
+
+    # Multi-table selector
+    if len(results_list) > 1:
+        table_names = [r.table_name for r in results_list]
+        idx = st.session_state.get("current_enrichment_idx", 0)
+        selected_name = st.selectbox(
+            "Tabela em revisão",
+            table_names,
+            index=idx,
+            key="validation_table_selector",
+        )
+        new_idx = table_names.index(selected_name)
+        if new_idx != idx:
+            _apply_edits_to_result()
+            st.session_state["current_enrichment_idx"] = new_idx
+            st.session_state["enrichment_result"] = results_list[new_idx]
+            _populate_edited_fields(results_list[new_idx])
+            st.rerun()
+        result = results_list[new_idx]
 
     c_back, c_regen, c_save, c_next = st.columns(4)
     with c_back:
         if st.button("← Voltar", use_container_width=True):
-            st.session_state["wizard_step"] = 3
+            st.session_state["wizard_step"] = 4
             st.rerun()
     with c_regen:
         if st.button("Regerar Tudo", use_container_width=True):
@@ -854,8 +1406,8 @@ def render_step4_validation() -> None:
     with c_next:
         if st.button("Próximo →", type="primary", use_container_width=True):
             _apply_edits_to_result()
-            st.session_state["step_completed"][4] = True
-            st.session_state["wizard_step"] = 5
+            st.session_state["step_completed"][5] = True
+            st.session_state["wizard_step"] = 6
             st.rerun()
 
     st.divider()
@@ -870,8 +1422,20 @@ def render_step4_validation() -> None:
         _render_column_editor(col, idx)
 
 
+def _before_after_caption(original: str, ai_value: str) -> None:
+    """Display a before/after indicator below an edited field."""
+    if not (original or "").strip():
+        st.caption("🆕 Novo — campo não existia antes do enriquecimento")
+    elif (original or "").strip() != (ai_value or "").strip():
+        preview = original[:120] + ("..." if len(original) > 120 else "")
+        st.caption(f"✨ Melhorado — anterior: _{preview}_")
+    else:
+        st.caption("Inalterado — mesmo valor do original")
+
+
 def _render_table_editor(result) -> None:
     edits = st.session_state["edited_table_fields"]
+    orig = st.session_state.get("original_metadata", {}).get(result.table_name, {})
 
     st.subheader("Metadados da Tabela")
     c1, c2, c3, c4 = st.columns(4)
@@ -902,6 +1466,7 @@ def _render_table_editor(result) -> None:
             "Proprietário / Time",
             value=edits.get("owner_suggestion", ""),
             key="edit_tbl_owner")
+        _before_after_caption(orig.get("owner", ""), edits.get("owner_suggestion", ""))
 
     with c_right:
         cls_opts = ["public", "internal", "confidential", "restricted"]
@@ -912,16 +1477,20 @@ def _render_table_editor(result) -> None:
             "Classificação", cls_opts,
             index=cls_opts.index(cur_cls),
             key="edit_tbl_cls")
+        _before_after_caption(orig.get("classification", ""), edits.get("classification", ""))
         edits["tags"] = st.text_input(
             "Tags (separadas por vírgula)",
             value=edits.get("tags", ""),
             key="edit_tbl_tags")
+        orig_tags_str = ", ".join(orig.get("tags", []))
+        _before_after_caption(orig_tags_str, edits.get("tags", ""))
 
     edits["description"] = st.text_area(
         "Descrição (PT-BR)",
         value=edits.get("description", ""),
         height=120,
         key="edit_tbl_desc")
+    _before_after_caption(orig.get("description", ""), edits.get("description", ""))
 
     if result.standards_used:
         st.caption("Normativos utilizados: " + ", ".join(result.standards_used))
@@ -929,6 +1498,14 @@ def _render_table_editor(result) -> None:
 
 def _render_column_editor(col, idx: int) -> None:
     edits = st.session_state["edited_columns"].get(col.name, {})
+    result = st.session_state.get("enrichment_result")
+    orig_col_desc = (
+        st.session_state.get("original_metadata", {})
+        .get(result.table_name if result else "", {})
+        .get("columns", {})
+        .get(col.name, "")
+    ) if result else ""
+
     pii_badge = " ⚠️ PII" if col.is_pii else ""
     conf = col.confidence
     conf_color = "green" if conf >= 0.8 else "orange" if conf >= 0.6 else "red"
@@ -950,6 +1527,7 @@ def _render_column_editor(col, idx: int) -> None:
                 value=edits.get("description", col.description),
                 height=80,
                 key=f"col_desc_{idx}")
+            _before_after_caption(orig_col_desc, edits.get("description", col.description))
             edits["business_name"] = st.text_input(
                 "Nome de negócio",
                 value=edits.get("business_name", col.business_name),
@@ -1226,18 +1804,19 @@ def generate_synapse_sql(result, schema: str) -> str:
     return "\n".join(lines)
 
 
-# ---- Step 5 renderer -------------------------------------------------------
+# ---- Step 6 renderer -------------------------------------------------------
 
-def render_step5_publish() -> None:
-    st.header("Etapa 5 de 5 — Publicação")
+def render_step6_publish() -> None:
+    st.header("Etapa 6 de 6 — Publicação")
 
     result = st.session_state.get("enrichment_result")
     if not result:
-        st.error("Nenhum resultado disponível. Volte para a Etapa 4.")
+        st.error("Nenhum resultado disponível. Volte para a Etapa 5.")
         return
 
     _apply_edits_to_result()
 
+    _render_impact_report()
     _render_publish_summary(result)
 
     st.divider()
@@ -1392,11 +1971,77 @@ def render_step5_publish() -> None:
     c1, c2 = st.columns(2)
     with c1:
         if st.button("← Voltar para Validação", use_container_width=True):
-            st.session_state["wizard_step"] = 4
+            st.session_state["wizard_step"] = 5
             st.rerun()
     with c2:
-        if st.button("Novo Enriquecimento", use_container_width=True):
+        if st.button("Novo Diagnóstico", use_container_width=True):
             _reset_wizard()
+
+
+def _render_impact_report() -> None:
+    """Show an impact report comparing metadata before and after enrichment."""
+    results_list = st.session_state.get("enrichment_results_list", [])
+    orig_meta = st.session_state.get("original_metadata", {})
+
+    if not results_list:
+        return
+
+    # Compute delta stats across all enriched tables
+    tables_enriched = len(results_list)
+    cols_new = 0       # column descriptions that didn't exist before
+    cols_improved = 0  # column descriptions that existed but were enriched
+    cols_total = 0
+    tables_new_desc = 0
+    tables_improved_desc = 0
+    pii_found = sum(1 for r in results_list if r.has_pii)
+
+    for r in results_list:
+        orig = orig_meta.get(r.table_name, {})
+        orig_desc = orig.get("description", "")
+        if not orig_desc:
+            tables_new_desc += 1
+        elif orig_desc.strip() != r.description.strip():
+            tables_improved_desc += 1
+
+        orig_cols = orig.get("columns", {})
+        for col in r.columns:
+            cols_total += 1
+            orig_col_desc = orig_cols.get(col.name, "")
+            if not orig_col_desc:
+                cols_new += 1
+            elif orig_col_desc.strip() != col.description.strip():
+                cols_improved += 1
+
+    with st.expander("Relatório de Impacto", expanded=True):
+        st.subheader("Impacto do Enriquecimento")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Tabelas enriquecidas", tables_enriched)
+        c2.metric("Descrições novas (tabelas)", tables_new_desc + tables_improved_desc)
+        c3.metric("Descrições novas (colunas)", cols_new)
+        c4.metric("Descrições melhoradas (colunas)", cols_improved)
+
+        if pii_found:
+            st.warning(f"PII detectado em {pii_found} tabela(s). Verifique a classificação antes de publicar.")
+
+        if tables_enriched > 1:
+            import pandas as pd
+            rows = []
+            for r in results_list:
+                orig = orig_meta.get(r.table_name, {})
+                had_desc = bool((orig.get("description", "") or "").strip())
+                rows.append({
+                    "Tabela": r.table_name,
+                    "Descrição antes": "✓" if had_desc else "—",
+                    "Descrição depois": "✓",
+                    "Colunas enriquecidas": sum(
+                        1 for col in r.columns
+                        if not (orig.get("columns", {}).get(col.name, "") or "").strip()
+                        or (orig.get("columns", {}).get(col.name, "") or "").strip() != col.description.strip()
+                    ),
+                    "Total colunas": len(r.columns),
+                    "PII": "⚠️" if r.has_pii else "",
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def _render_publish_summary(result) -> None:
@@ -1472,7 +2117,7 @@ def _publish_openmetadata(result) -> None:
             )
             if r2.ok:
                 st.success(f"Publicado com sucesso: {result.table_name}")
-                st.session_state["step_completed"][5] = True
+                st.session_state["step_completed"][6] = True
             else:
                 st.error(f"Erro PATCH ({r2.status_code}): {r2.text[:300]}")
 
@@ -1518,11 +2163,13 @@ def main() -> None:
     elif step == 2:
         render_step2_knowledge_base()
     elif step == 3:
-        render_step3_dataset_selection()
+        render_step3_diagnosis()
     elif step == 4:
-        render_step4_validation()
+        render_step4_dataset_selection()
     elif step == 5:
-        render_step5_publish()
+        render_step5_validation()
+    elif step == 6:
+        render_step6_publish()
 
 
 if __name__ == "__main__":
