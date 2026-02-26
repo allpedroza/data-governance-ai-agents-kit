@@ -721,6 +721,125 @@ Gere o array JSON com enriquecimento para cada coluna:"""
             "language": self.language
         }
 
+    def regenerate_column(
+        self,
+        column_name: str,
+        sample_result: SampleResult,
+        table_context: Dict[str, Any],
+        additional_context: Optional[str] = None
+    ) -> ColumnEnrichment:
+        """
+        Regenerate metadata for a single column using the LLM.
+
+        Args:
+            column_name: The column to regenerate metadata for
+            sample_result: Original SampleResult (for type, samples, patterns)
+            table_context: Dict with 'domain' and 'description' of the table
+            additional_context: Optional additional context string
+
+        Returns:
+            Fresh ColumnEnrichment instance
+        """
+        standards_context = self.standards_rag.get_context_for_enrichment(
+            table_name=sample_result.table_name,
+            column_names=[column_name],
+            n_results=2
+        )
+
+        if additional_context:
+            standards_context = f"{standards_context}\n\n## Contexto Adicional\n{additional_context}"
+
+        original_col = sample_result.get_column(column_name)
+
+        col_info = [{
+            "name": column_name,
+            "type": original_col.data_type if original_col else "unknown",
+            "samples": original_col.sample_values[:5] if original_col else [],
+            "null_ratio": f"{original_col.null_ratio:.1%}" if original_col else "N/A",
+            "distinct_count": original_col.distinct_count if original_col else 0,
+            "detected_patterns": original_col.patterns if original_col else [],
+            "inferred_type": original_col.inferred_semantic_type if original_col else None
+        }]
+
+        system_prompt = """Você é um especialista em governança de dados.
+Sua tarefa é gerar descrição e classificação para UMA coluna de dados.
+
+Responda APENAS em JSON válido (array com UM elemento), sem markdown ou texto adicional.
+
+Formato:
+[{
+    "name": "nome_da_coluna",
+    "description": "Descrição em português",
+    "description_en": "Description in English",
+    "business_name": "Nome amigável",
+    "tags": ["tag1", "tag2"],
+    "classification": "public|internal|confidential|restricted",
+    "semantic_type": "pii|email|phone|date|currency|id|flag|name|address|null",
+    "is_pii": true/false,
+    "confidence": 0.0 a 1.0,
+    "reasoning": "breve explicação"
+}]"""
+
+        prompt = f"""Analise a coluna abaixo e gere metadados:
+
+## Contexto da Tabela
+Tabela: {sample_result.table_name}
+Domínio: {table_context.get('domain', 'general')}
+Descrição: {table_context.get('description', 'N/A')}
+
+## Coluna para Análise
+{json.dumps(col_info, ensure_ascii=False, indent=2)}
+
+## Padrões Relevantes
+{standards_context}
+
+Gere o array JSON com UM elemento:"""
+
+        response = self.llm_provider.generate(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.1,
+            max_tokens=800
+        )
+
+        try:
+            content = response.content.strip()
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            col_data_list = json.loads(content)
+            col_data = col_data_list[0] if col_data_list else {}
+        except (json.JSONDecodeError, IndexError):
+            col_data = {
+                "name": column_name,
+                "description": f"Coluna {column_name}",
+                "description_en": f"Column {column_name}",
+                "business_name": column_name,
+                "tags": [],
+                "classification": "internal",
+                "semantic_type": original_col.inferred_semantic_type if original_col else None,
+                "is_pii": False,
+                "confidence": 0.3,
+                "reasoning": "Gerado automaticamente (fallback)"
+            }
+
+        return ColumnEnrichment(
+            name=column_name,
+            original_type=original_col.data_type if original_col else "unknown",
+            description=col_data.get("description", ""),
+            description_en=col_data.get("description_en", ""),
+            business_name=col_data.get("business_name", column_name),
+            tags=col_data.get("tags", []),
+            classification=col_data.get("classification", "internal"),
+            semantic_type=col_data.get("semantic_type"),
+            is_pii=col_data.get("is_pii", False),
+            is_nullable=original_col.null_ratio > 0 if original_col else True,
+            sample_values=[str(v) for v in (original_col.sample_values[:5] if original_col else [])],
+            confidence=col_data.get("confidence", 0.5),
+            reasoning=col_data.get("reasoning", "")
+        )
+
     def export_catalog(
         self,
         results: List[EnrichmentResult],
