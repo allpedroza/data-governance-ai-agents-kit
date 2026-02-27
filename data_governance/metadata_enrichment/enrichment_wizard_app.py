@@ -64,7 +64,7 @@ _DEFAULTS: Dict[str, Any] = {
     "diagnosis_results": [],        # List[TableMetadataDiagnosis]
     "selected_for_enrichment": [],  # List[str] table names selected by user
     "original_metadata": {},        # Dict[table_name, {description, owner, tags, classification, columns}]
-    "pii_diagnosis_results": [],    # List[PIITableDiagnosis]
+    "pii_diagnosis_results": [],    # List[TableClassification]
     "wh_scan_db": "",
     "wh_scan_schema": "",
     # Step 4 — Dataset (file or manual warehouse selection)
@@ -778,9 +778,12 @@ def _run_warehouse_diagnosis() -> None:
     status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
 
     # PII estimation from column names (fast, no sampling)
-    from metadata_enrichment.pii_classifier import PIIClassifier
-    pii_clf = PIIClassifier()
-    pii_results = pii_clf.classify_batch_from_names(table_dicts)
+    try:
+        from classification.data_classification_agent import DataClassificationAgent
+    except ImportError:
+        from data_governance.classification.data_classification_agent import DataClassificationAgent
+    pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
+    pii_results = pii_clf.classify_batch_from_dicts(table_dicts)
 
     # Pre-select absent + poor tables
     pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
@@ -879,9 +882,12 @@ def _run_openmetadata_diagnosis() -> None:
     status_text.text(f"Diagnóstico concluído — {total} tabelas avaliadas.")
 
     # PII estimation from column names (fast, no sampling)
-    from metadata_enrichment.pii_classifier import PIIClassifier
-    pii_clf = PIIClassifier()
-    pii_results = pii_clf.classify_batch_from_names(table_dicts)
+    try:
+        from classification.data_classification_agent import DataClassificationAgent
+    except ImportError:
+        from data_governance.classification.data_classification_agent import DataClassificationAgent
+    pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
+    pii_results = pii_clf.classify_batch_from_dicts(table_dicts)
 
     pre_selected = [r.table_name for r in results if r.status in ("absent", "poor")]
     st.session_state["diagnosis_results"] = results
@@ -1167,8 +1173,11 @@ def _handle_enrich_from_diagnosis() -> None:
             sample_result = sampler.sample(tbl_name, sample_size=sample_size, schema=schema)
 
             # Upgrade PII diagnosis with data-based evidence and append to context
-            from metadata_enrichment.pii_classifier import PIIClassifier
-            pii_clf = PIIClassifier()
+            try:
+                from classification.data_classification_agent import DataClassificationAgent
+            except ImportError:
+                from data_governance.classification.data_classification_agent import DataClassificationAgent
+            pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
             name_diag = next(
                 (p for p in st.session_state.get("pii_diagnosis_results", [])
                  if p.table_name == table_name),
@@ -1176,7 +1185,7 @@ def _handle_enrich_from_diagnosis() -> None:
             )
             data_pii_diag = pii_clf.classify_from_sample(sample_result)
             final_pii_diag = (
-                pii_clf.merge_diagnoses(name_diag, data_pii_diag)
+                pii_clf.merge_with_sample(name_diag, data_pii_diag)
                 if name_diag else data_pii_diag
             )
 

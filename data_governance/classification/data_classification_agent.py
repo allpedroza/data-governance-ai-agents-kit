@@ -56,15 +56,80 @@ PII (Personally Identifiable Information), PHI (Protected Health Information)
 and financial data, providing LGPD/GDPR-oriented recommendations without
 accessing raw data. An optional LLM step can review the same metadata to
 validate the sensitivity decision when the user provides an :class:`LLMProvider`.
+
+Exposes LGPD-specific properties on the result objects:
+  - ``has_pii`` / ``risk_level`` / ``lgpd_sensitive_columns`` on TableClassification
+  - ``column_name`` / ``pii_labels`` / ``lgpd_categories`` / ``evidence`` on ColumnClassification
+
+Also supports DataSampler-based classification via ``classify_from_sample()``.
 """
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from rag_discovery.providers.base import LLMProvider
+# Path setup for flexible import contexts
+_parent = Path(__file__).parent.parent
+if str(_parent) not in sys.path:
+    sys.path.insert(0, str(_parent))
 
+try:
+    from rag_discovery.providers.base import LLMProvider
+except ImportError:
+    try:
+        from data_governance.rag_discovery.providers.base import LLMProvider
+    except ImportError:
+        LLMProvider = None  # type: ignore[assignment,misc]
+
+
+# ---------------------------------------------------------------------------
+# LGPD category mapping
+# ---------------------------------------------------------------------------
+
+#: Maps heuristic categories to LGPD data classification buckets.
+_LGPD_CATEGORY_MAP: Dict[str, str] = {
+    "PII":       "pessoal_ordinario",   # Art. 5 I — identifies a natural person
+    "PHI":       "pessoal_sensivel",    # Art. 5 IX — health / biometric data
+    "FINANCIAL": "pessoal_sensivel",    # Art. 5 IX — financial / payment data
+}
+
+#: Human-readable labels for each heuristic category.
+_PII_LABEL_MAP: Dict[str, str] = {
+    "PII":       "PII Pessoal",
+    "PHI":       "PHI / Saúde",
+    "FINANCIAL": "Financeiro / Pagamento",
+}
+
+
+# ---------------------------------------------------------------------------
+# DataSampler pattern → heuristic category
+# ---------------------------------------------------------------------------
+
+_SAMPLER_PATTERN_TO_CATEGORY: Dict[str, str] = {
+    "cpf":         "PII",
+    "email":       "PII",
+    "phone":       "PII",
+    "ip_address":  "PII",
+    "cep":         "PII",
+    "cnpj":        "FINANCIAL",
+    "credit_card": "FINANCIAL",
+}
+
+_SEMANTIC_TYPE_TO_CATEGORY: Dict[str, str] = {
+    "pii":     "PII",
+    "email":   "PII",
+    "phone":   "PII",
+    "name":    "PII",
+    "address": "PII",
+}
+
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
 
 @dataclass
 class ColumnMetadata:
@@ -119,9 +184,18 @@ class SensitiveDataRule:
         reasons: List[str] = []
         normalized = column.normalized()
 
+        # Tokenize column name to avoid partial matches (e.g. 'conta' in 'contato')
+        name_tokens = set(re.split(r"[_\s]+", normalized["name"]))
+
         # Keyword match on name/description
         for keyword in self.keywords:
-            if keyword in normalized["name"]:
+            if "_" in keyword or " " in keyword:
+                # Compound keyword (e.g. "credit_card"): use full substring match
+                name_match = keyword in normalized["name"]
+            else:
+                # Single-word keyword: require whole-token match to avoid false positives
+                name_match = keyword in name_tokens
+            if name_match:
                 score += 0.5 * self.weight
                 reasons.append(f"nome contém '{keyword}'")
             elif keyword in normalized["description"]:
@@ -153,6 +227,47 @@ class ColumnClassification:
     confidence: float
     reasons: List[str]
     suggested_controls: List[str]
+    _detection_method: str = field(default="name_only", repr=False)
+
+    # ---------------------------------------------------------------- LGPD helpers
+
+    @property
+    def column_name(self) -> str:
+        """Convenience accessor for ``column.name``."""
+        return self.column.name
+
+    @property
+    def pii_labels(self) -> List[str]:
+        """Human-readable labels for each detected category."""
+        return [_PII_LABEL_MAP.get(cat, cat) for cat in self.categories]
+
+    @property
+    def lgpd_categories(self) -> List[str]:
+        """LGPD data type per detected category (deduplicated)."""
+        return list(dict.fromkeys(
+            _LGPD_CATEGORY_MAP.get(cat, "nao_pessoal") for cat in self.categories
+        ))
+
+    @property
+    def risk_level(self) -> str:
+        """Risk level derived from category and confidence."""
+        if "PHI" in self.categories:
+            return "high"
+        if "FINANCIAL" in self.categories:
+            return "high"
+        if "PII" in self.categories:
+            # Any PII that passed the detection threshold (≥0.45) is high risk
+            return "high" if self.confidence >= 0.45 else "medium"
+        return "none"
+
+    @property
+    def evidence(self) -> str:
+        """Human-readable detection evidence."""
+        return "; ".join(self.reasons) if self.reasons else "Regra heurística aplicada."
+
+    @property
+    def detection_method(self) -> str:
+        return self._detection_method
 
 
 @dataclass
@@ -167,6 +282,57 @@ class TableClassification:
     recommended_actions: List[str]
     rationale: str
     llm_assessment: Optional["LLMAssessment"] = None
+    detection_method: str = "name_only"  # "name_only" | "data_sample" | "combined"
+
+    # ---------------------------------------------------------------- LGPD helpers
+
+    @property
+    def table_name(self) -> str:
+        """Convenience accessor for ``table.name``."""
+        return self.table.name
+
+    @property
+    def has_pii(self) -> bool:
+        """True when any sensitive category was detected."""
+        return len(self.detected_categories) > 0
+
+    @property
+    def risk_level(self) -> str:
+        """Normalised risk level (high / medium / low / none)."""
+        level = self.sensitivity_level
+        if level == "CRITICAL":
+            return "high"
+        if level == "HIGH":
+            return "high"
+        if level == "MEDIUM":
+            return "medium"
+        if level == "LOW" and self.detected_categories:
+            return "low"
+        return "none"
+
+    @property
+    def lgpd_sensitive_columns(self) -> List[str]:
+        """Column names whose data falls under LGPD Art. 5 IX (pessoal_sensivel)."""
+        result = []
+        for cc in self.columns:
+            if "pessoal_sensivel" in cc.lgpd_categories:
+                result.append(cc.column.name)
+        return result
+
+    @property
+    def recommended_classification(self) -> str:
+        """Recommended data access level: restricted / confidential / internal."""
+        level = self.sensitivity_level
+        if level in ("HIGH", "CRITICAL"):
+            return "restricted"
+        if level == "MEDIUM":
+            return "confidential"
+        return "internal"
+
+    @property
+    def pii_columns(self) -> List[ColumnClassification]:
+        """Alias for ``columns`` — exposes the same interface expected by the wizard UI."""
+        return self.columns
 
 
 @dataclass
@@ -189,25 +355,22 @@ class DataClassificationAgent:
         SensitiveDataRule(
             category="PII",
             keywords=(
-                "cpf",
-                "cnpj",
-                "ssn",
-                "tax_id",
-                "passport",
-                "rg",
-                "nome",
-                "name",
-                "email",
-                "e-mail",
-                "phone",
-                "telefone",
-                "celular",
-                "address",
-                "endereco",
-                "zipcode",
-                "cep",
-                "birth",
-                "nascimento",
+                # Document identifiers
+                "cpf", "rg", "ssn", "tax_id", "passport", "passaporte",
+                "identidade", "documento", "document",
+                # Name
+                "nome", "name", "razao_social", "nomecomp",
+                # Contact
+                "email", "e-mail", "e_mail",
+                "phone", "telefone", "celular", "fone",
+                # Address
+                "address", "endereco", "logradouro", "rua",
+                "zipcode", "cep", "zip_code",
+                # Date of birth
+                "birth", "nascimento", "birthday", "birth_date",
+                "dt_nasc", "data_nasc",
+                # Network
+                "ip_address", "ip_addr", "endereco_ip",
             ),
             types=("string", "varchar", "email", "phone", "uuid"),
             tags=("pii", "personal"),
@@ -216,49 +379,36 @@ class DataClassificationAgent:
         SensitiveDataRule(
             category="PHI",
             keywords=(
-                "patient",
-                "paciente",
-                "diagnosis",
-                "diagnostico",
-                "medical",
-                "clinico",
-                "health",
-                "saude",
-                "lab",
-                "exame",
-                "prescription",
-                "receita",
+                "patient", "paciente",
+                "diagnosis", "diagnostico", "cid",
+                "medical", "clinico",
+                "health", "saude", "doenca",
+                "lab", "exame",
+                "prescription", "receita",
                 "insurance",
+                "biometria", "biometric", "fingerprint",
+                "foto", "photo",
+                "senha", "password", "pwd", "hash_senha",
             ),
             types=("clinical", "disease", "health", "json"),
-            tags=("phi", "health"),
+            tags=("phi", "health", "biometric"),
             weight=1.1,
-            description="Informações de saúde (PHI) com maiores restrições.",
+            description="Informações de saúde e biometria (PHI) com maiores restrições.",
         ),
         SensitiveDataRule(
             category="FINANCIAL",
             keywords=(
-                "credit_card",
-                "card",
-                "cvv",
-                "iban",
-                "swift",
-                "routing",
-                "account",
-                "conta",
-                "agencia",
-                "banco",
-                "transaction",
-                "transacao",
-                "invoice",
-                "fatura",
-                "salary",
-                "salario",
+                "credit_card", "card", "cartao", "card_number", "num_cartao",
+                "cvv", "iban", "swift", "routing",
+                "account", "conta", "agencia", "banco",
+                "transaction", "transacao",
+                "invoice", "fatura",
+                "salary", "salario", "renda", "income",
             ),
             types=("decimal", "double", "money", "currency", "card"),
             tags=("financial", "pci"),
             weight=1.05,
-            description="Dados financeiros e de pagamento sujeitos a PCI/GDPR.",
+            description="Dados financeiros e de pagamento sujeitos a PCI/LGPD.",
         ),
     )
 
@@ -267,7 +417,7 @@ class DataClassificationAgent:
         rules: Optional[Sequence[SensitiveDataRule]] = None,
         lgpd_requirements: Optional[Sequence[str]] = None,
         gdpr_requirements: Optional[Sequence[str]] = None,
-        llm_provider: Optional[LLMProvider] = None,
+        llm_provider: Optional[Any] = None,
     ) -> None:
         self.rules = rules or list(self.DEFAULT_RULES)
         self.lgpd_requirements = lgpd_requirements or [
@@ -360,6 +510,166 @@ class DataClassificationAgent:
     def classify_catalog(self, tables: Iterable[TableSchema]) -> List[TableClassification]:
         """Run classification across multiple tables."""
         return [self.classify_table(table) for table in tables]
+
+    def classify_batch_from_dicts(
+        self,
+        table_dicts: List[Dict[str, Any]],
+        use_llm: bool = False,
+    ) -> List[TableClassification]:
+        """Classify a list of table dicts (wizard format).
+
+        Args:
+            table_dicts: Each dict has keys: name, schema, database, description,
+                         owner, tags, columns (list of {name, type, description, tags}).
+            use_llm: If True and an LLM provider is configured, validates with LLM.
+
+        Returns:
+            List of TableClassification, one per input dict.
+        """
+        results: List[TableClassification] = []
+        for td in table_dicts:
+            table = TableSchema(
+                name=td.get("name", ""),
+                database=td.get("database", "") or "",
+                schema=td.get("schema", "") or "",
+                description=td.get("description", "") or "",
+                columns=[
+                    ColumnMetadata(
+                        name=c.get("name", "") if isinstance(c, dict) else str(c),
+                        type=c.get("type", "") or "" if isinstance(c, dict) else "",
+                        description=c.get("description", "") or "" if isinstance(c, dict) else "",
+                        tags=c.get("tags", []) or [] if isinstance(c, dict) else [],
+                    )
+                    for c in (td.get("columns") or [])
+                ],
+                tags=td.get("tags", []) or [],
+                owner=td.get("owner", "") or "",
+            )
+            tc = self.classify_table_with_llm(table) if (use_llm and self.llm_provider) else self.classify_table(table)
+            results.append(tc)
+        return results
+
+    def classify_from_sample(self, sample_result: Any) -> "TableClassification":
+        """Classify PII from a DataSampler SampleResult (patterns on real data).
+
+        Accepts any SampleResult duck-type with:
+          - ``.table_name: str``
+          - ``.columns: List`` where each column has ``.name``, ``.patterns``,
+            ``.inferred_semantic_type``, ``.dtype``
+
+        Returns:
+            TableClassification with ``detection_method = "data_sample"``.
+        """
+        columns: List[ColumnMetadata] = []
+        for col_profile in (sample_result.columns or []):
+            # Tags derived from DataSampler pattern detections
+            tags: List[str] = []
+            for pattern in (getattr(col_profile, "patterns", None) or []):
+                cat = _SAMPLER_PATTERN_TO_CATEGORY.get(pattern)
+                if cat:
+                    tags.append(cat.lower())
+
+            # Also check inferred semantic type
+            sem = getattr(col_profile, "inferred_semantic_type", None)
+            if sem:
+                cat = _SEMANTIC_TYPE_TO_CATEGORY.get(sem)
+                if cat and cat.lower() not in tags:
+                    tags.append(cat.lower())
+
+            columns.append(ColumnMetadata(
+                name=getattr(col_profile, "name", ""),
+                type=getattr(col_profile, "dtype", "") or "",
+                description="",
+                tags=tags,
+            ))
+
+        table = TableSchema(
+            name=getattr(sample_result, "table_name", ""),
+            columns=columns,
+        )
+        tc = self.classify_table(table)
+        tc.detection_method = "data_sample"
+        # Propagate detection method to columns
+        for cc in tc.columns:
+            cc._detection_method = "data_sample"
+        return tc
+
+    def merge_with_sample(
+        self,
+        name_classification: "TableClassification",
+        sample_classification: "TableClassification",
+    ) -> "TableClassification":
+        """Merge name-based and data-based classifications.
+
+        Data evidence takes precedence; name-based fills gaps for columns
+        not found in the sample classification.
+
+        Returns:
+            A new TableClassification with ``detection_method = "combined"``.
+        """
+        # Index data-based results by column name
+        sample_by_col: Dict[str, ColumnClassification] = {
+            cc.column.name: cc for cc in sample_classification.columns
+        }
+        name_by_col: Dict[str, ColumnClassification] = {
+            cc.column.name: cc for cc in name_classification.columns
+        }
+
+        merged_cols: List[ColumnClassification] = []
+
+        all_col_names = list(dict.fromkeys(
+            list(name_by_col.keys()) + list(sample_by_col.keys())
+        ))
+
+        for col_name in all_col_names:
+            name_cc = name_by_col.get(col_name)
+            sample_cc = sample_by_col.get(col_name)
+
+            if name_cc and sample_cc:
+                # Merge: combine categories and reasons; data takes precedence
+                merged_categories = sorted(set(name_cc.categories + sample_cc.categories))
+                merged_reasons = list(dict.fromkeys(
+                    [f"[nome] {r}" for r in name_cc.reasons]
+                    + [f"[dados] {r}" for r in sample_cc.reasons]
+                ))
+                merged_cols.append(ColumnClassification(
+                    column=sample_cc.column,
+                    categories=merged_categories,
+                    confidence=max(name_cc.confidence, sample_cc.confidence),
+                    reasons=merged_reasons,
+                    suggested_controls=self._suggest_controls(merged_categories),
+                    _detection_method="combined",
+                ))
+            elif sample_cc:
+                sample_cc._detection_method = "combined"
+                merged_cols.append(sample_cc)
+            elif name_cc:
+                merged_cols.append(name_cc)
+
+        merged_categories = sorted(set(
+            name_classification.detected_categories
+            + sample_classification.detected_categories
+        ))
+        sensitivity_level = self._derive_sensitivity_level(merged_categories)
+        rationale_parts = []
+        if name_classification.rationale:
+            rationale_parts.append(f"[nome] {name_classification.rationale}")
+        if sample_classification.rationale:
+            rationale_parts.append(f"[dados] {sample_classification.rationale}")
+
+        return TableClassification(
+            table=name_classification.table,
+            sensitivity_level=sensitivity_level,
+            detected_categories=merged_categories,
+            columns=merged_cols,
+            compliance_flags={
+                "lgpd": bool(merged_categories),
+                "gdpr": bool(merged_categories),
+            },
+            recommended_actions=self._recommended_actions(sensitivity_level),
+            rationale=" | ".join(rationale_parts) or "Metadados analisados sem achados.",
+            detection_method="combined",
+        )
 
     def _classify_column(self, column: ColumnMetadata) -> Tuple[List[str], List[Tuple[str, float]]]:
         matches: List[str] = []
