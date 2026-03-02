@@ -1,4 +1,4 @@
-# Data Discovery RAG Agent
+# Data Discovery Agent
 
 ## Resumo
 Agente de IA para descoberta semântica de dados com RAG híbrido (semântico + lexical), validação de catálogo e ranking contextual.
