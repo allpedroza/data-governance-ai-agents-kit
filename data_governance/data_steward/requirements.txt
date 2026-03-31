@@ -1,0 +1,5 @@
+# Data Steward Agent
+# No additional dependencies beyond the project root requirements.
+# Uses: json, uuid, datetime, pathlib (stdlib)
+# Optional: LLMProvider from data_governance.rag_discovery.providers.base
+# UI: streamlit>=1.32.0, plotly>=5.0.0 (already in project deps)

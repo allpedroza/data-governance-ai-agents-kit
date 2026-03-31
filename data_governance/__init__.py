@@ -112,6 +112,12 @@ try:
 except ImportError:
     _asset_value_available = False
 
+try:
+    from .data_steward import DataStewardAgent
+    _steward_available = True
+except ImportError:
+    _steward_available = False
+
 from .data_product_scoring import (
     DataProductScoringAgent,
     DataProductScoringReport,
@@ -148,6 +154,9 @@ if _asset_value_available:
         'AssetValueReport',
         'AssetValueScore',
     ])
+
+if _steward_available:
+    __all__.append('DataStewardAgent')
 
 __all__.extend([
     'DataProductScoringAgent',

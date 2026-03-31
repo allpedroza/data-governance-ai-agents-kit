@@ -180,6 +180,20 @@ try:
 except ImportError:
     AI_BUSINESS_VALUE_AVAILABLE = False
 
+# Data Steward Agent imports
+STEWARD_AVAILABLE = True
+try:
+    from data_governance.data_steward.agent import DataStewardAgent
+    from data_governance.data_steward.models import (
+        DataIssue,
+        GlossaryTerm,
+        QualityRuleDraft,
+        ImpactReport,
+        ApprovalRequest,
+    )
+except ImportError:
+    STEWARD_AVAILABLE = False
+
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -3594,6 +3608,156 @@ def render_vault_tab() -> None:
         """)
 
 
+def render_steward_tab() -> None:
+    """Data Steward Agent tab -- operational copilot for stewards."""
+    if not STEWARD_AVAILABLE:
+        st.warning("Data Steward Agent nao disponivel. Verifique a instalacao.")
+        return
+
+    st.markdown("## Data Steward Agent")
+    st.caption("Copiloto operacional de governanca — o agente propoe, o steward aprova.")
+
+    if "steward_agent" not in st.session_state:
+        st.session_state.steward_agent = DataStewardAgent(persist_dir="./steward_data")
+    agent = st.session_state.steward_agent
+
+    intake_tab, glossary_tab, rules_tab, impact_tab, workflow_tab = st.tabs([
+        "Triagem de Issues",
+        "Glossario de Negocio",
+        "Regras de Quality",
+        "Analise de Impacto",
+        "Aprovacoes",
+    ])
+
+    with intake_tab:
+        st.markdown("### Triagem de Issues de Dados")
+        with st.form("steward_issue_form"):
+            description = st.text_area(
+                "Descricao do problema", height=120,
+                placeholder="Ex: O KPI de receita mudou 20% sem razao aparente...")
+            col1, col2 = st.columns(2)
+            with col1:
+                ctx_domain = st.text_input("Dominio (opcional)", placeholder="finance", key="st_issue_dom")
+            with col2:
+                ctx_dataset = st.text_input("Dataset (opcional)", placeholder="fato_vendas", key="st_issue_ds")
+            submitted = st.form_submit_button("Triar Issue")
+        if submitted and description.strip():
+            ctx = {}
+            if ctx_domain:
+                ctx["domain"] = ctx_domain
+            if ctx_dataset:
+                ctx["dataset"] = ctx_dataset
+            issue = agent.triage_issue(description, ctx or None)
+            st.success(f"Issue triada: {issue.issue_id}")
+            st.markdown(issue.to_markdown())
+
+        issues = agent.list_issues()
+        if issues:
+            st.markdown("#### Issues Recentes")
+            for iss in issues[:10]:
+                sev_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(iss.severity, "⚪")
+                with st.expander(f"{sev_icon} {iss.title} ({iss.status})"):
+                    st.markdown(iss.to_markdown())
+
+    with glossary_tab:
+        st.markdown("### Glossario de Negocio")
+        with st.form("steward_glossary_form"):
+            term_name = st.text_input("Nome do termo", placeholder="receita_liquida")
+            g_domain = st.text_input("Dominio", placeholder="finance", key="st_gl_dom")
+            st.markdown("**Fontes de definicao**")
+            sources = []
+            for i in range(3):
+                c1, c2 = st.columns([1, 3])
+                with c1:
+                    src = st.text_input(f"Fonte {i+1}", key=f"st_gsrc_{i}", placeholder="SQL / Doc / Dashboard")
+                with c2:
+                    defn = st.text_input(f"Definicao {i+1}", key=f"st_gdef_{i}", placeholder="...")
+                if src and defn:
+                    sources.append({"source": src, "definition": defn})
+            submitted = st.form_submit_button("Curar Termo")
+        if submitted and term_name and sources:
+            term = agent.curate_term(term_name, sources, g_domain)
+            st.success(f"Termo curado: {term.term_id}")
+            st.markdown(term.to_markdown())
+
+        terms = agent.list_glossary()
+        if terms:
+            st.markdown("#### Termos Existentes")
+            for t in terms[:20]:
+                with st.expander(f"{'✅' if t.status == 'approved' else '📝'} {t.term_name} ({t.status})"):
+                    st.markdown(t.to_markdown())
+
+    with rules_tab:
+        st.markdown("### Regras de Data Quality")
+        with st.form("steward_rules_form"):
+            r_dataset = st.text_input("Dataset", placeholder="dim_customers", key="st_r_ds")
+            r_domain = st.text_input("Dominio", placeholder="customer", key="st_r_dom")
+            cols_json = st.text_area("Colunas (JSON, opcional)", height=60,
+                                     placeholder='[{"name": "cpf", "type": "string", "nullable": false}]')
+            submitted = st.form_submit_button("Sugerir Regras")
+        if submitted and r_dataset and r_domain:
+            columns = None
+            if cols_json.strip():
+                try:
+                    columns = __import__("json").loads(cols_json)
+                except Exception:
+                    st.error("JSON invalido")
+            rules = agent.draft_rules(r_dataset, r_domain, columns)
+            st.success(f"{len(rules)} regra(s) sugerida(s)")
+            for rule in rules:
+                st.markdown(rule.to_markdown())
+
+        existing_rules = agent.list_rules()
+        if existing_rules:
+            st.markdown("#### Regras Existentes")
+            for rule in existing_rules[:20]:
+                with st.expander(f"[{rule.dimension}] {rule.business_description[:50]} ({rule.status})"):
+                    st.markdown(rule.to_markdown())
+
+    with impact_tab:
+        st.markdown("### Analise de Impacto")
+        with st.form("steward_impact_form"):
+            change = st.text_area("Descricao da mudanca", height=80,
+                                  placeholder="Ex: Remover coluna cpf da tabela dim_customers")
+            c1, c2 = st.columns(2)
+            with c1:
+                i_ds = st.text_input("Dataset", placeholder="dim_customers", key="st_i_ds")
+            with c2:
+                i_attr = st.text_input("Atributo (opcional)", placeholder="cpf", key="st_i_attr")
+            i_domain = st.text_input("Dominio", placeholder="customer", key="st_i_dom")
+            submitted = st.form_submit_button("Analisar Impacto")
+        if submitted and change and i_ds:
+            report = agent.explain_impact(change, i_ds, i_attr or None, i_domain)
+            st.markdown(report.to_markdown())
+
+    with workflow_tab:
+        st.markdown("### Aprovacoes Pendentes")
+        pending = agent.get_pending_approvals()
+        if pending:
+            for req in pending:
+                type_icon = {"glossary_term": "📖", "quality_rule": "📏"}.get(req.request_type, "📋")
+                with st.expander(f"{type_icon} {req.title}"):
+                    st.markdown(req.to_markdown())
+                    with st.form(f"st_decision_{req.request_id}"):
+                        reviewer = st.text_input("Seu nome", key=f"st_rev_{req.request_id}")
+                        decision = st.selectbox("Decisao", ["approved", "rejected", "revision_requested"],
+                                                key=f"st_dec_{req.request_id}")
+                        notes = st.text_input("Notas", key=f"st_notes_{req.request_id}")
+                        if st.form_submit_button("Submeter Decisao"):
+                            if reviewer:
+                                agent.submit_decision(req.request_id, decision, reviewer, notes)
+                                st.success(f"Decisao registrada: {decision}")
+                                st.rerun()
+        else:
+            st.info("Nenhuma aprovacao pendente.")
+
+        st.markdown("#### Log de Atividades")
+        activities = agent.get_activity_log(limit=20)
+        for entry in activities:
+            st.text(f"[{entry.timestamp[:19]}] {entry.action} - {entry.actor}" +
+                     (f" | {entry.domain}" if entry.domain else ""))
+
+
 def render_settings_tab() -> None:
     """Centralized settings tab for API keys, Data Warehouse connections, and LLM configuration."""
     section_header(
@@ -4240,7 +4404,7 @@ def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
 
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
     "Lineage",
     "Discovery",
     "Enrichment",
@@ -4250,6 +4414,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "Asset Value",
     "NER Module",
     "Vault",
+    "Data Steward",
     "⚙️ Settings",
 ])
 with tab1:
@@ -4271,4 +4436,6 @@ with tab8:
 with tab9:
     render_vault_tab()
 with tab10:
+    render_steward_tab()
+with tab11:
     render_settings_tab()
