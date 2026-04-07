@@ -66,6 +66,14 @@ from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
+try:
+    from shared.persistence import JsonStorageMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.persistence import JsonStorageMixin
+
 
 class AlertLevel(Enum):
     """Alert severity levels"""
@@ -227,7 +235,7 @@ class RuleSet:
         ]
 
 
-class RuleEvaluator:
+class RuleEvaluator(JsonStorageMixin):
     """
     Evaluates quality rules and generates alerts
 
@@ -244,8 +252,7 @@ class RuleEvaluator:
     """
 
     def __init__(self, persist_dir: str = "./quality_rules"):
-        self.persist_dir = Path(persist_dir)
-        self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self._init_persist_dir(persist_dir)
 
         self.rule_sets: Dict[str, RuleSet] = {}
         self.alerts: List[QualityAlert] = []
@@ -255,10 +262,11 @@ class RuleEvaluator:
 
     def _load_rules(self) -> None:
         """Load rules from disk"""
-        for file_path in self.persist_dir.glob("*.json"):
+        for file_path in self._list_json_files(self.persist_dir):
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                data = self._load_json(file_path)
+                if data is None:
+                    continue
                 rule_set = RuleSet.from_dict(data)
                 self.rule_sets[rule_set.name] = rule_set
             except Exception as e:
@@ -267,9 +275,7 @@ class RuleEvaluator:
     def save_rule_set(self, rule_set: RuleSet) -> None:
         """Save a rule set to disk"""
         self.rule_sets[rule_set.name] = rule_set
-        file_path = self.persist_dir / f"{rule_set.name}.json"
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(rule_set.to_dict(), f, ensure_ascii=False, indent=2)
+        self._save_json(self.persist_dir / f"{rule_set.name}.json", rule_set.to_dict())
 
     def add_rule(self, rule: QualityRule, rule_set_name: str = "default") -> None:
         """Add a rule to a rule set"""

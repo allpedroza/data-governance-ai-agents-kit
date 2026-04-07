@@ -68,6 +68,14 @@ from typing import List, Dict, Any, Optional, Tuple, Set
 from dataclasses import dataclass, field
 from enum import Enum
 
+try:
+    from shared.persistence import JsonStorageMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.persistence import JsonStorageMixin
+
 
 class ChangeType(Enum):
     """Types of schema changes"""
@@ -172,7 +180,7 @@ class DriftReport:
         }
 
 
-class SchemaDriftDetector:
+class SchemaDriftDetector(JsonStorageMixin):
     """
     Detects schema changes between snapshots
 
@@ -215,18 +223,17 @@ class SchemaDriftDetector:
         Args:
             persist_dir: Directory to persist schema snapshots
         """
-        self.persist_dir = Path(persist_dir)
-        self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self._init_persist_dir(persist_dir)
         self._snapshots: Dict[str, List[SchemaSnapshot]] = {}
         self._load_snapshots()
 
     def _load_snapshots(self) -> None:
         """Load existing snapshots from disk"""
-        for file_path in self.persist_dir.glob("*.json"):
+        for file_path in self._list_json_files(self.persist_dir):
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
+                data = self._load_json(file_path)
+                if data is None:
+                    continue
                 table_name = data.get("table_name", file_path.stem)
                 snapshots = [
                     SchemaSnapshot.from_dict(s)
@@ -238,13 +245,14 @@ class SchemaDriftDetector:
 
     def _save_snapshots(self, table_name: str) -> None:
         """Save snapshots for a table to disk"""
-        file_path = self.persist_dir / f"{table_name.replace('.', '_')}.json"
         data = {
             "table_name": table_name,
             "snapshots": [s.to_dict() for s in self._snapshots.get(table_name, [])]
         }
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        self._save_json(
+            self.persist_dir / f"{table_name.replace('.', '_')}.json",
+            data,
+        )
 
     def snapshot(
         self,

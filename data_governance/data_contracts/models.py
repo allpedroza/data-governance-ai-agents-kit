@@ -62,6 +62,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 
 @dataclass
 class ContractField:
@@ -124,7 +132,7 @@ class DataContractSLA:
 
 
 @dataclass
-class DataContract:
+class DataContract(SerializableMixin):
     """Full data contract structure."""
 
     name: str
@@ -155,9 +163,6 @@ class DataContract:
             "tags": self.tags,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         lines = [
@@ -248,7 +253,7 @@ class ContractValidationFinding:
 
 
 @dataclass
-class ContractValidationReport:
+class ContractValidationReport(SerializableMixin):
     """Validation report for a contract applied to a dataset."""
 
     contract_name: str
@@ -269,9 +274,6 @@ class ContractValidationReport:
             "findings": [finding.to_dict() for finding in self.findings],
             "metrics": self.metrics,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         lines = [

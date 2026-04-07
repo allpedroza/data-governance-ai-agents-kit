@@ -76,6 +76,14 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
+try:
     from rag_discovery.providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider, LLMResponse
 except ImportError:
     from data_governance.rag_discovery.providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider, LLMResponse
@@ -119,7 +127,7 @@ class ColumnEnrichment:
 
 
 @dataclass
-class EnrichmentResult:
+class EnrichmentResult(SerializableMixin):
     """Result of metadata enrichment for a table"""
     table_name: str
     source: str
@@ -161,9 +169,6 @@ class EnrichmentResult:
             "standards_used": self.standards_used,
             "metadata": self.metadata
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         """Generate markdown documentation"""

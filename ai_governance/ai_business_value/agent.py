@@ -72,6 +72,14 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from enum import Enum
 
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 
 class ValueCategory(Enum):
     """Categories for AI initiative value classification"""
@@ -517,7 +525,7 @@ class AIInitiativeScore:
 
 
 @dataclass
-class AIInitiativeReport:
+class AIInitiativeReport(SerializableMixin):
     """Complete AI business value analysis report"""
     analysis_timestamp: datetime
     initiatives_analyzed: int
@@ -567,9 +575,6 @@ class AIInitiativeReport:
             'portfolio_recommendations': self.portfolio_recommendations,
             'investment_priorities': self.investment_priorities
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
     def to_markdown(self) -> str:
         """Generate markdown report"""

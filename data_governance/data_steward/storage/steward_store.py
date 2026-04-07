@@ -11,6 +11,14 @@ from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
+try:
+    from shared.persistence import JsonStorageMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.persistence import JsonStorageMixin
+
 from data_governance.data_steward.models import (
     ActivityLogEntry,
     ApprovalRequest,
@@ -35,7 +43,7 @@ def _dict_to_dataclass(cls: Type, data: Dict[str, Any]) -> Any:
     return cls(**filtered)
 
 
-class StewardStore:
+class StewardStore(JsonStorageMixin):
     """JSON-file-backed persistence for Data Steward entities.
 
     Each entity type is stored in its own subdirectory as individual JSON
@@ -61,23 +69,17 @@ class StewardStore:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _save_json(self, directory: str, filename: str, data: Dict[str, Any]) -> None:
+    def _save_json(self, directory: str, filename: str, data: Dict[str, Any]) -> None:  # type: ignore[override]
         """Write *data* as pretty-printed JSON to *directory/filename*."""
-        path = self._root / directory / filename
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+        super()._save_json(self._root / directory / filename, data)
 
-    def _load_json(self, directory: str, filename: str) -> Optional[Dict[str, Any]]:
+    def _load_json(self, directory: str, filename: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
         """Read and return JSON from *directory/filename*, or None."""
-        path = self._root / directory / filename
-        if not path.exists():
-            return None
-        with open(path, "r") as f:
-            return json.load(f)
+        return super()._load_json(self._root / directory / filename)
 
-    def _list_json_files(self, directory: str) -> List[Path]:
+    def _list_json_files(self, directory: str) -> List[Path]:  # type: ignore[override]
         """Return all *.json files in the given subdirectory."""
-        return sorted((self._root / directory).glob("*.json"))
+        return super()._list_json_files(self._root / directory)
 
     # ------------------------------------------------------------------
     # Issues

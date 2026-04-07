@@ -62,6 +62,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 from data_governance.data_asset_value import AssetValueReport, DataAssetValueAgent
 from data_governance.data_quality import DataQualityAgent, QualityReport
 
@@ -107,7 +115,7 @@ class DataProductDefinition:
 
 
 @dataclass
-class DataProductScore:
+class DataProductScore(SerializableMixin):
     """Scoring output for a data product."""
     product_name: str
     timestamp: str
@@ -137,9 +145,6 @@ class DataProductScore:
             "value_score": round(self.value_score, 2),
             "notes": self.notes,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         lines = [
@@ -172,7 +177,7 @@ class DataProductScore:
 
 
 @dataclass
-class DataProductScoringReport:
+class DataProductScoringReport(SerializableMixin):
     """Aggregate scoring report for multiple data products."""
     generated_at: str
     scores: List[DataProductScore]
@@ -185,8 +190,6 @@ class DataProductScoringReport:
             "scores": [score.to_dict() for score in self.scores],
         }
 
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
 
 @dataclass

@@ -64,6 +64,7 @@ import streamlit as st
 
 # Ensure repository modules are importable when running the app from repo root
 BASE_DIR = Path(__file__).resolve().parent
+sys.path.append(str(BASE_DIR))  # exposes shared/
 sys.path.append(str(BASE_DIR / "data_governance" / "lineage"))
 sys.path.append(str(BASE_DIR / "data_governance" / "rag_discovery"))
 sys.path.append(str(BASE_DIR / "data_governance"))

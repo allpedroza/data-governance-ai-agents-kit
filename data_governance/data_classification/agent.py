@@ -69,6 +69,15 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set, Tuple
+
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 try:
     from rag_discovery.providers.base import LLMProvider
 except ImportError:
@@ -125,7 +134,7 @@ class ColumnClassification:
 
 
 @dataclass
-class ClassificationReport:
+class ClassificationReport(SerializableMixin):
     """Complete classification report for a data source"""
     source_name: str
     source_type: str
@@ -172,9 +181,6 @@ class ClassificationReport:
             "compliance_flags": self.compliance_flags,
             "llm_analysis": self.llm_analysis,
         }
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), indent=2, ensure_ascii=False)
 
     def to_markdown(self) -> str:
         lines = [

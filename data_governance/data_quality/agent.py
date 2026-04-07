@@ -71,6 +71,14 @@ from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 from .metrics.quality_metrics import (
     QualityMetrics,
     MetricResult,
@@ -107,7 +115,7 @@ class QualityDimension(Enum):
 
 
 @dataclass
-class QualityReport:
+class QualityReport(SerializableMixin):
     """Comprehensive quality report for a data source"""
     source_name: str
     source_type: str
@@ -139,9 +147,6 @@ class QualityReport:
             "processing_time_ms": self.processing_time_ms,
             "metadata": self.metadata
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         """Generate markdown report"""

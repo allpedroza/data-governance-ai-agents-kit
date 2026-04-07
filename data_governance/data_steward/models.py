@@ -64,6 +64,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -136,7 +144,7 @@ class QualityRuleStatus(Enum):
 
 
 @dataclass
-class DataIssue:
+class DataIssue(SerializableMixin):
     """Issue de dados triada pelo agente."""
 
     issue_id: str
@@ -183,9 +191,6 @@ class DataIssue:
             "resolution_notes": self.resolution_notes,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         severity_indicator = {
@@ -250,7 +255,7 @@ class DataIssue:
 
 
 @dataclass
-class GlossaryTerm:
+class GlossaryTerm(SerializableMixin):
     """Termo de glossario curado."""
 
     term_id: str
@@ -295,9 +300,6 @@ class GlossaryTerm:
             "updated_at": self.updated_at,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         status_indicator = {
@@ -363,7 +365,7 @@ class GlossaryTerm:
 
 
 @dataclass
-class QualityRuleDraft:
+class QualityRuleDraft(SerializableMixin):
     """Regra de quality sugerida."""
 
     rule_id: str
@@ -402,9 +404,6 @@ class QualityRuleDraft:
             "updated_at": self.updated_at,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         severity_indicator = {
@@ -472,7 +471,7 @@ class QualityRuleDraft:
 
 
 @dataclass
-class ImpactReport:
+class ImpactReport(SerializableMixin):
     """Relatorio de impacto em linguagem humana."""
 
     report_id: str
@@ -507,9 +506,6 @@ class ImpactReport:
             "generated_at": self.generated_at,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         risk_indicator = {
@@ -576,7 +572,7 @@ class ImpactReport:
 
 
 @dataclass
-class ApprovalRequest:
+class ApprovalRequest(SerializableMixin):
     """Pedido de aprovacao."""
 
     request_id: str
@@ -617,9 +613,6 @@ class ApprovalRequest:
             "changelog_entry": self.changelog_entry,
             "metadata": self.metadata,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         status_indicator = {
@@ -691,7 +684,7 @@ class ApprovalRequest:
 
 
 @dataclass
-class StewardAssignment:
+class StewardAssignment(SerializableMixin):
     """Vincula pessoa a papel em dominio."""
 
     assignment_id: str
@@ -715,9 +708,6 @@ class StewardAssignment:
             "is_active": self.is_active,
         }
 
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
-
     def to_markdown(self) -> str:
         active_display = "✅ Active" if self.is_active else "❌ Inactive"
         datasets_display = ", ".join(self.datasets) if self.datasets else "-"
@@ -729,7 +719,7 @@ class StewardAssignment:
 
 
 @dataclass
-class ActivityLogEntry:
+class ActivityLogEntry(SerializableMixin):
     """Trilha de auditoria."""
 
     timestamp: str
@@ -748,9 +738,6 @@ class ActivityLogEntry:
             "dataset": self.dataset,
             "details": self.details,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
     def to_markdown(self) -> str:
         context_parts = []

@@ -76,6 +76,14 @@ from sqlparse.sql import IdentifierList, Identifier, Where, Comparison
 from sqlparse.tokens import Keyword, DML
 
 try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
+
+try:
     from rag_discovery.providers.base import LLMProvider
 except ImportError:
     from data_governance.rag_discovery.providers.base import LLMProvider
@@ -245,7 +253,7 @@ class AssetValueScore:
 
 
 @dataclass
-class AssetValueReport:
+class AssetValueReport(SerializableMixin):
     """Complete value analysis report for data assets"""
     analysis_timestamp: datetime
     assets_analyzed: int
@@ -295,9 +303,6 @@ class AssetValueReport:
             'llm_review': self.llm_review,
             'recommendations': self.recommendations
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
     def to_markdown(self) -> str:
         """Generate markdown report"""

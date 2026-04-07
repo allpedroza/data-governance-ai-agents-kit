@@ -72,7 +72,6 @@ Features:
 - Configurable sensitivity thresholds
 """
 
-import json
 import re
 from dataclasses import dataclass, field, asdict
 from typing import (
@@ -82,6 +81,14 @@ from typing import (
 from enum import Enum
 from datetime import datetime
 import hashlib
+
+try:
+    from shared.serialization import SerializableMixin
+except ImportError:
+    import sys as _sys, pathlib as _pathlib
+    _root = next(p for p in _pathlib.Path(__file__).resolve().parents if (p / "shared").is_dir())
+    _sys.path.insert(0, str(_root))
+    from shared.serialization import SerializableMixin
 
 from .patterns.entity_patterns import (
     EntityCategory,
@@ -153,7 +160,7 @@ class DetectedEntity:
 
 
 @dataclass
-class NERResult:
+class NERResult(SerializableMixin):
     """Result of NER analysis on text."""
     original_text: str
     anonymized_text: Optional[str]
@@ -180,9 +187,6 @@ class NERResult:
             "warnings": self.warnings,
             "blocked_reason": self.blocked_reason,
         }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
     @property
     def is_safe(self) -> bool:
