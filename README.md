@@ -2,6 +2,207 @@
 
 **Escale governança de dados e IA com agentes inteligentes** — reduza riscos, acelere compliance e maximize o valor dos seus ativos de dados.
 
+<details>
+<summary><strong>🇺🇸 English Overview</strong></summary>
+
+## What is this?
+
+The **AI & Data Governance Agents Kit** is an open-source toolkit of **10 specialized AI agents** that automate end-to-end data and AI governance tasks — from discovery and lineage mapping to compliance enforcement and ROI measurement.
+
+Built for data teams that need governance to be **continuous**, not a one-off project.
+
+---
+
+## The Problem
+
+| Challenge | Business Impact |
+|-----------|----------------|
+| **Undocumented data** | Analysts spend 80% of their time searching for and understanding data |
+| **Inconsistent quality** | Decisions made on bad data cost millions |
+| **Manual compliance** | Slow audits and regulatory fines (GDPR / LGPD) |
+| **Ungoverned AI** | Models in production with bias, no traceability |
+| **Information silos** | Rework, conflicting "sources of truth", manual reconciliation |
+
+---
+
+## The 10 Agents
+
+### Data Governance
+
+| Agent | What it does | Key Value |
+|-------|-------------|-----------|
+| **Data Lineage** | Maps dependencies across datasets and pipelines | Assess change impact before breaking production |
+| **Data Discovery** | Semantic search with hybrid RAG | Find data in seconds, not days |
+| **Metadata Enrichment** | Auto-generates descriptions, tags, and glossary entries | Always-documented catalog with zero manual effort |
+| **Data Classification** | Classifies sensitivity (PII/PHI/PCI) | Automated compliance and smart masking |
+| **Data Quality** | Monitors quality with SLAs and alerts | Reliable data for critical decisions |
+| **Data Asset Value** | Quantifies value by usage and dependencies | Prioritize investments based on real data |
+| **Data Product Scoring** | Unified maturity score | Consolidated governance view per data product |
+
+### AI Governance
+
+| Agent | What it does | Key Value |
+|-------|-------------|-----------|
+| **Sensitive Data NER** | Detects and anonymizes sensitive data in text | Protect data in LLM prompts and responses |
+| **AI Business Value** | Calculates ROI of AI initiatives | Justify investments with clear metrics |
+| **AI Policy Engine** | Enforces policies as code with deployment gates | Automated governance in CI/CD |
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Python 3.10+
+- An OpenAI API key (required for LLM-powered agents)
+- `uv` (recommended) or `pip`
+
+### 1. Clone and set up
+
+```bash
+git clone https://github.com/allpedroza/data-governance-ai-agents-kit.git
+cd data-governance-ai-agents-kit
+
+# Option A: uv (recommended — faster)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv && source .venv/bin/activate
+
+# Option B: standard pip
+python -m venv .venv && source .venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
+# With uv
+uv pip install -r requirements.txt streamlit
+
+# With pip
+pip install -r requirements.txt streamlit
+```
+
+### 3. Configure and run
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+
+# Launch the unified UI
+streamlit run app.py
+```
+
+Open `http://localhost:8501` and start exploring the agents.
+
+---
+
+## Usage Examples
+
+### Map pipeline lineage
+
+```python
+from data_governance.lineage.data_lineage_agent import DataLineageAgent
+
+agent = DataLineageAgent()
+result = agent.analyze_pipeline(["etl/transform.sql", "etl/job.py"])
+
+print(f"Assets found: {result['metrics']['total_assets']}")
+print(f"Transformations: {result['metrics']['total_transformations']}")
+```
+
+### Discover data with natural language
+
+```python
+from data_governance.rag_discovery.data_discovery_rag_agent import DataDiscoveryRAGAgent
+
+rag = DataDiscoveryRAGAgent()
+answer = rag.discover("Which tables contain customer data?")
+print(answer.answer)
+```
+
+### Anonymize sensitive data
+
+```python
+from ai_governance.sensitive_data_ner import SensitiveDataNERAgent
+
+agent = SensitiveDataNERAgent()
+result = agent.analyze("SSN 123-45-6789 belongs to customer John Smith")
+
+print(result.anonymized_text)
+# Output: "SSN [SSN_REDACTED] belongs to customer [PERSON_REDACTED]"
+```
+
+### Calculate AI initiative ROI
+
+```python
+from ai_governance.ai_business_value import AIBusinessValueAgent, CostBreakdown, BenefitProjection
+
+agent = AIBusinessValueAgent(currency="USD", projection_years=3)
+report = agent.analyze_initiatives(
+    initiatives=[{"id": "chatbot", "name": "Support Chatbot", "type": "customer_experience"}],
+    cost_data={"chatbot": CostBreakdown(initiative_id="chatbot", development_internal=150000)},
+    benefit_projections={"chatbot": BenefitProjection(initiative_id="chatbot", revenue_increase=250000)}
+)
+
+print(f"Projected ROI: {report.initiatives[0].roi_percentage:.1f}%")
+```
+
+---
+
+## Integrations
+
+**Data Catalogs:** OpenMetadata · Apache Atlas · AWS Glue
+
+**Data Warehouses:** Snowflake · Amazon Redshift · Google BigQuery · Azure Synapse
+
+Connectors available in `data_governance/warehouse/`.
+
+---
+
+## Repository Structure
+
+```
+data-governance-ai-agents-kit/
+│
+├── app.py                              # Unified Streamlit UI
+│
+├── data_governance/
+│   ├── lineage/                        # Data Lineage Agent
+│   ├── rag_discovery/                  # Data Discovery Agent
+│   ├── metadata_enrichment/            # Metadata Enrichment Agent
+│   ├── data_classification/            # Data Classification Agent
+│   ├── data_quality/                   # Data Quality Agent
+│   ├── data_asset_value/               # Data Asset Value Agent
+│   ├── data_product_scoring/           # Data Product Scoring Layer
+│   └── warehouse/                      # DW connectors
+│
+├── ai_governance/
+│   ├── sensitive_data_ner/             # Sensitive Data NER + Vault
+│   ├── ai_business_value/              # AI Business Value Agent
+│   └── policy_engine/                  # AI Policy Engine (Policy-as-Code)
+│
+├── examples/                           # Examples and notebooks
+└── requirements.txt                    # Dependencies
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! Follow this flow:
+
+1. **Fork** this repository
+2. **Clone** your fork: `git clone https://github.com/<your-username>/data-governance-ai-agents-kit.git`
+3. **Create a branch**: `git checkout -b feature/my-feature`
+4. **Make your changes** and commit: `git commit -m "feat: add new feature"`
+5. **Push** to your fork: `git push origin feature/my-feature`
+6. **Open a Pull Request**
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+
+</details>
+
 ---
 
 ## O Problema
