@@ -1,0 +1,933 @@
+# ============================================================
+# TAXONOMY DOCUMENT — Single Source of Truth
+# ============================================================
+# Este YAML define o padrão taxonômico canônico.
+# É lido por:
+#   1. Agentes de IA (para escrever artefatos aderentes)
+#   2. Scoring Engine (para avaliar maturidade)
+#   3. HTML Generator (para renderizar artefato visual)
+# ============================================================
+
+metadata:
+  title: "Data Dictionary Taxonomy"
+  version: "2.0"
+  domain: "South America"
+  platform: "BigQuery"
+  owner: "Data Engineering"
+  steward: "Analytics Engineering"
+  last_updated: "2026-05-22"
+  total_concepts: 82
+  total_aliases: 121
+  total_domains: 11
+
+# ============================================================
+# SEÇÃO 1: NAMING CONVENTIONS & PRINCÍPIOS FUNDAMENTAIS
+# ============================================================
+naming_conventions:
+  casing_rules:
+    columns: "PascalCase"
+    entities: "UPPER_CASE"
+    ctes: "snake_case"
+    examples:
+      column: ["CustomerName", "NationalID"]
+      entity: ["CUSTOMER", "AGENDA_CUSTOMERS"]
+      cte: ["stg_customers", "dim_vehicles"]
+
+  canonical_acronyms:
+    description: "Siglas que devem ser mantidas em MAIÚSCULO, mesmo no meio de nomes PascalCase"
+    items: ["VIN", "GUID", "GPS", "MFA", "DNA", "KM", "API", "URL", "SQL", "ID"]
+    rule: "Sempre UPPER_CASE dentro de nomes compostos. Ex: CustomerGUID, não CustomerGuid."
+
+  forbidden_forms:
+    description: "Formas de casing misto que nunca devem ser usadas"
+    items:
+      - pattern: "Customer_Id"
+        reason: "Mixed case with underscore"
+      - pattern: "customerID"
+        reason: "camelCase não é permitido"
+      - pattern: "CUSTOMERName"
+        reason: "All-caps prefix misturado com PascalCase"
+      - pattern: "dealer_code"
+        reason: "snake_case não é usado para colunas"
+
+  full_words_required:
+    description: "Use palavras completas, nunca abreviações"
+    rules:
+      - correct: "Customer"
+        forbidden: "Cust"
+      - correct: "Address"
+        forbidden: "Addr"
+      - correct: "Number"
+        forbidden: "Num"
+      - correct: "Description"
+        forbidden: "Desc"
+      - correct: "Status"
+        forbidden: "Sts"
+
+  application_names:
+    description: "Nomes de aplicação devem preservar casing oficial"
+    items:
+      - name: "WhatsApp"
+        correct: "WhatsApp"
+        forbidden: "whatsapp"
+      - name: "Salesforce"
+        correct: "Salesforce"
+        forbidden: "salesforce"
+      - name: "SharePoint"
+        correct: "SharePoint"
+        forbidden: "sharepoint"
+      - name: "BigQuery"
+        correct: "BigQuery"
+        forbidden: "bigquery"
+
+# ============================================================
+# SEÇÃO 2: GRUPOS DE CONCEITOS
+# ============================================================
+concept_groups:
+  - name: "Customer Identity"
+    icon: "👤"
+    count: 6
+    description: "Atributos que identificam unicamente um cliente. Contém regras estritas de anonimização (PII)."
+    pii_level: "high"
+    concepts:
+      - name: "Country"
+        data_type: "STRING"
+        definition: "ISO 3-letter country code associated with the customer record."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Country"
+          multi_entity: "CustomerCountry"
+        aliases: ["CustomerCountry", "CustomerCountryCode", "customer_country", "UserCountryCode"]
+
+      - name: "DocumentType"
+        data_type: "STRING"
+        definition: "Type of the national identification document used by the customer."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "DocumentType"
+          multi_entity: "CustomerDocumentType"
+        aliases: ["CustomerDocumentType", "NationalDocumentType"]
+
+      - name: "NationalID"
+        data_type: "STRING"
+        definition: "National identification document number associated with the customer."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "NationalID"
+          multi_entity: "CustomerNationalID"
+        aliases: ["CustomerNationalID", "DocumentNumber", "CustomerCPF", "CustomerCNPJ", "CPF", "CNPJ", "DNI"]
+
+      - name: "CustomerGUID"
+        data_type: "STRING"
+        definition: "Globally unique identifier used to link the customer profile across source systems."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "CustomerGUID"
+          multi_entity: "CustomerGUID"
+        aliases: ["UserGUID", "RMGUID", "GuestGUID"]
+
+      - name: "Name"
+        data_type: "STRING"
+        definition: "Customer full legal name — concatenation of first name and last name, or company legal name."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Name"
+          multi_entity: "CustomerName"
+        aliases: []
+
+      - name: "Language"
+        data_type: "STRING"
+        definition: "Preferred language code associated with the customer profile."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Language"
+          multi_entity: "CustomerLanguage"
+        aliases: []
+
+  - name: "Contact Information"
+    icon: "📞"
+    count: 7
+    description: "Dados de contato do cliente (email, telefone, endereço de comunicação)."
+    pii_level: "high"
+    concepts:
+      - name: "Email"
+        data_type: "STRING"
+        definition: "Primary email address for customer communication."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Email"
+          multi_entity: "CustomerEmail"
+        aliases: ["CustomerEmail", "EmailAddress", "PrimaryEmail"]
+      - name: "Phone"
+        data_type: "STRING"
+        definition: "Primary phone number for customer contact."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Phone"
+          multi_entity: "CustomerPhone"
+        aliases: ["CustomerPhone", "PhoneNumber", "MobilePhone", "CellPhone"]
+      - name: "PhoneType"
+        data_type: "STRING"
+        definition: "Classification of the phone number (mobile, landline, work)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "PhoneType"
+          multi_entity: "CustomerPhoneType"
+        aliases: []
+      - name: "PreferredContact"
+        data_type: "STRING"
+        definition: "Customer preferred contact channel (email, phone, WhatsApp, SMS)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "PreferredContact"
+          multi_entity: "CustomerPreferredContact"
+        aliases: ["ContactPreference", "PreferredChannel"]
+      - name: "OptInMarketing"
+        data_type: "BOOLEAN"
+        definition: "Whether the customer opted in to receive marketing communications."
+        accepted_types: ["BOOLEAN"]
+        entity_qualified_forms:
+          single_entity: "OptInMarketing"
+          multi_entity: "CustomerOptInMarketing"
+        aliases: ["MarketingConsent", "OptIn"]
+      - name: "OptInWhatsApp"
+        data_type: "BOOLEAN"
+        definition: "Whether the customer opted in to receive WhatsApp messages."
+        accepted_types: ["BOOLEAN"]
+        entity_qualified_forms:
+          single_entity: "OptInWhatsApp"
+          multi_entity: "CustomerOptInWhatsApp"
+        aliases: ["WhatsAppConsent"]
+      - name: "LastContactDate"
+        data_type: "DATE"
+        definition: "Date of the most recent customer interaction."
+        accepted_types: ["DATE", "TIMESTAMP"]
+        entity_qualified_forms:
+          single_entity: "LastContactDate"
+          multi_entity: "CustomerLastContactDate"
+        aliases: ["LastInteraction"]
+
+  - name: "Address"
+    icon: "📍"
+    count: 7
+    description: "Endereço físico associado a clientes, dealers ou outras entidades."
+    pii_level: "medium"
+    concepts:
+      - name: "Street"
+        data_type: "STRING"
+        definition: "Street name and number of the address."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Street"
+          multi_entity: "CustomerStreet"
+        aliases: ["AddressLine1", "StreetAddress"]
+      - name: "City"
+        data_type: "STRING"
+        definition: "City or municipality name."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "City"
+          multi_entity: "CustomerCity"
+        aliases: ["Municipality"]
+      - name: "State"
+        data_type: "STRING"
+        definition: "State, province, or region code."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "State"
+          multi_entity: "CustomerState"
+        aliases: ["Province", "Region"]
+      - name: "PostalCode"
+        data_type: "STRING"
+        definition: "Postal or ZIP code."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "PostalCode"
+          multi_entity: "CustomerPostalCode"
+        aliases: ["ZipCode", "CEP"]
+      - name: "AddressType"
+        data_type: "STRING"
+        definition: "Type of address (residential, commercial, mailing)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "AddressType"
+          multi_entity: "CustomerAddressType"
+        aliases: []
+      - name: "Latitude"
+        data_type: "FLOAT"
+        definition: "Geographic latitude coordinate."
+        accepted_types: ["FLOAT", "NUMERIC"]
+        entity_qualified_forms:
+          single_entity: "Latitude"
+          multi_entity: "CustomerLatitude"
+        aliases: ["Lat"]
+      - name: "Longitude"
+        data_type: "FLOAT"
+        definition: "Geographic longitude coordinate."
+        accepted_types: ["FLOAT", "NUMERIC"]
+        entity_qualified_forms:
+          single_entity: "Longitude"
+          multi_entity: "CustomerLongitude"
+        aliases: ["Lng", "Long"]
+
+  - name: "Dealer"
+    icon: "🏢"
+    count: 4
+    description: "Informações sobre concessionárias e pontos de venda."
+    pii_level: "low"
+    concepts:
+      - name: "DealerCode"
+        data_type: "STRING"
+        definition: "Unique code identifying a dealer/dealership in the network."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Code"
+          multi_entity: "DealerCode"
+        aliases: ["DealerID", "StoreCode"]
+      - name: "DealerName"
+        data_type: "STRING"
+        definition: "Official registered name of the dealership."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Name"
+          multi_entity: "DealerName"
+        aliases: ["StoreName"]
+      - name: "DealerType"
+        data_type: "STRING"
+        definition: "Classification of dealer (authorized, independent, service-only)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Type"
+          multi_entity: "DealerType"
+        aliases: ["StoreType"]
+      - name: "DealerRegion"
+        data_type: "STRING"
+        definition: "Geographic region the dealer belongs to."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Region"
+          multi_entity: "DealerRegion"
+        aliases: ["Territory"]
+
+  - name: "Vehicle"
+    icon: "🚗"
+    count: 11
+    description: "Atributos do veículo incluindo VIN, modelo, ano, motor."
+    pii_level: "low"
+    concepts:
+      - name: "VIN"
+        data_type: "STRING"
+        definition: "Vehicle Identification Number — unique 17-character code."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "VIN"
+          multi_entity: "VehicleVIN"
+        aliases: ["VehicleVIN", "ChassisNumber"]
+      - name: "LicensePlate"
+        data_type: "STRING"
+        definition: "Vehicle license plate number registered with local authority."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "LicensePlate"
+          multi_entity: "VehicleLicensePlate"
+        aliases: ["Plate", "Registration"]
+      - name: "Model"
+        data_type: "STRING"
+        definition: "Vehicle model name (e.g., Ranger, Territory, Bronco)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Model"
+          multi_entity: "VehicleModel"
+        aliases: ["ModelName"]
+      - name: "ModelYear"
+        data_type: "INTEGER"
+        definition: "Year the vehicle model was manufactured."
+        accepted_types: ["INTEGER", "INT64"]
+        entity_qualified_forms:
+          single_entity: "ModelYear"
+          multi_entity: "VehicleModelYear"
+        aliases: ["Year", "ManufactureYear"]
+      - name: "Color"
+        data_type: "STRING"
+        definition: "Exterior color of the vehicle."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Color"
+          multi_entity: "VehicleColor"
+        aliases: ["ExteriorColor"]
+      - name: "Engine"
+        data_type: "STRING"
+        definition: "Engine type and displacement description."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Engine"
+          multi_entity: "VehicleEngine"
+        aliases: ["EngineType", "Motorization"]
+      - name: "Transmission"
+        data_type: "STRING"
+        definition: "Transmission type (manual, automatic, CVT)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Transmission"
+          multi_entity: "VehicleTransmission"
+        aliases: ["TransmissionType", "GearType"]
+      - name: "FuelType"
+        data_type: "STRING"
+        definition: "Type of fuel used (gasoline, diesel, electric, hybrid, flex)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "FuelType"
+          multi_entity: "VehicleFuelType"
+        aliases: ["Fuel"]
+      - name: "Mileage"
+        data_type: "INTEGER"
+        definition: "Current odometer reading in kilometers."
+        accepted_types: ["INTEGER", "INT64"]
+        entity_qualified_forms:
+          single_entity: "Mileage"
+          multi_entity: "VehicleMileage"
+        aliases: ["Odometer", "KM"]
+      - name: "Segment"
+        data_type: "STRING"
+        definition: "Market segment classification (SUV, Sedan, Truck, Hatch)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Segment"
+          multi_entity: "VehicleSegment"
+        aliases: ["Category", "VehicleCategory"]
+      - name: "WarrantyExpiration"
+        data_type: "DATE"
+        definition: "Date when the vehicle factory warranty expires."
+        accepted_types: ["DATE"]
+        entity_qualified_forms:
+          single_entity: "WarrantyExpiration"
+          multi_entity: "VehicleWarrantyExpiration"
+        aliases: ["WarrantyEnd"]
+
+  - name: "Contract"
+    icon: "📄"
+    count: 4
+    description: "Dados contratuais entre cliente e empresa."
+    pii_level: "medium"
+    concepts:
+      - name: "ContractNumber"
+        data_type: "STRING"
+        definition: "Unique identifier for the contract."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ContractNumber"
+          multi_entity: "ContractNumber"
+        aliases: ["ContractID", "AgreementNumber"]
+      - name: "ContractType"
+        data_type: "STRING"
+        definition: "Type of contract (sale, service, lease, financing)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ContractType"
+          multi_entity: "ContractType"
+        aliases: ["AgreementType"]
+      - name: "ContractStartDate"
+        data_type: "DATE"
+        definition: "Date when the contract becomes effective."
+        accepted_types: ["DATE"]
+        entity_qualified_forms:
+          single_entity: "StartDate"
+          multi_entity: "ContractStartDate"
+        aliases: ["EffectiveDate"]
+      - name: "ContractEndDate"
+        data_type: "DATE"
+        definition: "Date when the contract expires."
+        accepted_types: ["DATE"]
+        entity_qualified_forms:
+          single_entity: "EndDate"
+          multi_entity: "ContractEndDate"
+        aliases: ["ExpirationDate"]
+
+  - name: "Audit & Dates"
+    icon: "📅"
+    count: 4
+    description: "Campos de auditoria e timestamps padrão presentes em toda tabela."
+    pii_level: "none"
+    concepts:
+      - name: "CreatedAt"
+        data_type: "TIMESTAMP"
+        definition: "Timestamp when the record was created in the system."
+        accepted_types: ["TIMESTAMP"]
+        entity_qualified_forms:
+          single_entity: "CreatedAt"
+          multi_entity: "CreatedAt"
+        aliases: ["CreateDate", "InsertedAt"]
+      - name: "UpdatedAt"
+        data_type: "TIMESTAMP"
+        definition: "Timestamp of the last modification to the record."
+        accepted_types: ["TIMESTAMP"]
+        entity_qualified_forms:
+          single_entity: "UpdatedAt"
+          multi_entity: "UpdatedAt"
+        aliases: ["ModifiedAt", "LastModified"]
+      - name: "DeletedAt"
+        data_type: "TIMESTAMP"
+        definition: "Timestamp of soft-delete, null if record is active."
+        accepted_types: ["TIMESTAMP"]
+        entity_qualified_forms:
+          single_entity: "DeletedAt"
+          multi_entity: "DeletedAt"
+        aliases: ["RemovedAt"]
+      - name: "IsActive"
+        data_type: "BOOLEAN"
+        definition: "Whether the record is currently active."
+        accepted_types: ["BOOLEAN"]
+        entity_qualified_forms:
+          single_entity: "IsActive"
+          multi_entity: "IsActive"
+        aliases: ["Active", "IsEnabled"]
+
+  - name: "Schedule"
+    icon: "🗓️"
+    count: 6
+    description: "Agendamentos de serviço e manutenção."
+    pii_level: "low"
+    concepts:
+      - name: "ScheduleID"
+        data_type: "STRING"
+        definition: "Unique identifier for the service schedule."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ScheduleID"
+          multi_entity: "ScheduleID"
+        aliases: ["AppointmentID"]
+      - name: "ScheduleDate"
+        data_type: "DATE"
+        definition: "Date of the scheduled appointment."
+        accepted_types: ["DATE"]
+        entity_qualified_forms:
+          single_entity: "ScheduleDate"
+          multi_entity: "ScheduleDate"
+        aliases: ["AppointmentDate"]
+      - name: "ScheduleTime"
+        data_type: "TIME"
+        definition: "Time of the scheduled appointment."
+        accepted_types: ["TIME", "STRING"]
+        entity_qualified_forms:
+          single_entity: "ScheduleTime"
+          multi_entity: "ScheduleTime"
+        aliases: ["AppointmentTime"]
+      - name: "ServiceType"
+        data_type: "STRING"
+        definition: "Type of service scheduled (maintenance, repair, inspection, recall)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ServiceType"
+          multi_entity: "ScheduleServiceType"
+        aliases: ["MaintenanceType"]
+      - name: "ScheduleStatus"
+        data_type: "STRING"
+        definition: "Current status of the schedule (confirmed, pending, cancelled, completed)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Status"
+          multi_entity: "ScheduleStatus"
+        aliases: ["AppointmentStatus"]
+      - name: "EstimatedDuration"
+        data_type: "INTEGER"
+        definition: "Estimated duration of the service in minutes."
+        accepted_types: ["INTEGER", "INT64"]
+        entity_qualified_forms:
+          single_entity: "EstimatedDuration"
+          multi_entity: "ScheduleEstimatedDuration"
+        aliases: ["Duration"]
+
+  - name: "Division"
+    icon: "🏛️"
+    count: 5
+    description: "Divisões organizacionais e estrutura hierárquica."
+    pii_level: "none"
+    concepts:
+      - name: "DivisionCode"
+        data_type: "STRING"
+        definition: "Unique code identifying an organizational division."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Code"
+          multi_entity: "DivisionCode"
+        aliases: ["DivID"]
+      - name: "DivisionName"
+        data_type: "STRING"
+        definition: "Name of the organizational division."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Name"
+          multi_entity: "DivisionName"
+        aliases: ["DepartmentName"]
+      - name: "ParentDivision"
+        data_type: "STRING"
+        definition: "Code of the parent division in hierarchy."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ParentDivision"
+          multi_entity: "ParentDivisionCode"
+        aliases: []
+      - name: "DivisionLevel"
+        data_type: "INTEGER"
+        definition: "Hierarchy level (1=top, incrementing)."
+        accepted_types: ["INTEGER", "INT64"]
+        entity_qualified_forms:
+          single_entity: "Level"
+          multi_entity: "DivisionLevel"
+        aliases: ["HierarchyLevel"]
+      - name: "DivisionCountry"
+        data_type: "STRING"
+        definition: "Country where the division operates."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Country"
+          multi_entity: "DivisionCountry"
+        aliases: []
+
+  - name: "Checklist"
+    icon: "✅"
+    count: 6
+    description: "Checklists de inspeção, qualidade e manutenção."
+    pii_level: "none"
+    concepts:
+      - name: "ChecklistID"
+        data_type: "STRING"
+        definition: "Unique identifier for the checklist instance."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "ChecklistID"
+          multi_entity: "ChecklistID"
+        aliases: ["InspectionID"]
+      - name: "ChecklistType"
+        data_type: "STRING"
+        definition: "Type of checklist (pre-delivery, post-service, quality)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Type"
+          multi_entity: "ChecklistType"
+        aliases: ["InspectionType"]
+      - name: "ChecklistStatus"
+        data_type: "STRING"
+        definition: "Completion status (open, in_progress, completed, failed)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Status"
+          multi_entity: "ChecklistStatus"
+        aliases: []
+      - name: "CompletedBy"
+        data_type: "STRING"
+        definition: "Name or ID of the person who completed the checklist."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "CompletedBy"
+          multi_entity: "ChecklistCompletedBy"
+        aliases: ["Inspector"]
+      - name: "CompletedDate"
+        data_type: "DATE"
+        definition: "Date the checklist was completed."
+        accepted_types: ["DATE", "TIMESTAMP"]
+        entity_qualified_forms:
+          single_entity: "CompletedDate"
+          multi_entity: "ChecklistCompletedDate"
+        aliases: ["InspectionDate"]
+      - name: "Score"
+        data_type: "FLOAT"
+        definition: "Overall score of the checklist (0-100)."
+        accepted_types: ["FLOAT", "NUMERIC"]
+        entity_qualified_forms:
+          single_entity: "Score"
+          multi_entity: "ChecklistScore"
+        aliases: ["Rating"]
+
+  - name: "Advisor"
+    icon: "🧑‍💼"
+    count: 8
+    description: "Consultores de serviço, vendas e atendimento."
+    pii_level: "medium"
+    concepts:
+      - name: "AdvisorID"
+        data_type: "STRING"
+        definition: "Unique identifier for the service/sales advisor."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "AdvisorID"
+          multi_entity: "AdvisorID"
+        aliases: ["ConsultantID"]
+      - name: "AdvisorName"
+        data_type: "STRING"
+        definition: "Full name of the advisor."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Name"
+          multi_entity: "AdvisorName"
+        aliases: ["ConsultantName"]
+      - name: "AdvisorEmail"
+        data_type: "STRING"
+        definition: "Corporate email of the advisor."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Email"
+          multi_entity: "AdvisorEmail"
+        aliases: []
+      - name: "AdvisorRole"
+        data_type: "STRING"
+        definition: "Role classification (sales, service, parts, management)."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "Role"
+          multi_entity: "AdvisorRole"
+        aliases: ["Position"]
+      - name: "AdvisorDealer"
+        data_type: "STRING"
+        definition: "Dealer code where the advisor is assigned."
+        accepted_types: ["STRING"]
+        entity_qualified_forms:
+          single_entity: "DealerCode"
+          multi_entity: "AdvisorDealerCode"
+        aliases: []
+      - name: "HireDate"
+        data_type: "DATE"
+        definition: "Date when the advisor was hired."
+        accepted_types: ["DATE"]
+        entity_qualified_forms:
+          single_entity: "HireDate"
+          multi_entity: "AdvisorHireDate"
+        aliases: ["StartDate"]
+      - name: "IsActive"
+        data_type: "BOOLEAN"
+        definition: "Whether the advisor is currently active."
+        accepted_types: ["BOOLEAN"]
+        entity_qualified_forms:
+          single_entity: "IsActive"
+          multi_entity: "AdvisorIsActive"
+        aliases: ["Active"]
+      - name: "Rating"
+        data_type: "FLOAT"
+        definition: "Average customer satisfaction rating (1-5 scale)."
+        accepted_types: ["FLOAT", "NUMERIC"]
+        entity_qualified_forms:
+          single_entity: "Rating"
+          multi_entity: "AdvisorRating"
+        aliases: ["CustomerRating", "SatisfactionScore"]
+
+# ============================================================
+# SEÇÃO 3: CONTEXT-BASED RULES
+# ============================================================
+context_rules:
+  - rule_type: "single_entity"
+    title: "Single-Entity Tables"
+    subtitle: "Omita prefixos redundantes (tabelas de uma entidade)"
+    definition: "Tabelas contendo apenas um tipo de entidade (dimensões ou fact-tables específicos). O nome da tabela já fornece contexto, então prefixos são redundantes."
+    applicable_to:
+      - "Tabelas de dimensão (CUSTOMER, DEALER, VEHICLE)"
+      - "Fact-tables específicos de entidade"
+    examples:
+      CUSTOMER: ["Name", "Country", "NationalID"]
+      DEALER: ["Code", "Name", "Country"]
+      VEHICLE: ["VIN", "LicensePlate"]
+    anti_patterns:
+      CUSTOMER: ["CustomerName", "CustomerCountry"]
+      DEALER: ["DealerCode"]
+      VEHICLE: ["VehicleVIN"]
+    rationale: "O nome da tabela fornece contexto de entidade. Adicionar prefixo cria redundância e aumenta complexidade para consumidores downstream e validação por IA."
+
+  - rule_type: "multi_entity"
+    title: "Multi-Entity Tables"
+    subtitle: "SEMPRE use prefixo (tabelas com múltiplas entidades)"
+    definition: "Tabelas desnormalizadas ou fact-tables contendo referências de FK para múltiplas entidades. Prefixos desambiguam qual entidade cada atributo pertence."
+    applicable_to:
+      - "Fact-tables (CONTRACT, SCHEDULE, TRANSACTION)"
+      - "Tabelas desnormalizadas de reporting (DEALER_PERFORMANCE, CUSTOMER_ACTIVITY)"
+      - "Tabelas master/bridge misturando múltiplas entidades"
+    examples:
+      CONTRACT: ["CustomerName", "DealerCode", "DealerName", "AdvisorName"]
+      TRANSACTION: ["CustomerID", "DealerID", "SupplierID"]
+      PARTY: ["CustomerCountry", "DealerCountry", "SupplierCountry"]
+    rationale: "Prefixos desambiguam quando tabela contém relações para múltiplos tipos de entidade. Sem prefixo, um campo 'Name' poderia referir-se a Cliente, Dealer ou Fornecedor."
+
+# ============================================================
+# SEÇÃO 4: ALIASES AMBÍGUOS
+# ============================================================
+ambiguous_aliases:
+  - name: "Country / País"
+    description: "Pode significar país do cliente, dealer, ou fabricante"
+    resolution_rules:
+      single_entity: "Use 'Country' no contexto de tabela única."
+      multi_entity: "Use 'CustomerCountry', 'DealerCountry' para desambiguar."
+      rule_of_thumb: "Prefixe o nome da entidade quando em tabelas cruzadas."
+
+  - name: "Name / Nome"
+    description: "Cliente? Dealer? Advisor? Precisa desambiguar"
+    resolution_rules:
+      CUSTOMER_table: "Apenas 'Name'"
+      DEALER_table: "Apenas 'Name'"
+      multi_entity: "'CustomerName', 'DealerName', 'AdvisorName'"
+
+  - name: "NationalID / Documento"
+    description: "CPF, CNPJ, DNI, RUT? Contexto é tudo"
+    resolution_rules:
+      rule: "Sempre verifique o campo 'DocumentType' para determinar se é Individual (CPF/DNI) ou Legal Entity (CNPJ/CUIT)."
+      storage: "Armazene normalizado sem formatação especial no banco."
+
+# ============================================================
+# SEÇÃO 5: DATETIME STANDARDS
+# ============================================================
+datetime_standards:
+  timezone: "UTC"
+  date_format: "YYYY-MM-DD"
+  timestamp_format: "YYYY-MM-DDTHH:MM:SS.sssZ"
+  naming:
+    created: "CreatedAt"
+    updated: "UpdatedAt"
+    deleted: "DeletedAt"
+    effective: "EffectiveDate"
+    expiration: "ExpirationDate"
+
+# ============================================================
+# SEÇÃO 6: GLOSSÁRIO
+# ============================================================
+glossary:
+  PII: "Personally Identifiable Information — dados que podem identificar um indivíduo."
+  PascalCase: "Cada palavra inicia com maiúscula, sem separadores. Ex: CustomerName."
+  snake_case: "Palavras separadas por underscore, tudo minúsculo. Ex: stg_customers."
+  UPPER_CASE: "Tudo em maiúsculo, palavras separadas por underscore. Ex: CUSTOMER."
+  CTE: "Common Table Expression — subconsulta nomeada em SQL."
+  FK: "Foreign Key — referência a chave primária de outra tabela."
+  VIN: "Vehicle Identification Number — código único do veículo."
+  GUID: "Globally Unique Identifier — identificador único universal."
+  DDL: "Data Definition Language — comandos SQL de criação de estrutura."
+  ETL: "Extract, Transform, Load — processo de integração de dados."
+  SLA: "Service Level Agreement — acordo de nível de serviço."
+
+# ============================================================
+# SEÇÃO 7: LAKE / PLATFORM STANDARDS
+# ============================================================
+lake_standards:
+  zones:
+    - name: "raw"
+      alias: "bronze"
+      description: "Dados brutos, sem transformação"
+      naming_pattern: "raw_{source}_{entity}"
+      retention: "90 days"
+    - name: "staged"
+      alias: "silver"
+      description: "Dados limpos, deduplicados, tipados"
+      naming_pattern: "stg_{domain}_{entity}"
+      retention: "1 year"
+    - name: "curated"
+      alias: "gold"
+      description: "Dados modelados para consumo (dim/fact)"
+      naming_pattern: "{type}_{entity}"
+      types: ["dim", "fact", "agg", "rpt"]
+      retention: "indefinite"
+  project_structure:
+    pattern: "{org}-{env}-{domain}"
+    examples:
+      - "acme-prod-analytics"
+      - "acme-dev-marketing"
+
+# ============================================================
+# SEÇÃO 8: AI AGENT INSTRUCTIONS
+# Machine-readable para agentes de IA
+# ============================================================
+ai_agent_instructions:
+  description: |
+    Esta seção é destinada a agentes de IA que precisam escrever
+    artefatos (SQL, schemas, documentação) aderentes a este padrão
+    taxonômico. Consulte estas regras antes de gerar qualquer artefato.
+
+  quick_rules:
+    - "Colunas SEMPRE em PascalCase"
+    - "Nomes de entidade/tabela SEMPRE em UPPER_CASE"
+    - "CTEs SEMPRE em snake_case"
+    - "Nunca abrevie palavras (Customer, não Cust)"
+    - "Siglas canônicas SEMPRE em UPPER_CASE dentro de nomes compostos"
+    - "Em tabelas single-entity, NÃO prefixe com nome da entidade"
+    - "Em tabelas multi-entity, SEMPRE prefixe com nome da entidade"
+    - "Timestamps em UTC, formato ISO 8601"
+    - "Nomes de aplicação preservam casing oficial"
+    - "Todo registro deve ter CreatedAt e UpdatedAt"
+
+  validation_checklist:
+    - check: "column_casing"
+      rule: "Todas as colunas devem usar PascalCase"
+      regex: "^[A-Z][a-zA-Z0-9]*$"
+      exception: "Acronyms canônicos mantêm UPPER_CASE (ex: VIN, GUID)"
+    - check: "entity_casing"
+      rule: "Nomes de entidade/tabela devem usar UPPER_CASE"
+      regex: "^[A-Z][A-Z0-9_]*$"
+    - check: "no_abbreviations"
+      rule: "Palavras completas obrigatórias"
+      forbidden_suffixes: ["Num", "Desc", "Addr", "Sts", "Cust", "Qty", "Amt"]
+    - check: "acronym_casing"
+      rule: "Acronyms canônicos devem manter UPPER_CASE"
+      canonical_list_ref: "naming_conventions.canonical_acronyms.items"
+    - check: "forbidden_patterns"
+      rule: "Patterns de casing misto proibidos"
+      forbidden_list_ref: "naming_conventions.forbidden_forms.items"
+    - check: "context_prefix"
+      rule: "Prefixar por entidade apenas em tabelas multi-entity"
+      lookup: "context_rules"
+
+  artifact_templates:
+    sql_select: |
+      -- Gerado seguindo taxonomy_schema.yaml
+      -- Colunas: PascalCase | Entidades: UPPER_CASE | CTEs: snake_case
+      SELECT
+        CustomerName,           -- ✓ PascalCase
+        CustomerGUID,           -- ✓ Acronym UPPER_CASE preservado
+        CreatedAt               -- ✓ Timestamp padrão
+      FROM CUSTOMER             -- ✓ Entidade UPPER_CASE
+    ddl_create: |
+      CREATE TABLE {ENTITY_UPPER} (
+        {ColumnPascal} {DATA_TYPE},
+        CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UpdatedAt TIMESTAMP
+      );
+
+# ============================================================
+# SEÇÃO 9: VALIDATION RULES (Machine-Readable)
+# ============================================================
+validation_rules:
+  - id: "VAL-001"
+    name: "Column PascalCase Check"
+    severity: "error"
+    scope: "column"
+    rule_type: "regex"
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+    message: "Coluna '{name}' não segue PascalCase"
+  - id: "VAL-002"
+    name: "No Abbreviation Check"
+    severity: "error"
+    scope: "column"
+    rule_type: "forbidden_substring"
+    forbidden: ["Cust", "Addr", "Num", "Desc", "Sts", "Qty", "Amt"]
+    message: "Coluna '{name}' contém abreviação proibida"
+  - id: "VAL-003"
+    name: "Entity UPPER_CASE Check"
+    severity: "error"
+    scope: "table"
+    rule_type: "regex"
+    pattern: "^[A-Z][A-Z0-9_]*$"
+    message: "Tabela '{name}' não segue UPPER_CASE"
+  - id: "VAL-004"
+    name: "Acronym Casing Check"
+    severity: "warning"
+    scope: "column"
+    rule_type: "acronym_case"
+    canonical_ref: "naming_conventions.canonical_acronyms.items"
+    message: "Acronym em '{name}' deve manter UPPER_CASE"
+  - id: "VAL-005"
+    name: "Timestamp Naming Check"
+    severity: "warning"
+    scope: "column"
+    rule_type: "datetime_naming"
+    expected_ref: "datetime_standards.naming"
+    message: "Campo de data/hora '{name}' não segue padrão de naming"
+  - id: "VAL-006"
+    name: "Zone Naming Check"
+    severity: "warning"
+    scope: "dataset"
+    rule_type: "zone_prefix"
+    expected_ref: "lake_standards.zones"
+    message: "Dataset '{name}' não segue padrão de zona (raw/stg/dim/fact)"

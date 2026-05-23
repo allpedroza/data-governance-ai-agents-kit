@@ -112,6 +112,12 @@ try:
 except ImportError:
     _asset_value_available = False
 
+try:
+    from .taxonomy import TaxonomyAgent, TaxonomyDocument, TaxonomyScore
+    _taxonomy_available = True
+except ImportError:
+    _taxonomy_available = False
+
 from .data_product_scoring import (
     DataProductScoringAgent,
     DataProductScoringReport,
@@ -147,6 +153,13 @@ if _asset_value_available:
         'DataAssetValueAgent',
         'AssetValueReport',
         'AssetValueScore',
+    ])
+
+if _taxonomy_available:
+    __all__.extend([
+        'TaxonomyAgent',
+        'TaxonomyDocument',
+        'TaxonomyScore',
     ])
 
 __all__.extend([

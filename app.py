@@ -191,16 +191,19 @@ st.markdown(
     """
     <style>
         :root {
-            --bg: #f8fafc;
+            --bg: #f0f4f8;
             --card: #ffffff;
             --border: #e2e8f0;
             --text: #0f172a;
-            --muted: #475569;
-            --accent: #2563eb;
+            --muted: #64748b;
+            --accent: #3B82F6;
+            --primary-dark: #0B2545;
+            --primary-mid: #134074;
         }
 
         .main {
             background: var(--bg);
+            font-family: 'Inter', sans-serif;
         }
 
         .section-card {
@@ -309,20 +312,39 @@ def init_session_state() -> None:
 
 def hero_section() -> None:
     """Top banner with quick context."""
-    with st.container(border=True):
-        col1, col2 = st.columns([3, 2])
-        with col1:
-            st.title("Data Governance AI Agents")
-            st.markdown(
-                "Uma interface simples para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de dados."
-            )
-            st.markdown(
-                "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
-                unsafe_allow_html=True,
-            )
-        with col2:
-            st.metric("Agentes disponíveis", "5", help="Lineage, Discovery, Enrichment, Classification e Quality")
-            st.metric("Status da sessão", "Pronto", help="Sessão inicializada com os caches padrões")
+    st.markdown(
+        """
+        <div style="background: linear-gradient(135deg, #0B2545 0%, #134074 100%); 
+                    color: white; 
+                    padding: 2.5rem 3rem; 
+                    border-radius: 16px; 
+                    margin-bottom: 2rem;
+                    box-shadow: 0 10px 25px rgba(11, 37, 69, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="max-width: 60%;">
+                    <h1 style="color: white; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; margin-top: 0;">Data Governance AI Agents</h1>
+                    <p style="font-size: 1.1rem; color: #E2E8F0; margin-bottom: 1rem;">
+                        Uma interface avançada para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de Dados.
+                    </p>
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 0.9rem;">
+                        <span style="color: #60A5FA;">💡 Dica:</span> Defina sua <code>OPENAI_API_KEY</code> para ativar buscas vetoriais, geração de metadados e relatórios ricos.
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1.5rem;">
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: white; line-height: 1;">11</div>
+                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Agentes Ativos</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: #34D399; line-height: 1;">Pronto</div>
+                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Status Sessão</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 def render_lineage_tab() -> None:
@@ -4240,7 +4262,8 @@ def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
 
 init_session_state()
 hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+    "🏷️ Taxonomy",
     "Lineage",
     "Discovery",
     "Enrichment",
@@ -4253,22 +4276,73 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "⚙️ Settings",
 ])
 with tab1:
-    render_lineage_tab()
+    try:
+        from data_governance.taxonomy.agent import TaxonomyAgent
+        from data_governance.taxonomy.models import TaxonomyDocument
+        _tax_available = True
+    except ImportError:
+        _tax_available = False
+
+    if not _tax_available:
+        st.error("O módulo de taxonomia não está instalado ou disponível.")
+    else:
+        st.subheader("🏷️ Taxonomy Evaluator & Generator")
+        st.markdown("Valide o dicionário de dados AS-IS e gere um artefato HTML premium comparando a maturidade atual com padrões de mercado.")
+        
+        with card_container():
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.info("Demonstração: Usaremos o dataset padrão de taxonomia para gerar o Score e o Artefato HTML.")
+                if st.button("Executar Agent: Extrair & Avaliar", type="primary"):
+                    with st.spinner("Analisando metadados e calculando maturidade..."):
+                        # For demo, load the schema from yaml
+                        import os
+                        import time
+                        
+                        yaml_path = os.path.join(os.path.dirname(__file__), "data_governance", "taxonomy", "taxonomy_schema.yaml")
+                        
+                        agent = TaxonomyAgent()
+                        if os.path.exists(yaml_path):
+                            taxonomy = agent.load_from_yaml(yaml_path)
+                            score = agent.score_taxonomy(taxonomy)
+                            html = agent.generate_html_artifact(taxonomy, score)
+                            
+                            st.session_state["taxonomy_html"] = html
+                            st.session_state["taxonomy_score"] = score.overall_score
+                            st.session_state["taxonomy_level"] = score.maturity_level
+                            
+                            st.success(f"Análise concluída! Score: {score.overall_score} (Nível {score.maturity_level})")
+                        else:
+                            st.error(f"Arquivo de schema não encontrado em: {yaml_path}")
+            
+            with col2:
+                if "taxonomy_html" in st.session_state:
+                    st.metric("Overall Score", f"{st.session_state['taxonomy_score']}/100", f"Maturity Level {st.session_state['taxonomy_level']}")
+                    st.download_button(
+                        label="📄 Download HTML Artifact",
+                        data=st.session_state["taxonomy_html"],
+                        file_name="data_dictionary_taxonomy.html",
+                        mime="text/html",
+                        use_container_width=True
+                    )
+
 with tab2:
-    render_rag_tab()
+    render_lineage_tab()
 with tab3:
-    render_enrichment_tab()
+    render_rag_tab()
 with tab4:
-    render_classification_tab()
+    render_enrichment_tab()
 with tab5:
-    render_quality_tab()
+    render_classification_tab()
 with tab6:
-    render_contracts_tab()
+    render_quality_tab()
 with tab7:
-    render_value_tab()
+    render_contracts_tab()
 with tab8:
-    render_ner_tab()
+    render_value_tab()
 with tab9:
-    render_vault_tab()
+    render_ner_tab()
 with tab10:
+    render_vault_tab()
+with tab11:
     render_settings_tab()
