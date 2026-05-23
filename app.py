@@ -4453,6 +4453,188 @@ with tab1:
                                     f"Impacto esperado: {action.expected_impact}"
                                 )
 
+        # ----------------------------------------------------------------
+        # Discovery pipeline: DW → anonimização → LLM → YAML + plano HTML
+        # ----------------------------------------------------------------
+        st.divider()
+        st.markdown("### 🔭 Descobrir taxonomia a partir do Data Warehouse")
+        st.caption(
+            "Faz scan via INFORMATION_SCHEMA, anonimiza samples (NER + regex), "
+            "pede ao LLM um YAML candidato e gera o plano de melhoria em HTML."
+        )
+
+        discovery_warehouses = get_configured_warehouses() if "get_configured_warehouses" in dir() else list(st.session_state.get("warehouse_connections", {}).keys())
+
+        if not discovery_warehouses:
+            st.info(
+                "Nenhum Data Warehouse configurado. Configure um na aba "
+                "Settings (Snowflake/BigQuery/Redshift/Synapse) para usar o discovery."
+            )
+        else:
+            settings = st.session_state.connection_settings
+            with card_container():
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    disc_wh = st.selectbox(
+                        "Data Warehouse",
+                        options=discovery_warehouses,
+                        key="discovery_wh_select",
+                    )
+                    disc_schema = st.text_input(
+                        "Schema (opcional)", key="discovery_schema"
+                    )
+                    disc_database = st.text_input(
+                        "Database/Project (opcional)", key="discovery_database"
+                    )
+                with col_b:
+                    llm_options = []
+                    if settings.get("openai_api_key"):
+                        llm_options.append(("openai", settings.get("llm_model", "gpt-4o-mini")))
+                    if settings.get("anthropic_api_key"):
+                        llm_options.append(("claude", settings.get("anthropic_model", "claude-3-5-sonnet-20240620")))
+                    if settings.get("deepseek_api_key"):
+                        llm_options.append(("deepseek", settings.get("deepseek_model", "deepseek-chat")))
+                    if not llm_options:
+                        st.warning("Configure ao menos uma API key de LLM em Settings.")
+                    else:
+                        provider_label = st.selectbox(
+                            "Provedor LLM",
+                            options=[f"{p} · {m}" for p, m in llm_options],
+                            key="discovery_llm_provider",
+                        )
+                    max_tables = st.number_input(
+                        "Máx. tabelas para inspecionar",
+                        min_value=1, max_value=500, value=30, step=5,
+                        key="discovery_max_tables",
+                    )
+                    profile_samples = st.checkbox(
+                        "Profile samples (consulta linhas; valores são anonimizados antes do LLM)",
+                        value=True, key="discovery_profile_samples",
+                    )
+
+                table_filter_raw = st.text_area(
+                    "Filtrar tabelas específicas (uma por linha, opcional)",
+                    key="discovery_table_filter",
+                    height=80,
+                )
+
+                if llm_options and st.button("🚀 Rodar discovery", type="primary", key="run_discovery"):
+                    table_filter = [
+                        t.strip() for t in (table_filter_raw or "").splitlines() if t.strip()
+                    ] or None
+
+                    with st.status("Executando pipeline de discovery...", expanded=True) as status:
+                        try:
+                            wh_config = st.session_state.warehouse_connections.get(disc_wh, {})
+                            connector = get_warehouse_connector(disc_wh, wh_config)
+                            if not connector:
+                                status.update(label="Erro ao construir conector", state="error")
+                                st.stop()
+
+                            status.write(f"Conectando ao {disc_wh}...")
+                            connector.connect()
+
+                            provider_choice = provider_label.split(" · ")[0]
+                            llm_model = provider_label.split(" · ")[1]
+                            status.write(f"Inicializando LLM ({provider_choice} / {llm_model})...")
+                            if provider_choice == "openai":
+                                from data_governance.rag_discovery.providers.llm.openai_llm import OpenAILLM
+                                llm = OpenAILLM(model=llm_model)
+                            elif provider_choice == "claude":
+                                from data_governance.rag_discovery.providers.llm.anthropic_llm import AnthropicLLM
+                                llm = AnthropicLLM(model=llm_model)
+                            elif provider_choice == "deepseek":
+                                from data_governance.rag_discovery.providers.llm.deepseek_llm import DeepSeekLLM
+                                llm = DeepSeekLLM(model=llm_model)
+                            else:
+                                st.error(f"Provedor desconhecido: {provider_choice}")
+                                st.stop()
+
+                            anon = None
+                            if NER_AVAILABLE:
+                                try:
+                                    from data_governance.taxonomy.discovery import SampleAnonymizer
+                                    anon = SampleAnonymizer(ner_agent=SensitiveDataNERAgent())
+                                except Exception:
+                                    anon = None
+
+                            status.write("Coletando inventário, anonimizando e chamando LLM...")
+                            agent = TaxonomyAgent()
+                            result = agent.discover_from_warehouse(
+                                connector=connector,
+                                llm=llm,
+                                anonymizer=anon,
+                                schema=disc_schema or None,
+                                database=disc_database or None,
+                                table_filter=table_filter,
+                                max_tables=int(max_tables),
+                                profile_samples=bool(profile_samples),
+                            )
+
+                            try:
+                                connector.disconnect()
+                            except Exception:
+                                pass
+
+                            st.session_state["discovery_result"] = result
+                            status.update(
+                                label=(
+                                    f"Discovery concluído: {len(result.inventory.tables)} tabelas, "
+                                    f"{result.inventory.column_count()} colunas, "
+                                    f"score {result.score.overall_score:.1f}/100"
+                                ),
+                                state="complete",
+                            )
+                        except Exception as exc:
+                            status.update(label=f"Falha: {exc}", state="error")
+                            st.exception(exc)
+
+        result = st.session_state.get("discovery_result")
+        if result is not None:
+            with card_container():
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Tabelas", len(result.inventory.tables))
+                m2.metric("Colunas", result.inventory.column_count())
+                m3.metric("Redactions", result.anonymization_report.get("redactions", 0))
+                m4.metric(
+                    "Score",
+                    f"{result.score.overall_score:.1f}/100",
+                    f"Nível {result.score.maturity_level} {result.score.maturity_label}",
+                )
+
+                col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                col_d1.download_button(
+                    "📥 YAML descoberto", data=result.yaml_text,
+                    file_name="taxonomy_discovered.yaml", mime="text/yaml",
+                    use_container_width=True,
+                )
+                col_d2.download_button(
+                    "📄 AS-IS HTML", data=result.as_is_html,
+                    file_name="taxonomy_discovered_as_is.html", mime="text/html",
+                    use_container_width=True,
+                )
+                col_d3.download_button(
+                    "🛠️ Plano de melhoria HTML", data=result.improvement_plan_html,
+                    file_name="taxonomy_improvement_plan.html", mime="text/html",
+                    use_container_width=True,
+                )
+                col_d4.download_button(
+                    "🔬 Inventário (JSON)",
+                    data=json.dumps(
+                        result.inventory.to_llm_dict(), indent=2, default=str, ensure_ascii=False,
+                    ),
+                    file_name="taxonomy_inventory.json", mime="application/json",
+                    use_container_width=True,
+                )
+
+                with st.expander("Resumo executivo do plano"):
+                    st.write(result.evaluation.plan.get("executive_summary", "—"))
+                    qw = result.evaluation.plan.get("quick_wins") or []
+                    if qw:
+                        st.markdown("**Quick wins:**")
+                        for q in qw:
+                            st.markdown(f"- {q}")
+
 with tab2:
     render_lineage_tab()
 with tab3:
