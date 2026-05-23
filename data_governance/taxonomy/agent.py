@@ -396,7 +396,47 @@ class TaxonomyAgent:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
-    # End-to-end product entry point
+    # Discovery pipeline (DW → LLM → YAML → plan HTML)
+    # ------------------------------------------------------------------
+    def discover_from_warehouse(
+        self,
+        connector,
+        llm,
+        evaluator_llm=None,
+        anonymizer=None,
+        schema: Optional[str] = None,
+        database: Optional[str] = None,
+        table_filter: Optional[List[str]] = None,
+        max_tables: int = 50,
+        profile_samples: bool = True,
+        sample_rows: int = 50,
+    ):
+        """Run the end-to-end discovery pipeline.
+
+        Convenience wrapper around :class:`TaxonomyDiscoveryPipeline`.
+        Returns a :class:`DiscoveryRunResult` with the inventory, the
+        synthesized taxonomy, the deterministic score and the LLM-built
+        improvement plan rendered as HTML.
+        """
+        from .discovery import TaxonomyDiscoveryPipeline
+        pipeline = TaxonomyDiscoveryPipeline(
+            llm=llm,
+            evaluator_llm=evaluator_llm,
+            anonymizer=anonymizer,
+            scorer=self.scorer,
+        )
+        return pipeline.run(
+            connector=connector,
+            schema=schema,
+            database=database,
+            table_filter=table_filter,
+            max_tables=max_tables,
+            profile_samples=profile_samples,
+            sample_rows=sample_rows,
+        )
+
+    # ------------------------------------------------------------------
+    # End-to-end product entry point (file-based, no LLM, no DW)
     # ------------------------------------------------------------------
     def run(self, yaml_path: str) -> Dict[str, Any]:
         """End-to-end: load → score → produce both reports + integration bundle.
