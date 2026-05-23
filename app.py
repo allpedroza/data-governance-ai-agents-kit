@@ -180,20 +180,6 @@ try:
 except ImportError:
     AI_BUSINESS_VALUE_AVAILABLE = False
 
-# Data Steward Agent imports
-STEWARD_AVAILABLE = True
-try:
-    from data_governance.data_steward.agent import DataStewardAgent
-    from data_governance.data_steward.models import (
-        DataIssue,
-        GlossaryTerm,
-        QualityRuleDraft,
-        ImpactReport,
-        ApprovalRequest,
-    )
-except ImportError:
-    STEWARD_AVAILABLE = False
-
 
 st.set_page_config(
     page_title="Data Governance AI Agents",
@@ -205,16 +191,19 @@ st.markdown(
     """
     <style>
         :root {
-            --bg: #f8fafc;
+            --bg: #f0f4f8;
             --card: #ffffff;
             --border: #e2e8f0;
             --text: #0f172a;
-            --muted: #475569;
-            --accent: #2563eb;
+            --muted: #64748b;
+            --accent: #3B82F6;
+            --primary-dark: #0B2545;
+            --primary-mid: #134074;
         }
 
         .main {
             background: var(--bg);
+            font-family: 'Inter', sans-serif;
         }
 
         .section-card {
@@ -323,20 +312,39 @@ def init_session_state() -> None:
 
 def hero_section() -> None:
     """Top banner with quick context."""
-    with st.container(border=True):
-        col1, col2 = st.columns([3, 2])
-        with col1:
-            st.title("Data Governance AI Agents")
-            st.markdown(
-                "Uma interface simples para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de dados."
-            )
-            st.markdown(
-                "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
-                unsafe_allow_html=True,
-            )
-        with col2:
-            st.metric("Agentes disponíveis", "5", help="Lineage, Discovery, Enrichment, Classification e Quality")
-            st.metric("Status da sessão", "Pronto", help="Sessão inicializada com os caches padrões")
+    st.markdown(
+        """
+        <div style="background: linear-gradient(135deg, #0B2545 0%, #134074 100%); 
+                    color: white; 
+                    padding: 2.5rem 3rem; 
+                    border-radius: 16px; 
+                    margin-bottom: 2rem;
+                    box-shadow: 0 10px 25px rgba(11, 37, 69, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="max-width: 60%;">
+                    <h1 style="color: white; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; margin-top: 0;">Data Governance AI Agents</h1>
+                    <p style="font-size: 1.1rem; color: #E2E8F0; margin-bottom: 1rem;">
+                        Uma interface avançada para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de Dados.
+                    </p>
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 0.9rem;">
+                        <span style="color: #60A5FA;">💡 Dica:</span> Defina sua <code>OPENAI_API_KEY</code> para ativar buscas vetoriais, geração de metadados e relatórios ricos.
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1.5rem;">
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: white; line-height: 1;">11</div>
+                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Agentes Ativos</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: #34D399; line-height: 1;">Pronto</div>
+                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Status Sessão</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 def render_lineage_tab() -> None:
@@ -3608,156 +3616,6 @@ def render_vault_tab() -> None:
         """)
 
 
-def render_steward_tab() -> None:
-    """Data Steward Agent tab -- operational copilot for stewards."""
-    if not STEWARD_AVAILABLE:
-        st.warning("Data Steward Agent nao disponivel. Verifique a instalacao.")
-        return
-
-    st.markdown("## Data Steward Agent")
-    st.caption("Copiloto operacional de governanca — o agente propoe, o steward aprova.")
-
-    if "steward_agent" not in st.session_state:
-        st.session_state.steward_agent = DataStewardAgent(persist_dir="./steward_data")
-    agent = st.session_state.steward_agent
-
-    intake_tab, glossary_tab, rules_tab, impact_tab, workflow_tab = st.tabs([
-        "Triagem de Issues",
-        "Glossario de Negocio",
-        "Regras de Quality",
-        "Analise de Impacto",
-        "Aprovacoes",
-    ])
-
-    with intake_tab:
-        st.markdown("### Triagem de Issues de Dados")
-        with st.form("steward_issue_form"):
-            description = st.text_area(
-                "Descricao do problema", height=120,
-                placeholder="Ex: O KPI de receita mudou 20% sem razao aparente...")
-            col1, col2 = st.columns(2)
-            with col1:
-                ctx_domain = st.text_input("Dominio (opcional)", placeholder="finance", key="st_issue_dom")
-            with col2:
-                ctx_dataset = st.text_input("Dataset (opcional)", placeholder="fato_vendas", key="st_issue_ds")
-            submitted = st.form_submit_button("Triar Issue")
-        if submitted and description.strip():
-            ctx = {}
-            if ctx_domain:
-                ctx["domain"] = ctx_domain
-            if ctx_dataset:
-                ctx["dataset"] = ctx_dataset
-            issue = agent.triage_issue(description, ctx or None)
-            st.success(f"Issue triada: {issue.issue_id}")
-            st.markdown(issue.to_markdown())
-
-        issues = agent.list_issues()
-        if issues:
-            st.markdown("#### Issues Recentes")
-            for iss in issues[:10]:
-                sev_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(iss.severity, "⚪")
-                with st.expander(f"{sev_icon} {iss.title} ({iss.status})"):
-                    st.markdown(iss.to_markdown())
-
-    with glossary_tab:
-        st.markdown("### Glossario de Negocio")
-        with st.form("steward_glossary_form"):
-            term_name = st.text_input("Nome do termo", placeholder="receita_liquida")
-            g_domain = st.text_input("Dominio", placeholder="finance", key="st_gl_dom")
-            st.markdown("**Fontes de definicao**")
-            sources = []
-            for i in range(3):
-                c1, c2 = st.columns([1, 3])
-                with c1:
-                    src = st.text_input(f"Fonte {i+1}", key=f"st_gsrc_{i}", placeholder="SQL / Doc / Dashboard")
-                with c2:
-                    defn = st.text_input(f"Definicao {i+1}", key=f"st_gdef_{i}", placeholder="...")
-                if src and defn:
-                    sources.append({"source": src, "definition": defn})
-            submitted = st.form_submit_button("Curar Termo")
-        if submitted and term_name and sources:
-            term = agent.curate_term(term_name, sources, g_domain)
-            st.success(f"Termo curado: {term.term_id}")
-            st.markdown(term.to_markdown())
-
-        terms = agent.list_glossary()
-        if terms:
-            st.markdown("#### Termos Existentes")
-            for t in terms[:20]:
-                with st.expander(f"{'✅' if t.status == 'approved' else '📝'} {t.term_name} ({t.status})"):
-                    st.markdown(t.to_markdown())
-
-    with rules_tab:
-        st.markdown("### Regras de Data Quality")
-        with st.form("steward_rules_form"):
-            r_dataset = st.text_input("Dataset", placeholder="dim_customers", key="st_r_ds")
-            r_domain = st.text_input("Dominio", placeholder="customer", key="st_r_dom")
-            cols_json = st.text_area("Colunas (JSON, opcional)", height=60,
-                                     placeholder='[{"name": "cpf", "type": "string", "nullable": false}]')
-            submitted = st.form_submit_button("Sugerir Regras")
-        if submitted and r_dataset and r_domain:
-            columns = None
-            if cols_json.strip():
-                try:
-                    columns = __import__("json").loads(cols_json)
-                except Exception:
-                    st.error("JSON invalido")
-            rules = agent.draft_rules(r_dataset, r_domain, columns)
-            st.success(f"{len(rules)} regra(s) sugerida(s)")
-            for rule in rules:
-                st.markdown(rule.to_markdown())
-
-        existing_rules = agent.list_rules()
-        if existing_rules:
-            st.markdown("#### Regras Existentes")
-            for rule in existing_rules[:20]:
-                with st.expander(f"[{rule.dimension}] {rule.business_description[:50]} ({rule.status})"):
-                    st.markdown(rule.to_markdown())
-
-    with impact_tab:
-        st.markdown("### Analise de Impacto")
-        with st.form("steward_impact_form"):
-            change = st.text_area("Descricao da mudanca", height=80,
-                                  placeholder="Ex: Remover coluna cpf da tabela dim_customers")
-            c1, c2 = st.columns(2)
-            with c1:
-                i_ds = st.text_input("Dataset", placeholder="dim_customers", key="st_i_ds")
-            with c2:
-                i_attr = st.text_input("Atributo (opcional)", placeholder="cpf", key="st_i_attr")
-            i_domain = st.text_input("Dominio", placeholder="customer", key="st_i_dom")
-            submitted = st.form_submit_button("Analisar Impacto")
-        if submitted and change and i_ds:
-            report = agent.explain_impact(change, i_ds, i_attr or None, i_domain)
-            st.markdown(report.to_markdown())
-
-    with workflow_tab:
-        st.markdown("### Aprovacoes Pendentes")
-        pending = agent.get_pending_approvals()
-        if pending:
-            for req in pending:
-                type_icon = {"glossary_term": "📖", "quality_rule": "📏"}.get(req.request_type, "📋")
-                with st.expander(f"{type_icon} {req.title}"):
-                    st.markdown(req.to_markdown())
-                    with st.form(f"st_decision_{req.request_id}"):
-                        reviewer = st.text_input("Seu nome", key=f"st_rev_{req.request_id}")
-                        decision = st.selectbox("Decisao", ["approved", "rejected", "revision_requested"],
-                                                key=f"st_dec_{req.request_id}")
-                        notes = st.text_input("Notas", key=f"st_notes_{req.request_id}")
-                        if st.form_submit_button("Submeter Decisao"):
-                            if reviewer:
-                                agent.submit_decision(req.request_id, decision, reviewer, notes)
-                                st.success(f"Decisao registrada: {decision}")
-                                st.rerun()
-        else:
-            st.info("Nenhuma aprovacao pendente.")
-
-        st.markdown("#### Log de Atividades")
-        activities = agent.get_activity_log(limit=20)
-        for entry in activities:
-            st.text(f"[{entry.timestamp[:19]}] {entry.action} - {entry.actor}" +
-                     (f" | {entry.domain}" if entry.domain else ""))
-
-
 def render_settings_tab() -> None:
     """Centralized settings tab for API keys, Data Warehouse connections, and LLM configuration."""
     section_header(
@@ -4405,6 +4263,7 @@ def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
 init_session_state()
 hero_section()
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+    "🏷️ Taxonomy",
     "Lineage",
     "Discovery",
     "Enrichment",
@@ -4414,28 +4273,203 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
     "Asset Value",
     "NER Module",
     "Vault",
-    "Data Steward",
     "⚙️ Settings",
 ])
 with tab1:
-    render_lineage_tab()
+    try:
+        from data_governance.taxonomy.agent import TaxonomyAgent
+        from data_governance.taxonomy.models import TaxonomyDocument
+        _tax_available = True
+        _tax_import_error = None
+    except ImportError as exc:
+        _tax_available = False
+        _tax_import_error = str(exc)
+
+    if not _tax_available:
+        st.error(
+            "O módulo de taxonomia não está disponível. "
+            f"Detalhes: {_tax_import_error}"
+        )
+    else:
+        st.subheader("🏷️ Taxonomy Evaluator & Generator")
+        st.markdown(
+            "Valide o dicionário de dados AS-IS e gere um artefato HTML "
+            "premium comparando a maturidade atual com padrões de mercado. "
+            "O bundle exportado alimenta os agentes de Metadata Enrichment, "
+            "Data Quality e Data Contracts."
+        )
+
+        default_yaml = os.path.join(
+            os.path.dirname(__file__),
+            "data_governance",
+            "taxonomy",
+            "taxonomy_schema.yaml",
+        )
+
+        with card_container():
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                source_mode = st.radio(
+                    "Fonte da taxonomia",
+                    ["Schema padrão do repositório", "Upload de YAML"],
+                    horizontal=True,
+                    key="taxonomy_source_mode",
+                )
+
+                uploaded_yaml = None
+                if source_mode == "Upload de YAML":
+                    uploaded_yaml = st.file_uploader(
+                        "Envie um arquivo YAML de taxonomia",
+                        type=["yaml", "yml"],
+                        key="taxonomy_yaml_upload",
+                    )
+                else:
+                    st.info(f"Schema padrão: `{default_yaml}`")
+
+                if st.button("Executar Agent: Extrair & Avaliar", type="primary"):
+                    with st.spinner("Analisando metadados e calculando maturidade..."):
+                        agent = TaxonomyAgent()
+                        try:
+                            if source_mode == "Upload de YAML":
+                                if not uploaded_yaml:
+                                    st.warning("Envie um arquivo YAML para analisar.")
+                                    st.stop()
+                                content = uploaded_yaml.read().decode("utf-8")
+                                taxonomy = agent.load_from_yaml_string(content)
+                            else:
+                                if not os.path.exists(default_yaml):
+                                    st.error(f"Arquivo de schema não encontrado em: {default_yaml}")
+                                    st.stop()
+                                taxonomy = agent.load_from_yaml(default_yaml)
+
+                            score = agent.score_taxonomy(taxonomy)
+                            plan = agent.build_improvement_plan(score)
+                            html = agent.generate_html_artifact(taxonomy, score)
+                            as_is_md = agent.generate_current_state_report_markdown(taxonomy, score)
+                            plan_md = agent.generate_improvement_plan_markdown(plan)
+
+                            st.session_state["taxonomy_html"] = html
+                            st.session_state["taxonomy_as_is_md"] = as_is_md
+                            st.session_state["taxonomy_plan_md"] = plan_md
+                            st.session_state["taxonomy_score"] = score.overall_score
+                            st.session_state["taxonomy_level"] = score.maturity_level
+                            st.session_state["taxonomy_label"] = score.maturity_label
+                            st.session_state["taxonomy_dimensions"] = score.dimension_scores
+                            st.session_state["taxonomy_recommendations"] = score.recommendations
+                            st.session_state["taxonomy_plan"] = plan
+                            st.session_state["taxonomy_bundle"] = agent.export_for_other_agents(taxonomy)
+
+                            st.success(
+                                f"Análise concluída! Score: {score.overall_score} "
+                                f"(Nível {score.maturity_level} — {score.maturity_label})"
+                            )
+                        except (FileNotFoundError, ValueError) as exc:
+                            st.error(f"Falha ao carregar a taxonomia: {exc}")
+                        except Exception as exc:  # noqa: BLE001
+                            st.error(f"Erro inesperado durante a análise: {exc}")
+
+            with col2:
+                if "taxonomy_html" in st.session_state:
+                    st.metric(
+                        "Overall Score",
+                        f"{st.session_state['taxonomy_score']}/100",
+                        f"Nível {st.session_state['taxonomy_level']} — "
+                        f"{st.session_state.get('taxonomy_label', '')}",
+                    )
+                    st.download_button(
+                        label="📄 Relatório AS-IS (HTML interativo)",
+                        data=st.session_state["taxonomy_html"],
+                        file_name="taxonomy_as_is_report.html",
+                        mime="text/html",
+                        use_container_width=True,
+                    )
+                    if "taxonomy_as_is_md" in st.session_state:
+                        st.download_button(
+                            label="📝 Relatório AS-IS (Markdown)",
+                            data=st.session_state["taxonomy_as_is_md"],
+                            file_name="taxonomy_as_is_report.md",
+                            mime="text/markdown",
+                            use_container_width=True,
+                        )
+                    if "taxonomy_plan_md" in st.session_state:
+                        st.download_button(
+                            label="🛠️ Plano de Melhoria (Markdown)",
+                            data=st.session_state["taxonomy_plan_md"],
+                            file_name="taxonomy_improvement_plan.md",
+                            mime="text/markdown",
+                            use_container_width=True,
+                        )
+                    if "taxonomy_bundle" in st.session_state:
+                        st.download_button(
+                            label="🔗 Bundle para outros agentes (JSON)",
+                            data=json.dumps(
+                                st.session_state["taxonomy_bundle"],
+                                indent=2,
+                                ensure_ascii=False,
+                            ),
+                            file_name="taxonomy_bundle.json",
+                            mime="application/json",
+                            use_container_width=True,
+                        )
+
+        if "taxonomy_dimensions" in st.session_state:
+            with card_container():
+                st.markdown("**Score por dimensão**")
+                st.dataframe(
+                    [
+                        {"Dimensão": k.replace("_", " ").title(), "Score": v}
+                        for k, v in st.session_state["taxonomy_dimensions"].items()
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            plan = st.session_state.get("taxonomy_plan")
+            if plan is not None:
+                with card_container():
+                    st.markdown("### 🛠️ Plano de Melhoria por Dimensão")
+                    st.caption(
+                        f"Score atual {plan.overall_score:.1f}/100 → meta "
+                        f"{plan.target_overall_score:.1f}/100. As dimensões "
+                        "estão ordenadas pela maior lacuna."
+                    )
+                    for dim_plan in plan.dimensions:
+                        gap = dim_plan.target_score - dim_plan.current_score
+                        with st.expander(
+                            f"{dim_plan.dimension.replace('_', ' ').title()} "
+                            f"— {dim_plan.current_score:.0f}/100 (gap {gap:.0f})"
+                        ):
+                            if dim_plan.findings:
+                                st.markdown("**Achados atuais:**")
+                                for f_msg in dim_plan.findings:
+                                    st.markdown(f"- {f_msg}")
+                            st.markdown("**Ações propostas:**")
+                            for idx, action in enumerate(dim_plan.actions, start=1):
+                                st.markdown(
+                                    f"{idx}. **{action.title}** — {action.detail}"
+                                )
+                                st.caption(
+                                    f"Esforço: {action.effort} · "
+                                    f"Impacto esperado: {action.expected_impact}"
+                                )
+
 with tab2:
-    render_rag_tab()
+    render_lineage_tab()
 with tab3:
-    render_enrichment_tab()
+    render_rag_tab()
 with tab4:
-    render_classification_tab()
+    render_enrichment_tab()
 with tab5:
-    render_quality_tab()
+    render_classification_tab()
 with tab6:
-    render_contracts_tab()
+    render_quality_tab()
 with tab7:
-    render_value_tab()
+    render_contracts_tab()
 with tab8:
-    render_ner_tab()
+    render_value_tab()
 with tab9:
-    render_vault_tab()
+    render_ner_tab()
 with tab10:
-    render_steward_tab()
+    render_vault_tab()
 with tab11:
     render_settings_tab()

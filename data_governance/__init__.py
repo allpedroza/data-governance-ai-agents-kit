@@ -113,10 +113,10 @@ except ImportError:
     _asset_value_available = False
 
 try:
-    from .data_steward import DataStewardAgent
-    _steward_available = True
+    from .taxonomy import TaxonomyAgent, TaxonomyDocument, TaxonomyScore
+    _taxonomy_available = True
 except ImportError:
-    _steward_available = False
+    _taxonomy_available = False
 
 from .data_product_scoring import (
     DataProductScoringAgent,
@@ -155,8 +155,12 @@ if _asset_value_available:
         'AssetValueScore',
     ])
 
-if _steward_available:
-    __all__.append('DataStewardAgent')
+if _taxonomy_available:
+    __all__.extend([
+        'TaxonomyAgent',
+        'TaxonomyDocument',
+        'TaxonomyScore',
+    ])
 
 __all__.extend([
     'DataProductScoringAgent',
