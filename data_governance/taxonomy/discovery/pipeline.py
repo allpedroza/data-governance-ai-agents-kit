@@ -145,7 +145,16 @@ class TaxonomyDiscoveryPipeline:
             len(synthesis.taxonomy.get_all_concepts()),
         )
 
-        score = self.scorer.score(synthesis.taxonomy)
+        # Resolve architecture profile from inventory + declared metadata
+        from ..context import ArchitectureProfile
+        declared = ArchitectureProfile.from_metadata(synthesis.taxonomy.metadata)
+        profile = ArchitectureProfile.detect(inventory, declared=declared)
+        logger.info(
+            "Profile resolved: cloud=%s, pattern=%s, declared=%s",
+            profile.cloud.cloud, profile.pattern.name, profile.declared,
+        )
+
+        score = self.scorer.score(synthesis.taxonomy, profile=profile)
         evaluation = self.evaluator.evaluate(synthesis.taxonomy, score)
 
         return DiscoveryRunResult(

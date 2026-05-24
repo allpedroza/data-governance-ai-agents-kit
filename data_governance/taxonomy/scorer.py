@@ -4,10 +4,17 @@ Evaluates a TaxonomyDocument against eight weighted dimensions. The scoring
 favours coverage and depth over presence alone — e.g., having 11 concept
 groups does not award a perfect structural score unless those groups are
 populated, named and described.
+
+When an :class:`ArchitectureProfile` is supplied (or declared in the
+taxonomy metadata), the scorer becomes context-aware: cloud-specific
+identifier limits influence ``naming_consistency``; architectural
+prefixes (``dim_``, ``fct_``, ``stg_``, ``hub_``...) are treated as
+canonical rather than forbidden abbreviations.
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+from .context import ArchitectureProfile
 from .models import TaxonomyDocument
 
 _SEVERITY_ORDER = {"critical": 0, "major": 1, "minor": 2}
@@ -71,9 +78,19 @@ class TaxonomyScorer:
         "lake_platform_alignment": 0.10,
     }
 
-    def score(self, taxonomy: TaxonomyDocument) -> TaxonomyScore:
+    def score(
+        self,
+        taxonomy: TaxonomyDocument,
+        profile: Optional[ArchitectureProfile] = None,
+    ) -> TaxonomyScore:
         findings: Dict[str, List[str]] = {k: [] for k in self.WEIGHTS.keys()}
         scores: Dict[str, float] = {}
+
+        # Resolve the architecture profile: explicit > metadata > undeclared/generic
+        if profile is None:
+            profile = ArchitectureProfile.from_metadata(taxonomy.metadata)
+        for f_msg in profile.detection_findings:
+            findings["naming_consistency"].append(f_msg)
 
         # 1. Naming Consistency — requires both definition and concrete examples
         nc = taxonomy.naming_conventions
@@ -84,23 +101,49 @@ class TaxonomyScorer:
             if nc.casing_rules.get("examples"):
                 nc_score += 10
                 findings["naming_consistency"].append("Casing rules backed by examples.")
+            # Bonus when declared casing matches the cloud default
+            declared_col_casing = str(nc.casing_rules.get("columns", "")).lower()
+            expected = profile.expected_column_casing().lower()
+            if declared_col_casing and declared_col_casing == expected:
+                nc_score += 10
+                findings["naming_consistency"].append(
+                    f"Column casing aligned with {profile.cloud.cloud} default ({expected})."
+                )
+            elif declared_col_casing and declared_col_casing != expected:
+                findings["naming_consistency"].append(
+                    f"Column casing '{declared_col_casing}' differs from "
+                    f"{profile.cloud.cloud} default '{expected}' — intentional?"
+                )
         if nc.canonical_acronyms:
-            nc_score += 20
+            nc_score += 15
             findings["naming_consistency"].append(
                 f"{len(nc.canonical_acronyms.get('items', []))} canonical acronyms defined."
             )
         if nc.forbidden_forms:
-            nc_score += 20
+            nc_score += 15
             findings["naming_consistency"].append(
                 f"{len(nc.forbidden_forms.get('items', []))} forbidden patterns documented."
             )
         if nc.application_names:
-            nc_score += 15
+            nc_score += 10
             findings["naming_consistency"].append("Application-name casing rules defined.")
         if nc.full_words_required:
             nc_score += 10
             findings["naming_consistency"].append("Full-word-required policy defined.")
-        scores["naming_consistency"] = min(100.0, nc_score)
+        # Cloud identifier-limit awareness
+        all_concepts_for_len = taxonomy.get_all_concepts()
+        if all_concepts_for_len:
+            over_limit = [
+                c.name for c in all_concepts_for_len
+                if len(c.name) > profile.cloud.column_name_max
+            ]
+            if over_limit:
+                findings["naming_consistency"].append(
+                    f"{len(over_limit)} concept name(s) exceed {profile.cloud.cloud} "
+                    f"column-name limit of {profile.cloud.column_name_max} chars."
+                )
+                nc_score -= min(20, len(over_limit) * 4)
+        scores["naming_consistency"] = max(0.0, min(100.0, nc_score))
 
         # 2. Definition Completeness — penalise very short definitions
         concepts = taxonomy.get_all_concepts()
@@ -199,21 +242,47 @@ class TaxonomyScorer:
             )
         scores["governance_readiness"] = round(min(100.0, gr_score), 1)
 
-        # 8. Lake/Platform Alignment
+        # 8. Lake/Platform Alignment — context-aware against architectural pattern
         la_score = 0.0
         zones = taxonomy.lake_standards.zones if taxonomy.lake_standards else []
         if zones:
-            la_score += min(60.0, len(zones) * 20)
+            la_score += min(50.0, len(zones) * 18)
             findings["lake_platform_alignment"].append(
                 f"{len(zones)} lake zones defined."
             )
             if all(z.naming_pattern for z in zones):
-                la_score += 20
+                la_score += 15
                 findings["lake_platform_alignment"].append("All zones declare a naming pattern.")
+            # Medallion pattern: expected zones must be present
+            if profile.pattern.name == "medallion" and profile.pattern.expected_zones:
+                declared = {(z.name or "").lower() for z in zones}
+                missing = [z for z in profile.pattern.expected_zones if z not in declared]
+                if missing:
+                    findings["lake_platform_alignment"].append(
+                        f"Medallion pattern requires zones {list(profile.pattern.expected_zones)}; "
+                        f"missing: {missing}."
+                    )
+                    la_score -= min(15, len(missing) * 5)
+                else:
+                    la_score += 15
+                    findings["lake_platform_alignment"].append("Medallion zones complete.")
+        else:
+            # No zones, but pattern is Inmon — that's intentional, not penalized hard
+            if profile.pattern.name == "inmon":
+                findings["lake_platform_alignment"].append(
+                    "Inmon pattern detected — zones not expected; relying on schema design."
+                )
+                la_score = 60.0
         if taxonomy.lake_standards and taxonomy.lake_standards.project_structure:
             la_score += 20
             findings["lake_platform_alignment"].append("Project structure naming patterns defined.")
-        scores["lake_platform_alignment"] = round(min(100.0, la_score), 1)
+        scores["lake_platform_alignment"] = round(max(0.0, min(100.0, la_score)), 1)
+
+        # Surface the resolved profile in the metadata of the score
+        findings.setdefault("naming_consistency", []).append(
+            f"Profile resolved: cloud={profile.cloud.cloud}, "
+            f"pattern={profile.pattern.name}, declared={profile.declared}."
+        )
 
         overall_score = sum(scores[dim] * weight for dim, weight in self.WEIGHTS.items())
         mat_level, mat_label = self._calculate_maturity_level(overall_score)

@@ -300,18 +300,32 @@ class TaxonomyDocument:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
-    def validate_name(self, name: str, scope: str) -> List[str]:
+    def validate_name(
+        self,
+        name: str,
+        scope: str,
+        profile: Optional[Any] = None,
+    ) -> List[str]:
         """Validate ``name`` against the rules whose ``scope`` matches.
 
         ``forbidden_substring`` rules match on token boundaries (PascalCase /
         snake_case / camelCase) so that, for example, "Cust" only flags
         "CustID" or "CustomerCust" — never "Customer".
+
+        When ``profile`` (an :class:`ArchitectureProfile`) is provided, tokens
+        that match its canonical prefixes / abbreviations (``dim``, ``fct``,
+        ``stg``, ``hub``, ``id``, ``utc``…) are skipped during the
+        ``forbidden_substring`` check — they are part of the architectural
+        vocabulary, not abbreviations.
         """
         if not name:
             return []
         violations: List[str] = []
         tokens = _tokenize_identifier(name)
         token_set = {t.lower() for t in tokens}
+        # Drop tokens that the architectural profile considers canonical
+        if profile is not None and hasattr(profile, "is_canonical_token"):
+            token_set = {t for t in token_set if not profile.is_canonical_token(t)}
         acronyms = {a.upper() for a in self.get_canonical_acronyms()}
 
         for rule in self.validation_rules:

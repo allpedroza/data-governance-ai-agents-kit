@@ -60,21 +60,33 @@ from ..base import LLMProvider, LLMResponse
 
 
 class AnthropicLLM(LLMProvider):
-    """
-    Cliente para modelos Claude via SDK oficial da Anthropic.
+    """Cliente para modelos Claude via SDK oficial da Anthropic.
 
-    Modelos recomendados:
-    - claude-3-5-sonnet-20240620 (equilíbrio custo/desempenho)
-    - claude-3-opus-20240229 (qualidade superior)
-    - claude-3-haiku-20240307 (baixo custo)
+    Modelos suportados (família Claude 4.x — mais recentes primeiro):
+
+    - ``claude-opus-4-7``                    — máxima qualidade, custo alto
+    - ``claude-sonnet-4-6``                  — equilíbrio custo/qualidade (padrão)
+    - ``claude-haiku-4-5-20251001``          — baixo custo / latência baixa
+
+    Use :class:`TaxonomyClaudeLLM` para seleção automática do melhor modelo
+    por estágio (synthesis / evaluation).
+
+    Notas de implementação corrigidas em relação à versão anterior:
+
+    * O parâmetro ``system`` da API Anthropic é top-level — não é um
+      ``message`` com ``role="system"`` como na API OpenAI.
+    * ``temperature=0.0`` é honrado quando o caller pede ``0`` explícito.
     """
+
+    DEFAULT_MODEL = "claude-sonnet-4-6"
 
     def __init__(
         self,
-        model: str = "claude-3-5-sonnet-20240620",
+        model: str = DEFAULT_MODEL,
         api_key: Optional[str] = None,
         default_temperature: float = 0.0,
-        default_max_tokens: int = 2048,
+        default_max_tokens: int = 4096,
+        max_retries: int = 2,
     ):
         try:
             import anthropic
@@ -94,7 +106,7 @@ class AnthropicLLM(LLMProvider):
                 "Set ANTHROPIC_API_KEY environment variable or pass api_key parameter."
             )
 
-        self._client = anthropic.Anthropic(api_key=self._api_key)
+        self._client = anthropic.Anthropic(api_key=self._api_key, max_retries=max_retries)
 
     def generate(
         self,
@@ -103,18 +115,19 @@ class AnthropicLLM(LLMProvider):
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> LLMResponse:
-        messages = []
+        kwargs = {
+            "model": self._model_name,
+            "max_tokens": max_tokens or self._default_max_tokens,
+            "temperature": (
+                temperature if temperature is not None else self._default_temperature
+            ),
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        # Anthropic uses a top-level `system` parameter — NOT a chat message.
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+            kwargs["system"] = system_prompt
 
-        messages.append({"role": "user", "content": prompt})
-
-        response = self._client.messages.create(
-            model=self._model_name,
-            max_tokens=max_tokens or self._default_max_tokens,
-            temperature=temperature if temperature is not None else self._default_temperature,
-            messages=messages,
-        )
+        response = self._client.messages.create(**kwargs)
 
         content_parts = []
         for block in response.content:

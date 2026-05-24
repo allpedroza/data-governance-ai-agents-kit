@@ -27,6 +27,17 @@ from .synthesizer import TaxonomySynthesizer, SynthesisResult
 from .evaluator import TaxonomyEvaluator, EvaluationResult
 from .pipeline import TaxonomyDiscoveryPipeline, DiscoveryRunResult
 
+# Optional Anthropic helper — only import works if the `anthropic` SDK is installed.
+try:
+    from .anthropic_connector import (
+        TaxonomyClaudeLLM,
+        MODEL_OPUS_47, MODEL_SONNET_46, MODEL_HAIKU_45,
+        MODEL_TIERS, STAGE_RECOMMENDATIONS,
+    )
+    _claude_available = True
+except ImportError:
+    _claude_available = False
+
 __all__ = [
     "TaxonomyDiscoveryPipeline",
     "DiscoveryRunResult",
