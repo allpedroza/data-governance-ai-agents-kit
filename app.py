@@ -187,54 +187,266 @@ st.set_page_config(
     layout="wide",
 )
 
+# ---------------------------------------------------------------------------
+# Global design system — aligned with the taxonomy HTML artifact so the whole
+# framework UI feels like a single product. Palette, typography, radii and
+# shadows come from data_governance/taxonomy/html_generator.py.
+# ---------------------------------------------------------------------------
 st.markdown(
     """
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f0f4f8;
-            --card: #ffffff;
-            --border: #e2e8f0;
-            --text: #0f172a;
-            --muted: #64748b;
-            --accent: #3B82F6;
             --primary-dark: #0B2545;
             --primary-mid: #134074;
+            --accent-blue: #3B82F6;
+            --accent-green: #10B981;
+            --accent-amber: #F59E0B;
+            --accent-red: #EF4444;
+            --surface: #F8FAFC;
+            --card: #FFFFFF;
+            --text-primary: #0F172A;
+            --text-secondary: #475569;
+            --text-muted: #94A3B8;
+            --border: #E2E8F0;
+            --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06);
+            --shadow-lg: 0 10px 25px rgba(11, 37, 69, 0.10);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
         }
 
-        .main {
-            background: var(--bg);
-            font-family: 'Inter', sans-serif;
+        html, body, [class*="css"], .stApp, .main, .block-container,
+        button, input, textarea, select {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+                        'Segoe UI', sans-serif !important;
+            color: var(--text-primary);
         }
 
+        .stApp { background: var(--surface); }
+        .block-container { padding-top: 1.5rem; max-width: 1320px; }
+
+        /* ---------------- Typography ---------------- */
+        h1, h2, h3, h4 { color: var(--primary-dark); letter-spacing: -0.01em; }
+        h1 { font-weight: 700; }
+        h2 { font-weight: 600; }
+        h3 { font-weight: 600; font-size: 1.125rem; }
+        p, label, .stMarkdown { color: var(--text-primary); }
+
+        /* ---------------- Helper classes ---------------- */
         .section-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            box-shadow: var(--shadow-sm);
         }
-
         .pill {
             display: inline-block;
-            padding: 0.2rem 0.7rem;
+            padding: 0.25rem 0.75rem;
             border-radius: 999px;
-            background: #eef2ff;
-            color: var(--text);
-            margin-right: 0.4rem;
-            border: 1px solid var(--border);
+            font-size: 0.8rem;
+            background: #EFF6FF;
+            color: var(--accent-blue);
+            border: 1px solid #BFDBFE;
+            margin: 0.1rem 0.25rem 0.1rem 0;
         }
+        .pill.alias  { background: var(--surface); color: var(--text-secondary); border-color: var(--border); }
+        .pill.success { background: #DCFCE7; color: #065F46; border-color: #BBF7D0; }
+        .pill.warning { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+        .pill.danger  { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
 
         .callout {
-            border-left: 4px solid var(--accent);
-            background: #eef2ff;
+            border-left: 4px solid var(--accent-blue);
+            background: #EFF6FF;
             padding: 0.75rem 1rem;
-            border-radius: 12px;
-            color: var(--text);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+        .callout.success { border-left-color: var(--accent-green); background: #ECFDF5; }
+        .callout.warning { border-left-color: var(--accent-amber); background: #FFFBEB; }
+        .callout.danger  { border-left-color: var(--accent-red);   background: #FEF2F2; }
+
+        .compact-header h1, .compact-header p { margin-bottom: 0.35rem; }
+        .compact-header h3 { color: var(--primary-dark); margin-bottom: 0.25rem; }
+        .compact-header .desc { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.75rem; }
+
+        /* ---------------- Streamlit native overrides ---------------- */
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem;
+            background: transparent;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0;
+        }
+        .stTabs [data-baseweb="tab"] {
+            background: transparent;
+            color: var(--text-secondary);
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            font-weight: 500;
+            border: none;
+        }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            color: var(--accent-blue);
+            background: #EFF6FF;
+            border-bottom: 3px solid var(--accent-blue);
         }
 
-        .compact-header h1, .compact-header p {
-            margin-bottom: 0.35rem;
-            color: var(--text);
+        /* Buttons */
+        .stButton > button, .stDownloadButton > button {
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            transition: all 0.15s ease;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+        .stButton > button:hover, .stDownloadButton > button:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        .stButton > button[kind="primary"] {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+        .stButton > button[kind="primary"]:hover {
+            background: var(--primary-mid);
+            color: white;
+            border-color: var(--primary-mid);
+        }
+
+        /* Metrics */
+        [data-testid="stMetric"] {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+        [data-testid="stMetricLabel"] {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+        [data-testid="stMetricValue"] {
+            color: var(--primary-dark);
+            font-weight: 700;
+        }
+
+        /* Inputs */
+        .stTextInput input, .stTextArea textarea, .stNumberInput input,
+        .stSelectbox div[data-baseweb="select"] > div,
+        .stMultiSelect div[data-baseweb="select"] > div {
+            border-radius: var(--radius-sm) !important;
+            border-color: var(--border) !important;
+        }
+        .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
+            border-color: var(--accent-blue) !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
+        }
+
+        /* Expanders */
+        .streamlit-expanderHeader, [data-testid="stExpander"] summary {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        [data-testid="stExpander"] {
+            border-radius: var(--radius-sm);
+        }
+
+        /* Containers with native border (st.container(border=True)) */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: var(--card);
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius-md) !important;
+            box-shadow: var(--shadow-sm);
+            padding: 0.5rem;
+        }
+
+        /* Status panels */
+        [data-testid="stStatus"], [data-testid="stStatusWidget"] {
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--card);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background: var(--card);
+            border-right: 1px solid var(--border);
+        }
+
+        /* Chat messages */
+        [data-testid="stChatMessage"] {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* DataFrames */
+        [data-testid="stDataFrame"] {
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        /* Alerts (info / warning / error / success) */
+        [data-testid="stAlert"] {
+            border-radius: var(--radius-sm);
+            border-left-width: 4px;
+        }
+
+        /* Code blocks */
+        code, pre, .stCode {
+            font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace !important;
+            background: var(--surface);
+            border-radius: 4px;
+            color: var(--primary-dark);
+        }
+
+        /* Hero section helper */
+        .gv-hero {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-mid) 100%);
+            color: white;
+            padding: 2.25rem 2.5rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 1.75rem;
+            box-shadow: var(--shadow-lg);
+        }
+        .gv-hero h1 { color: white; font-size: 2.25rem; margin: 0 0 0.5rem 0; }
+        .gv-hero p  { color: #E2E8F0; font-size: 1.05rem; margin-bottom: 1rem; }
+        .gv-hero .tip {
+            background: rgba(255, 255, 255, 0.10);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            font-size: 0.9rem;
+        }
+        .gv-hero .stat {
+            background: rgba(255, 255, 255, 0.10);
+            backdrop-filter: blur(10px);
+            padding: 1.25rem 1.5rem;
+            border-radius: var(--radius-md);
+            text-align: center;
+            min-width: 140px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .gv-hero .stat .num { font-size: 2.25rem; font-weight: 700; color: white; line-height: 1; }
+        .gv-hero .stat .num.success { color: #34D399; }
+        .gv-hero .stat .lbl {
+            font-size: 0.78rem; color: #94A3B8;
+            text-transform: uppercase; letter-spacing: 1px; margin-top: 0.4rem;
         }
     </style>
     """,
@@ -248,7 +460,7 @@ def section_header(title: str, description: str | None = None) -> None:
     st.markdown("<div class='compact-header'>", unsafe_allow_html=True)
     st.subheader(title)
     if description:
-        st.markdown(f"<p style='color:#475569;'>{description}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='desc'>{description}</p>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -256,6 +468,21 @@ def card_container():
     """Provide a lightly styled container similar to OpenMetadata panels."""
 
     return st.container(border=True)
+
+
+def callout(message: str, kind: str = "info") -> None:
+    """Render a colored callout aligned with the design system.
+
+    ``kind`` ∈ {"info", "success", "warning", "danger"}.
+    """
+    cls = "" if kind == "info" else f" {kind}"
+    st.markdown(f"<div class='callout{cls}'>{message}</div>", unsafe_allow_html=True)
+
+
+def pill(text: str, kind: str = "") -> str:
+    """Return an inline-HTML pill (use with ``st.markdown(..., unsafe_allow_html=True)``)."""
+    cls = f"pill {kind}" if kind else "pill"
+    return f"<span class='{cls}'>{text}</span>"
 
 
 def _initialize_rag_agent() -> None:
@@ -311,39 +538,37 @@ def init_session_state() -> None:
 
 
 def hero_section() -> None:
-    """Top banner with quick context."""
+    """Top banner aligned with the taxonomy design system."""
     st.markdown(
         """
-        <div style="background: linear-gradient(135deg, #0B2545 0%, #134074 100%); 
-                    color: white; 
-                    padding: 2.5rem 3rem; 
-                    border-radius: 16px; 
-                    margin-bottom: 2rem;
-                    box-shadow: 0 10px 25px rgba(11, 37, 69, 0.2);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="gv-hero">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 2rem;">
                 <div style="max-width: 60%;">
-                    <h1 style="color: white; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; margin-top: 0;">Data Governance AI Agents</h1>
-                    <p style="font-size: 1.1rem; color: #E2E8F0; margin-bottom: 1rem;">
-                        Uma interface avançada para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de Dados.
+                    <h1>Data Governance AI Agents</h1>
+                    <p>
+                        Uma interface avançada para orquestrar o framework de IA Generativa
+                        que acelerará seu programa de Governança de Dados.
                     </p>
-                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 0.9rem;">
-                        <span style="color: #60A5FA;">💡 Dica:</span> Defina sua <code>OPENAI_API_KEY</code> para ativar buscas vetoriais, geração de metadados e relatórios ricos.
+                    <div class="tip">
+                        <span style="color: #60A5FA;">💡 Dica:</span>
+                        Defina sua <code style="background: rgba(255,255,255,0.15); color: #E2E8F0; padding: 0.1rem 0.4rem; border-radius: 4px;">OPENAI_API_KEY</code>
+                        para ativar buscas vetoriais, geração de metadados e relatórios ricos.
                     </div>
                 </div>
-                <div style="display: flex; gap: 1.5rem;">
-                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
-                        <div style="font-size: 2.5rem; font-weight: 700; color: white; line-height: 1;">11</div>
-                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Agentes Ativos</div>
+                <div style="display: flex; gap: 1rem;">
+                    <div class="stat">
+                        <div class="num">11</div>
+                        <div class="lbl">Agentes Ativos</div>
                     </div>
-                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 1.5rem; border-radius: 12px; text-align: center; min-width: 140px; border: 1px solid rgba(255,255,255,0.2);">
-                        <div style="font-size: 2.5rem; font-weight: 700; color: #34D399; line-height: 1;">Pronto</div>
-                        <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Status Sessão</div>
+                    <div class="stat">
+                        <div class="num success">Pronto</div>
+                        <div class="lbl">Status Sessão</div>
                     </div>
                 </div>
             </div>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
