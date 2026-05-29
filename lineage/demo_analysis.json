@@ -1,0 +1,1088 @@
+{
+  "timestamp": "2025-12-14T08:58:43.969143",
+  "assets": [
+    {
+      "name": "raw_sales.csv",
+      "type": "file",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/extract_sales.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "SELECT * FROM customers",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/extract_sales.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "processed_sales.parquet",
+      "type": "file",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/ml_pipeline.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "kafka:localhost:9092/user_events",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "processed_stream",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "events_stream.value",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "processed_stream.data",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "aggregated_stream",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "delta:/delta/tables/event_aggregations",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_features.csv",
+      "type": "file",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/ml_pipeline.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "ml_prepared_data.parquet",
+      "type": "file",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/ml_pipeline.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "churn_predictions.csv",
+      "type": "file",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/ml_pipeline.py",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "metrics_history.metric_date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "result.metric_date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "metrics_history.total_revenue",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "result.total_revenue",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "result.prev_revenue",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "result.growth_rate",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_customer.customer_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_segments.customer_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_customer.customer_segment",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_segments.customer_segment",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.customer_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_segments.total_purchases",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.amount",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_segments.avg_purchase_value",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "customer_segments.customer_tier",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_product.product_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.product_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_product.product_name",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.product_name",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_product.product_category",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.product_category",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.quantity",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.units_sold",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.revenue",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "product_performance.unique_buyers",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.product_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.total_sales",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.unique_customers",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_date.date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.product_category",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.customer_segment",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.date_id",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "mv_daily_kpis.date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "mv_daily_kpis.daily_revenue",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "mv_daily_kpis.daily_customers",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary.*",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "metrics_history.record_count",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "system.CURRENT_DATE",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "metrics_history.snapshot_date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "sales_summary",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "metrics_history",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "fact_sales.date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "dim_customer.last_purchase_date",
+      "type": "table",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "aws_glue_catalog_database.analytics",
+      "type": "terraform_resource",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/infrastructure.tf",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "aws_glue_catalog_table.sales_fact",
+      "type": "terraform_resource",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/infrastructure.tf",
+      "schema": {},
+      "metadata": {}
+    },
+    {
+      "name": "databricks_table.ml_features",
+      "type": "terraform_resource",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/infrastructure.tf",
+      "schema": {},
+      "metadata": {}
+    }
+  ],
+  "transformations": [
+    {
+      "source": "kafka:localhost:9092/user_events",
+      "target": "processed_stream",
+      "operation": "readStream",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "confidence": 0.9
+    },
+    {
+      "source": "events_stream.value",
+      "target": "processed_stream.data",
+      "operation": "select/from_json",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "confidence": 0.8
+    },
+    {
+      "source": "processed_stream",
+      "target": "aggregated_stream",
+      "operation": "groupBy/agg",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "confidence": 0.9
+    },
+    {
+      "source": "aggregated_stream",
+      "target": "delta:/delta/tables/event_aggregations",
+      "operation": "writeStream",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/streaming_notebook.py",
+      "confidence": 0.95
+    },
+    {
+      "source": "metrics_history.metric_date",
+      "target": "result.metric_date",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "metrics_history.total_revenue",
+      "target": "result.total_revenue",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "metrics_history.total_revenue",
+      "target": "result.prev_revenue",
+      "operation": "WINDOW_LAG",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.97
+    },
+    {
+      "source": "metrics_history.total_revenue",
+      "target": "result.growth_rate",
+      "operation": "EXPRESSION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.95
+    },
+    {
+      "source": "metrics_history.metric_date",
+      "target": "result.growth_rate",
+      "operation": "WINDOW_ORDER_BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.7
+    },
+    {
+      "source": "metrics_history.metric_date",
+      "target": "result.prev_revenue",
+      "operation": "WINDOW_ORDER_BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.7
+    },
+    {
+      "source": "dim_customer.customer_id",
+      "target": "customer_segments.customer_id",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "dim_customer.customer_segment",
+      "target": "customer_segments.customer_segment",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "customer_segments.total_purchases",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "fact_sales.amount",
+      "target": "customer_segments.avg_purchase_value",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.98
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "customer_segments.avg_purchase_value",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.9
+    },
+    {
+      "source": "dim_customer.customer_id",
+      "target": "customer_segments.total_purchases",
+      "operation": "JOIN",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.8
+    },
+    {
+      "source": "dim_customer.customer_id",
+      "target": "customer_segments.avg_purchase_value",
+      "operation": "JOIN",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.8
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "customer_segments.customer_tier",
+      "operation": "CASE",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": 0.9
+    },
+    {
+      "source": "dim_product.product_id",
+      "target": "product_performance.product_id",
+      "operation": "SELECT/GROUP BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_product.product_name",
+      "target": "product_performance.product_name",
+      "operation": "SELECT/GROUP BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_product.product_category",
+      "target": "product_performance.product_category",
+      "operation": "SELECT/GROUP BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.quantity",
+      "target": "product_performance.units_sold",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.amount",
+      "target": "product_performance.revenue",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "product_performance.unique_buyers",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_product.product_id",
+      "target": "fact_sales.product_id",
+      "operation": "JOIN",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/analysis_queries.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.amount",
+      "target": "sales_summary.total_sales",
+      "operation": "SUM",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "sales_summary.unique_customers",
+      "operation": "COUNT_DISTINCT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_date.date",
+      "target": "sales_summary.date",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_product.product_category",
+      "target": "sales_summary.product_category",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "dim_customer.customer_segment",
+      "target": "sales_summary.customer_segment",
+      "operation": "SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.date_id",
+      "target": "sales_summary.date",
+      "operation": "JOIN_KEY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "medium"
+    },
+    {
+      "source": "fact_sales.product_id",
+      "target": "sales_summary.product_category",
+      "operation": "JOIN_KEY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "medium"
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "sales_summary.customer_segment",
+      "operation": "JOIN_KEY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "medium"
+    },
+    {
+      "source": "sales_summary.date",
+      "target": "mv_daily_kpis.date",
+      "operation": "SELECT/GROUP BY",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "sales_summary.total_sales",
+      "target": "mv_daily_kpis.daily_revenue",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "sales_summary.unique_customers",
+      "target": "mv_daily_kpis.daily_customers",
+      "operation": "AGGREGATION",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "sales_summary.total_sales",
+      "target": "metrics_history.total_revenue",
+      "operation": "INSERT SELECT SUM",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "sales_summary.*",
+      "target": "metrics_history.record_count",
+      "operation": "INSERT SELECT COUNT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "medium"
+    },
+    {
+      "source": "system.CURRENT_DATE",
+      "target": "metrics_history.snapshot_date",
+      "operation": "INSERT SELECT literal",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "sales_summary",
+      "target": "metrics_history",
+      "operation": "INSERT SELECT",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.date",
+      "target": "dim_customer.last_purchase_date",
+      "operation": "UPDATE with scalar subquery",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    },
+    {
+      "source": "fact_sales.customer_id",
+      "target": "dim_customer.last_purchase_date",
+      "operation": "UPDATE join/filter",
+      "source_file": "/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_0c9yoxuu/transform_data.sql",
+      "confidence": "high"
+    }
+  ],
+  "metrics": {
+    "total_assets": 59,
+    "total_transformations": 42,
+    "asset_types": {
+      "file": 5,
+      "table": 51,
+      "terraform_resource": 3
+    },
+    "operation_types": {
+      "readStream": 1,
+      "select/from_json": 1,
+      "groupBy/agg": 1,
+      "writeStream": 1,
+      "SELECT": 7,
+      "WINDOW_LAG": 1,
+      "EXPRESSION": 1,
+      "WINDOW_ORDER_BY": 2,
+      "AGGREGATION": 8,
+      "JOIN": 3,
+      "CASE": 1,
+      "SELECT/GROUP BY": 4,
+      "SUM": 1,
+      "COUNT_DISTINCT": 1,
+      "JOIN_KEY": 3,
+      "INSERT SELECT SUM": 1,
+      "INSERT SELECT COUNT": 1,
+      "INSERT SELECT literal": 1,
+      "INSERT SELECT": 1,
+      "UPDATE with scalar subquery": 1,
+      "UPDATE join/filter": 1
+    },
+    "complexity_metrics": {
+      "nodes": 59,
+      "edges": 42,
+      "density": 0.012273524254821741,
+      "avg_degree": 1.423728813559322,
+      "strongly_connected_components": 59,
+      "weakly_connected_components": 19,
+      "has_cycles": false
+    }
+  },
+  "critical_components": {
+    "single_points_of_failure": [
+      {
+        "asset": "aggregated_stream",
+        "downstream_impact": 1,
+        "type": "table"
+      },
+      {
+        "asset": "processed_stream",
+        "downstream_impact": 2,
+        "type": "table"
+      },
+      {
+        "asset": "metrics_history.total_revenue",
+        "downstream_impact": 3,
+        "type": "table"
+      },
+      {
+        "asset": "dim_customer.customer_id",
+        "downstream_impact": 3,
+        "type": "table"
+      },
+      {
+        "asset": "fact_sales.customer_id",
+        "downstream_impact": 8,
+        "type": "table"
+      },
+      {
+        "asset": "sales_summary.unique_customers",
+        "downstream_impact": 1,
+        "type": "table"
+      },
+      {
+        "asset": "dim_customer.customer_segment",
+        "downstream_impact": 2,
+        "type": "table"
+      },
+      {
+        "asset": "sales_summary.customer_segment",
+        "downstream_impact": 0,
+        "type": "table"
+      },
+      {
+        "asset": "dim_customer.last_purchase_date",
+        "downstream_impact": 0,
+        "type": "table"
+      },
+      {
+        "asset": "customer_segments.avg_purchase_value",
+        "downstream_impact": 0,
+        "type": "table"
+      },
+      {
+        "asset": "fact_sales.amount",
+        "downstream_impact": 8,
+        "type": "table"
+      },
+      {
+        "asset": "sales_summary.total_sales",
+        "downstream_impact": 5,
+        "type": "table"
+      },
+      {
+        "asset": "metrics_history.metric_date",
+        "downstream_impact": 3,
+        "type": "table"
+      },
+      {
+        "asset": "dim_product.product_category",
+        "downstream_impact": 2,
+        "type": "table"
+      },
+      {
+        "asset": "sales_summary.product_category",
+        "downstream_impact": 0,
+        "type": "table"
+      },
+      {
+        "asset": "fact_sales.product_id",
+        "downstream_impact": 1,
+        "type": "table"
+      },
+      {
+        "asset": "dim_product.product_id",
+        "downstream_impact": 3,
+        "type": "table"
+      },
+      {
+        "asset": "sales_summary.date",
+        "downstream_impact": 1,
+        "type": "table"
+      }
+    ],
+    "critical_paths": [
+      {
+        "path": [
+          "kafka:localhost:9092/user_events",
+          "processed_stream",
+          "aggregated_stream",
+          "delta:/delta/tables/event_aggregations"
+        ],
+        "length": 4,
+        "description": "Caminho cr\u00edtico com 4 assets"
+      }
+    ],
+    "high_impact_assets": [
+      {
+        "asset": "metrics_history.metric_date",
+        "downstream_count": 3,
+        "upstream_count": 0,
+        "type": "table",
+        "reason": "high_fan_out"
+      },
+      {
+        "asset": "metrics_history.total_revenue",
+        "downstream_count": 3,
+        "upstream_count": 1,
+        "type": "table",
+        "reason": "high_fan_out"
+      },
+      {
+        "asset": "dim_customer.customer_id",
+        "downstream_count": 3,
+        "upstream_count": 0,
+        "type": "table",
+        "reason": "high_fan_out"
+      },
+      {
+        "asset": "fact_sales.customer_id",
+        "downstream_count": 7,
+        "upstream_count": 0,
+        "type": "table",
+        "reason": "high_fan_out"
+      },
+      {
+        "asset": "fact_sales.amount",
+        "downstream_count": 3,
+        "upstream_count": 0,
+        "type": "table",
+        "reason": "high_fan_out"
+      }
+    ],
+    "bottleneck_assets": [],
+    "subgraphs": [
+      {
+        "id": 3,
+        "size": 4,
+        "assets": [
+          "processed_stream",
+          "kafka:localhost:9092/user_events",
+          "aggregated_stream",
+          "delta:/delta/tables/event_aggregations"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 4 assets (table)"
+      },
+      {
+        "id": 4,
+        "size": 2,
+        "assets": [
+          "processed_stream.data",
+          "events_stream.value"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      },
+      {
+        "id": 8,
+        "size": 24,
+        "assets": [
+          "sales_summary.unique_customers",
+          "customer_segments.customer_id",
+          "metrics_history.total_revenue",
+          "mv_daily_kpis.daily_revenue",
+          "sales_summary.customer_segment",
+          "result.prev_revenue",
+          "dim_customer.last_purchase_date",
+          "fact_sales.amount",
+          "customer_segments.avg_purchase_value",
+          "product_performance.revenue"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 24 assets (table)"
+      },
+      {
+        "id": 9,
+        "size": 6,
+        "assets": [
+          "product_performance.product_category",
+          "product_performance.product_id",
+          "dim_product.product_category",
+          "sales_summary.product_category",
+          "dim_product.product_id",
+          "fact_sales.product_id"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 6 assets (table)"
+      },
+      {
+        "id": 10,
+        "size": 2,
+        "assets": [
+          "dim_product.product_name",
+          "product_performance.product_name"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      },
+      {
+        "id": 11,
+        "size": 2,
+        "assets": [
+          "product_performance.units_sold",
+          "fact_sales.quantity"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      },
+      {
+        "id": 12,
+        "size": 4,
+        "assets": [
+          "fact_sales.date_id",
+          "sales_summary.date",
+          "dim_date.date",
+          "mv_daily_kpis.date"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 4 assets (table)"
+      },
+      {
+        "id": 13,
+        "size": 2,
+        "assets": [
+          "metrics_history.record_count",
+          "sales_summary.*"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      },
+      {
+        "id": 14,
+        "size": 2,
+        "assets": [
+          "metrics_history.snapshot_date",
+          "system.CURRENT_DATE"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      },
+      {
+        "id": 15,
+        "size": 2,
+        "assets": [
+          "sales_summary",
+          "metrics_history"
+        ],
+        "dominant_type": "table",
+        "description": "Componente com 2 assets (table)"
+      }
+    ],
+    "isolated_components": [
+      "raw_sales.csv",
+      "SELECT * FROM customers",
+      "processed_sales.parquet",
+      "customer_features.csv",
+      "ml_prepared_data.parquet",
+      "churn_predictions.csv",
+      "aws_glue_catalog_database.analytics",
+      "aws_glue_catalog_table.sales_fact",
+      "databricks_table.ml_features"
+    ]
+  },
+  "insights": {
+    "summary": "O grafo de linhagem mostra um ecossistema predominantemente tabular (51/59 assets) com baixa densidade (0,012), ac\u00edclico e grau m\u00e9dio de 1,42, o que sugere uma malha de depend\u00eancias relativamente simples e modular. Entretanto, a presen\u00e7a de 18 pontos \u00fanicos de falha (SPOFs) e 5 assets de alto impacto eleva o risco operacional, pois chaves e colunas cr\u00edticas (por exemplo, fact_sales.customer_id, dim_customer.customer_id, metrics_history.total_revenue) concentram depend\u00eancias rio abaixo. Streams agregados/ processados alimentam partes do pipeline, conectando ingest\u00e3o a camadas anal\u00edticas.\nEm termos de impacto, a concentra\u00e7\u00e3o de depend\u00eancias em identificadores e m\u00e9tricas centrais cria um potencial raio de explos\u00e3o consider\u00e1vel para quebras de esquema, atrasos de carga e desvios de qualidade. A aus\u00eancia de ciclos e a baixa densidade s\u00e3o favor\u00e1veis para conten\u00e7\u00e3o de incidentes, mas a criticidade de poucos n\u00f3s exige controles de qualidade, contratos de dados e redund\u00e2ncia direcionada para evitar quedas significativas no downstream de relat\u00f3rios e indicadores financeiros.",
+    "recommendations": [
+      "Tratar SPOFs cr\u00edticos: introduzir redund\u00e2ncia ou materializa\u00e7\u00f5es est\u00e1veis para fact_sales.customer_id, dim_customer.customer_id e m\u00e9tricas de metrics_history (ex.: materialized views com refresh incremental e fallback).",
+      "Impor contratos de dados (data contracts) e testes de esquema/sem\u00e2ntica nos producers de aggregated_stream e processed_stream (tipagem, obrigatoriedade de campos, faixas v\u00e1lidas, nulos).",
+      "Garantir integridade referencial entre fact_sales.customer_id e dim_customer.customer_id (chaves naturais ou surrogate keys; valida\u00e7\u00e3o de foreign keys ou checks equivalentes na engine).",
+      "Observabilidade com alertas de linhagem: configurar monitoramento orientado a depend\u00eancias para ativos de alto impacto (SLOs, atraso, volume, taxa de erro, varia\u00e7\u00e3o).",
+      "Qualidade de dados: testes de regras para fact_sales.amount e metrics_history.total_revenue (distribui\u00e7\u00f5es, outliers, somat\u00f3rios por janela, reconcilia\u00e7\u00e3o com fontes cont\u00e1beis).",
+      "Particionamento e clustering por metric_date (e data de venda) para acelerar consultas e minimizar janelas de recomputa\u00e7\u00e3o; manter reten\u00e7\u00e3o e compacta\u00e7\u00e3o de parti\u00e7\u00f5es frias.",
+      "Versionamento de esquema e migra\u00e7\u00f5es declarativas para tabelas de n\u00facleo anal\u00edtico; aplicar valida\u00e7\u00f5es em PRs e gates de deploy.",
+      "Tornar reprocessamento barato: estrat\u00e9gias de backfill idempotente (por dia/parti\u00e7\u00e3o), snapshotting de dimens\u00f5es e CDC para corrigir atrasos do streaming.",
+      "Mitigar risco em streams: retries, DLQs, deduplica\u00e7\u00e3o por chaves de neg\u00f3cio e checkpoints transacionais; documentar SLAs de lat\u00eancia end-to-end.",
+      "Gerir terraform_resource com pipelines de IaC (plan/apply com revis\u00e3o, detec\u00e7\u00e3o de drift e bloqueios de estado); propagar mudan\u00e7as de infra para consumidores com janelas de manuten\u00e7\u00e3o.",
+      "Cat\u00e1logo e documenta\u00e7\u00e3o de linhagem: anotar colunas cr\u00edticas, sem\u00e2ntica e regras de deriva\u00e7\u00e3o de m\u00e9tricas; expor lineage impact em mudan\u00e7as.",
+      "Desacoplar depend\u00eancias de alto grau: onde poss\u00edvel, introduzir camadas de views est\u00e1veis/contratuais entre fontes vol\u00e1teis e camadas de consumo."
+    ],
+    "risk_assessment": "MEDIUM: apesar da baixa densidade e aus\u00eancia de ciclos reduzirem a complexidade operacional, h\u00e1 18 SPOFs e ativos de alto impacto centrados em chaves e m\u00e9tricas financeiras. Um incidente nesses n\u00f3s pode afetar entre 3 e 8 assets downstream. A presen\u00e7a de streams e recursos Terraform adiciona risco de integra\u00e7\u00e3o/infra. Com controles adequados (contratos, testes, materializa\u00e7\u00f5es e observabilidade), o risco pode ser mitigado sem exigir grandes refatora\u00e7\u00f5es estruturais.",
+    "subgraph_summaries": [
+      {
+        "name": "Componente 1 \u2014 N\u00facleo anal\u00edtico (24 assets, table)",
+        "description": "Maior subgrafo, provavelmente concentrando fact_sales, dim_customer e m\u00e9tricas correlatas. Alta centralidade em colunas-chave (customer_id) e medidas (amount), servindo de base para relat\u00f3rios e agrega\u00e7\u00f5es."
+      },
+      {
+        "name": "Componente 2 \u2014 M\u00e9tricas hist\u00f3ricas (4 assets, table)",
+        "description": "Conjunto focado em metrics_history (metric_date, total_revenue). Alimenta pain\u00e9is e s\u00e9ries temporais; sens\u00edvel a atrasos de ingest\u00e3o e a quebras de esquema."
+      },
+      {
+        "name": "Componente 3 \u2014 Lookups/Dimens\u00f5es leves (2 assets, table)",
+        "description": "Pequeno hub de tabelas de refer\u00eancia ou dimens\u00f5es auxiliares. Baixo acoplamento, mas pode afetar joins cr\u00edticos se ausente."
+      },
+      {
+        "name": "Componente 4 \u2014 Ingest\u00e3o por stream (aggregated_stream, processed_stream)",
+        "description": "Subgrafo de streaming que alimenta camadas de staging; requer confiabilidade (retries, DLQ, dedupe) e contratos de dados para estabilidade rio abaixo."
+      },
+      {
+        "name": "Componente 5 \u2014 Staging/bronze (tables)",
+        "description": "Camada intermedi\u00e1ria para normaliza\u00e7\u00e3o e saneamento de dados brutos antes de transformar para o core; ideal para valida\u00e7\u00f5es e esquemas tolerantes a evolu\u00e7\u00e3o."
+      },
+      {
+        "name": "Componente 6 \u2014 Arquivos de entrada (5 assets, file)",
+        "description": "Fontes em arquivo (landing). Variabilidade de formato e qualidade; recomenda-se valida\u00e7\u00e3o de esquema, controle de vers\u00f5es e parti\u00e7\u00f5es por data de chegada."
+      },
+      {
+        "name": "Componente 7 \u2014 Camada de apresenta\u00e7\u00e3o (tables/views)",
+        "description": "Views/materialized views consumidas por BI e relat\u00f3rios; dependem fortemente das tabelas n\u00facleo e das m\u00e9tricas hist\u00f3ricas."
+      },
+      {
+        "name": "Componente 8 \u2014 Recursos de Infra (3 assets, terraform_resource)",
+        "description": "Recursos provisionados via Terraform (buckets, t\u00f3picos, permiss\u00f5es). Mudan\u00e7as aqui podem impactar ingest\u00e3o/armazenamento; exige governan\u00e7a de IaC."
+      },
+      {
+        "name": "Componente 9 \u2014 Exporta\u00e7\u00f5es/feeds externos",
+        "description": "Tabelas ou jobs que publicam dados para sistemas externos. Ponto de acoplamento com SLAs de terceiros e necessidades de versionamento de contrato."
+      },
+      {
+        "name": "Componente 10 \u2014 Sandbox/Desenvolvimento",
+        "description": "Espa\u00e7o de experimenta\u00e7\u00e3o para transforma\u00e7\u00f5es e testes; ideal para validar migra\u00e7\u00f5es e impactos de linhagem antes de promover a produ\u00e7\u00e3o."
+      }
+    ]
+  }
+}

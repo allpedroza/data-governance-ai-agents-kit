@@ -1,0 +1,359 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Relatório de Análise de Linhagem de Dados</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 200px;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .metric-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        .visualization-links {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .viz-link {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .viz-link:hover {
+            background: #2980b9;
+        }
+        .documentation {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        pre {
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 14px;
+        }
+        .insights-section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .insight-summary {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .risk-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+        .risk-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .risk-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .recommendation-list {
+            list-style: none;
+            padding: 0;
+        }
+        .recommendation-list li {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+        .critical-component {
+            background: #fff3cd;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border-left: 3px solid #ffc107;
+        }
+        .warning-icon {
+            color: #ff9800;
+        }
+        .error-icon {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Relatório de Análise de Linhagem de Dados</h1>
+    <p class="timestamp">Gerado: 2025-12-01 10:13:32</p>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-value">57</div>
+            <div class="metric-label">Total de Assets</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">39</div>
+            <div class="metric-label">Transformações</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">3</div>
+            <div class="metric-label">Tipos de Assets</div>
+        </div>
+    </div>
+
+    <h2>🤖 Insights Automáticos e Análise Crítica</h2>
+    <div class="insights-section">
+
+        <h3>📊 Resumo Executivo</h3>
+        <div class="insight-summary">
+            <p>O pipeline analisado contém 57 assets de dados com 39 transformações. Foram identificados 13 pontos únicos de falha que requerem atenção especial.</p>
+        </div>
+
+        <h3>💡 Avaliação de Risco</h3>
+        <div class="risk-badge risk-high">HIGH - Pipeline com múltiplos pontos críticos</div>
+
+        <h3>📋 Recomendações</h3>
+        <ul class="recommendation-list">
+            <li>🔴 Implementar redundância para 13 pontos únicos de falha identificados</li>
+            <li>📦 Revisar 9 assets isolados que podem estar órfãos</li>
+        </ul>
+
+        <h3><span class="error-icon">🔴</span> Pontos Únicos de Falha</h3>
+        <div class="critical-component">
+            <strong>aggregated_stream</strong> (table)<br>
+            Impacta <strong>1</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>processed_stream</strong> (table)<br>
+            Impacta <strong>2</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>m.total_revenue</strong> (table)<br>
+            Impacta <strong>2</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>m.metric_date</strong> (table)<br>
+            Impacta <strong>2</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>fact_sales.customer_id</strong> (table)<br>
+            Impacta <strong>8</strong> assets downstream
+        </div>
+
+        <h3>🛣️ Caminhos Críticos</h3>
+        <div class="critical-component">
+            <strong>Caminho crítico com 4 assets</strong><br>
+            <code style="font-size: 0.85em;">kafka:localhost:9092/user_events → processed_stream → aggregated_stream → delta:/delta/tables/event_aggregations</code>
+        </div>
+    </div>
+
+    <h2>📈 Visualizações Interativas</h2>
+    <div class="visualization-links">
+        <a href="report_dashboard.html" class="viz-link" target="_blank">Dashboard</a>
+        <a href="report_force.html" class="viz-link" target="_blank">Grafo Force-Directed</a>
+        <a href="report_sankey.html" class="viz-link" target="_blank">Diagrama de Fluxo de Dados</a>
+
+    </div>
+
+    <h2>📝 Documentação Detalhada</h2>
+    <div class="documentation">
+        <pre># 📊 Documentação de Linhagem de Dados
+**Gerado em:** 2025-12-01 10:13:32
+
+## 📈 Resumo
+- **Total de Assets:** 57
+- **Total de Transformações:** 39
+- **Tipos de Assets:** terraform_resource, table, file
+
+## 🗂️ Assets de Dados
+
+### TERRAFORM_RESOURCE
+- **aws_glue_catalog_database.analytics**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/infrastructure.tf`
+- **aws_glue_catalog_table.sales_fact**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/infrastructure.tf`
+- **databricks_table.ml_features**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/infrastructure.tf`
+
+### TABLE
+- **SELECT * FROM customers**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/extract_sales.py`
+- **kafka:localhost:9092/user_events**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/streaming_notebook.py`
+- **processed_stream**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/streaming_notebook.py`
+- **aggregated_stream**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/streaming_notebook.py`
+- **delta:/delta/tables/event_aggregations**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/streaming_notebook.py`
+- **metrics_history.metric_date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **m.metric_date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **metrics_history.total_revenue**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **m.total_revenue**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **prev_revenue**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **growth_rate**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_customer.customer_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **customer_segments.customer_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_customer.customer_segment**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **customer_segments.customer_segment**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **fact_sales.customer_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **fact_sales.***
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **customer_segments.total_purchases**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **fact_sales.amount**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **customer_segments.avg_purchase_value**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **customer_segments.customer_tier**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_product.product_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.product_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_product.product_name**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.product_name**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_product.product_category**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.product_category**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **fact_sales.quantity**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.units_sold**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.revenue**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance.unique_buyers**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **dim_product.product_id = fact_sales.product_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **product_performance**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/analysis_queries.sql`
+- **sales_summary.total_sales**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **sales_summary.unique_customers**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **dim_date.date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **sales_summary.date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **sales_summary.product_category**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **sales_summary.customer_segment**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **fact_sales.date_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **dim_date.date_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **fact_sales.product_id**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **mv_daily_kpis.date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **mv_daily_kpis.daily_revenue**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **mv_daily_kpis.daily_customers**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **sales_summary**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **metrics_history**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **fact_sales.date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+- **dim_customer.last_purchase_date**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/transform_data.sql`
+
+### FILE
+- **raw_sales.csv**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/extract_sales.py`
+- **processed_sales.parquet**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/ml_pipeline.py`
+- **customer_features.csv**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/ml_pipeline.py`
+- **ml_prepared_data.parquet**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/ml_pipeline.py`
+- **churn_predictions.csv**
+  - Arquivo: `/var/folders/21/0w991r752_12lzxm2bs9jcn00000gn/T/lineage_demo_qbdg0916/ml_pipeline.py`
+
+## 🔄 Fluxos de Dados Principais
+
+**fact_sales.customer_id**
+- Entradas: 0 | Saídas: 7
+- Envia para: customer_segments.customer_id, customer_segments.total_purchases, customer_segments.avg_purchase_value
+
+**fact_sales.amount**
+- Entradas: 0 | Saídas: 3
+- Envia para: customer_segments.avg_purchase_value, product_performance.revenue, sales_summary.total_sales
+
+## ⚠️ Alertas e Observações
+- **Nós isolados:** raw_sales.csv, SELECT * FROM customers, processed_sales.parquet, customer_features.csv, ml_prepared_data.parquet
+</pre>
+    </div>
+    
+</body>
+</html>

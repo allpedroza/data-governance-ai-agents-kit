@@ -861,41 +861,66 @@ class DataLineageVisualizer:
         <head>
             <title>Data Lineage Analysis - AI Enhanced</title>
             <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
                 body {{
-                    font-family: 'Segoe UI', Arial, sans-serif;
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     margin: 0;
                     padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: #020617;
+                    background-image: radial-gradient(circle at 20% 30%, rgba(59,130,246,0.06) 0%, transparent 50%),
+                                      radial-gradient(circle at 80% 70%, rgba(139,92,246,0.04) 0%, transparent 40%);
                     min-height: 100vh;
+                    color: #f1f5f9;
+                    -webkit-font-smoothing: antialiased;
                 }}
                 .container {{
                     max-width: 1400px;
                     margin: 0 auto;
-                    background: white;
+                    background: rgba(15,23,42,0.80);
+                    backdrop-filter: blur(12px);
                     border-radius: 20px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
                     overflow: hidden;
+                    border: 1px solid rgba(51,65,85,0.45);
                 }}
                 .header {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
                     color: white;
                     padding: 40px;
                     text-align: center;
+                    position: relative;
+                    overflow: hidden;
+                }}
+                .header::before {{
+                    content: '';
+                    position: absolute; top: -50%; left: -50%;
+                    width: 200%; height: 200%;
+                    background: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.08) 0%, transparent 50%);
+                    pointer-events: none;
                 }}
                 .header h1 {{
                     margin: 0;
-                    font-size: 2.5em;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                    font-size: 2.4em;
+                    font-weight: 800;
+                    letter-spacing: -0.03em;
+                    position: relative;
+                }}
+                .header p {{
+                    opacity: 0.85;
+                    position: relative;
                 }}
                 .content {{
                     padding: 40px;
                 }}
                 .summary-section {{
-                    background: #f8f9fa;
-                    border-left: 5px solid #667eea;
+                    background: rgba(15,23,42,0.55);
+                    backdrop-filter: blur(8px);
+                    border-left: 4px solid #3b82f6;
                     padding: 20px;
                     margin: 20px 0;
-                    border-radius: 10px;
+                    border-radius: 14px;
+                    border: 1px solid rgba(51,65,85,0.45);
+                    color: #94a3b8;
                 }}
                 .insights-grid {{
                     display: grid;
@@ -904,60 +929,67 @@ class DataLineageVisualizer:
                     margin: 20px 0;
                 }}
                 .insight-card {{
-                    background: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 10px;
+                    background: rgba(15,23,42,0.55);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(51,65,85,0.45);
+                    border-radius: 14px;
                     padding: 20px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    transition: transform 0.3s;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                    transition: all 0.25s cubic-bezier(.4,0,.2,1);
                 }}
                 .insight-card:hover {{
-                    transform: translateY(-5px);
-                    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+                    transform: translateY(-3px);
+                    border-color: rgba(59,130,246,0.35);
+                    box-shadow: 0 0 24px rgba(59,130,246,0.18);
                 }}
                 .severity-critical {{
-                    border-top: 5px solid #e74c3c;
+                    border-top: 4px solid #ef4444;
                 }}
                 .severity-high {{
-                    border-top: 5px solid #f39c12;
+                    border-top: 4px solid #f59e0b;
                 }}
                 .severity-medium {{
-                    border-top: 5px solid #3498db;
+                    border-top: 4px solid #3b82f6;
                 }}
                 .severity-low {{
-                    border-top: 5px solid #95a5a6;
+                    border-top: 4px solid #64748b;
                 }}
                 .metric {{
                     display: inline-block;
-                    background: #667eea;
+                    background: linear-gradient(135deg,#3b82f6,#8b5cf6);
                     color: white;
                     padding: 10px 20px;
-                    border-radius: 20px;
+                    border-radius: 999px;
                     margin: 5px;
-                    font-weight: bold;
+                    font-weight: 600;
+                    font-size: 0.9em;
+                    box-shadow: 0 0 20px rgba(59,130,246,0.18);
                 }}
                 .recommendation {{
-                    background: #e8f5e9;
-                    border: 1px solid #4caf50;
-                    border-radius: 10px;
+                    background: rgba(34,197,94,0.08);
+                    border: 1px solid rgba(34,197,94,0.3);
+                    border-radius: 14px;
                     padding: 15px;
                     margin: 10px 0;
                 }}
                 .recommendation h4 {{
-                    color: #2e7d32;
+                    color: #22c55e;
                     margin-top: 0;
+                    font-weight: 600;
                 }}
                 pre {{
-                    background: #f4f4f4;
+                    background: rgba(15,23,42,0.7);
+                    color: #94a3b8;
                     padding: 15px;
-                    border-radius: 5px;
+                    border-radius: 10px;
                     overflow-x: auto;
                     white-space: pre-wrap;
+                    border: 1px solid rgba(51,65,85,0.45);
                 }}
                 #plotly-div {{
                     margin: 30px 0;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 10px;
+                    border: 1px solid rgba(51,65,85,0.45);
+                    border-radius: 14px;
                     overflow: hidden;
                 }}
             </style>

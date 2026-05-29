@@ -134,15 +134,18 @@ def render_progress_bar(current_step: int) -> None:
                     st.rerun()
             elif num == current_step:
                 st.markdown(
-                    f"<div style='text-align:center;font-weight:bold;"
-                    f"background:#1f77b4;color:white;padding:6px;"
-                    f"border-radius:6px'>{num}. {label}</div>",
+                    f"<div style='text-align:center;font-weight:600;"
+                    f"background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;padding:8px;"
+                    f"border-radius:10px;font-size:0.85rem;font-family:Inter,sans-serif;"
+                    f"box-shadow:0 0 20px rgba(59,130,246,0.25)'>{num}. {label}</div>",
                     unsafe_allow_html=True
                 )
             else:
                 st.markdown(
-                    f"<div style='text-align:center;color:#999;"
-                    f"padding:6px'>{num}. {label}</div>",
+                    f"<div style='text-align:center;color:#64748b;"
+                    f"padding:8px;font-size:0.85rem;font-family:Inter,sans-serif;"
+                    f"border:1px solid rgba(51,65,85,0.3);border-radius:10px;"
+                    f"background:rgba(15,23,42,0.3)'>{num}. {label}</div>",
                     unsafe_allow_html=True
                 )
 
@@ -779,9 +782,9 @@ def _run_warehouse_diagnosis() -> None:
 
     # PII estimation from column names (fast, no sampling)
     try:
-        from classification.data_classification_agent import DataClassificationAgent
+        from data_classification.schema_classifier import DataClassificationAgent
     except ImportError:
-        from data_governance.classification.data_classification_agent import DataClassificationAgent
+        from data_governance.data_classification.schema_classifier import DataClassificationAgent
     pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
     pii_results = pii_clf.classify_batch_from_dicts(table_dicts)
 
@@ -883,9 +886,9 @@ def _run_openmetadata_diagnosis() -> None:
 
     # PII estimation from column names (fast, no sampling)
     try:
-        from classification.data_classification_agent import DataClassificationAgent
+        from data_classification.schema_classifier import DataClassificationAgent
     except ImportError:
-        from data_governance.classification.data_classification_agent import DataClassificationAgent
+        from data_governance.data_classification.schema_classifier import DataClassificationAgent
     pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
     pii_results = pii_clf.classify_batch_from_dicts(table_dicts)
 
@@ -1174,9 +1177,9 @@ def _handle_enrich_from_diagnosis() -> None:
 
             # Upgrade PII diagnosis with data-based evidence and append to context
             try:
-                from classification.data_classification_agent import DataClassificationAgent
+                from data_classification.schema_classifier import DataClassificationAgent
             except ImportError:
-                from data_governance.classification.data_classification_agent import DataClassificationAgent
+                from data_governance.data_classification.schema_classifier import DataClassificationAgent
             pii_clf = DataClassificationAgent(llm_provider=agent.llm_provider)
             name_diag = next(
                 (p for p in st.session_state.get("pii_diagnosis_results", [])

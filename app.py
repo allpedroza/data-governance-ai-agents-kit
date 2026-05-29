@@ -1,55 +1,6 @@
-# /// script
-# dependencies = [
-#   "azure-identity>=1.12.0",
-#   "azure-storage-blob>=12.14.0",
-#   "black>=22.0.0",
-#   "boto3>=1.26.0",
-#   "chromadb>=0.4.0",
-#   "cryptography>=41.0.0",
-#   "databricks-sdk>=0.5.0",
-#   "faiss-cpu>=1.7.0",
-#   "flake8>=5.0.0",
-#   "google-cloud-bigquery-storage>=2.0.0",
-#   "google-cloud-bigquery>=3.0.0",
-#   "google-cloud-storage>=2.7.0",
-#   "isort>=5.0.0",
-#   "kaleido>=0.2.0",
-#   "matplotlib>=3.6.0",
-#   "mypy>=1.0.0",
-#   "networkx>=3.0",
-#   "numpy>=1.24.0",
-#   "openai>=1.0.0",
-#   "openpyxl>=3.0.0",
-#   "pandas>=2.0.0",
-#   "plotly>=5.0.0",
-#   "psycopg2-binary>=2.9.0",
-#   "pyarrow>=14.0.0",
-#   "pyodbc>=4.0.0",
-#   "pyspark>=3.3.0",
-#   "pytest-cov>=4.0.0",
-#   "pytest>=7.0.0",
-#   "python-dotenv>=1.0.0",
-#   "python-igraph>=0.10.0",
-#   "pyyaml>=6.0",
-#   "redshift-connector>=2.0.0",
-#   "requests>=2.31.0",
-#   "scikit-learn>=1.0.0",
-#   "seaborn>=0.12.0",
-#   "sentence-transformers>=2.2.0",
-#   "snowflake-connector-python>=3.0.0",
-#   "snowflake-sqlalchemy>=1.5.0",
-#   "spacy>=3.5.0; extra == "spacy"",
-#   "sphinx-rtd-theme>=1.0.0",
-#   "sphinx>=5.0.0",
-#   "sqlalchemy-bigquery>=1.6.0",
-#   "sqlalchemy-redshift>=0.8.0",
-#   "sqlalchemy>=2.0.0",
-#   "sqlparse>=0.4.0",
-#   "streamlit>=1.32.0",
-#   "tqdm>=4.65.0",
-# ]
-# ///
-"""Unified Streamlit UI to orchestrate the five available agents."""
+# Dependencies are now managed via pyproject.toml —
+# install with: pip install -e ".[all]" or pick specific groups.
+
 import csv
 import json
 import os
@@ -61,6 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import streamlit as st
+
+# Centralised authentication and RBAC
+from utils.auth_middleware import require_auth, has_role, current_user, logout
 
 # Ensure repository modules are importable when running the app from repo root
 BASE_DIR = Path(__file__).resolve().parent
@@ -85,6 +39,11 @@ if missing_core_modules:
     )
 
 from data_governance.lineage.data_lineage_agent import DataLineageAgent  # noqa: E402
+from data_governance.lineage.graph_adapter import (  # noqa: E402
+    generate_cytoscape_json,
+    render_interactive_html,
+    cytoscape_json_download,
+)
 from data_governance.rag_discovery.data_discovery_rag_agent import (  # noqa: E402
     DataDiscoveryRAGAgent,
     TableMetadata,
@@ -204,48 +163,445 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+        /* ── Google Fonts ─────────────────────────────────── */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        /* ── Design Tokens (Premium Dark — Onyx/Indigo) ── */
         :root {
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --border: #e2e8f0;
-            --text: #0f172a;
-            --muted: #475569;
-            --accent: #2563eb;
+            --bg-primary:    #0A0A0A;
+            --bg-secondary:  #141414;
+            --bg-elevated:   rgba(20,20,20,0.95);
+            --bg-glass:      rgba(20,20,20,0.75);
+            --border:        #262626;
+            --border-hover:  #4F46E5;
+            --text-primary:  #EDEDED;
+            --text-secondary:#A1A1AA;
+            --text-muted:    #71717A;
+            --accent:        #4F46E5;
+            --accent-light:  #818CF8;
+            --accent-glow:   rgba(79,70,229,0.15);
+            --accent-gradient: linear-gradient(135deg,#4F46E5,#6366F1);
+            --success:       #10B981;
+            --warning:       #F59E0B;
+            --error:         #EF4444;
+            --radius:        8px;
+            --radius-lg:     12px;
+            --shadow:        0 4px 20px rgba(0,0,0,0.4);
+            --shadow-glow:   0 0 16px rgba(79,70,229,0.2);
+            --transition:    all 0.2s cubic-bezier(.4,0,.2,1);
+            --font:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
 
-        .main {
-            background: var(--bg);
+        /* ── Light-mode overrides (Premium B2B Light) ── */
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-primary:    #FAFAFA;
+                --bg-secondary:  #FFFFFF;
+                --bg-elevated:   #FFFFFF;
+                --bg-glass:      rgba(255,255,255,0.9);
+                --border:        #E4E4E7;
+                --border-hover:  #4F46E5;
+                --text-primary:  #18181B;
+                --text-secondary:#52525B;
+                --text-muted:    #A1A1AA;
+                --accent:        #4F46E5;
+                --accent-light:  #6366F1;
+                --accent-glow:   rgba(79,70,229,0.1);
+                --accent-gradient: linear-gradient(135deg,#4F46E5,#6366F1);
+                --shadow:        0 2px 10px rgba(0,0,0,0.05);
+                --shadow-glow:   0 0 16px rgba(79,70,229,0.15);
+            }
         }
 
+        /* ── Global ───────────────────────────────────────── */
+        html, body, [data-testid="stAppViewContainer"] {
+            font-family: var(--font) !important;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .main, [data-testid="stAppViewContainer"] {
+            background: var(--bg-primary) !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: var(--bg-secondary) !important;
+            border-right: 1px solid var(--border) !important;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+        [data-testid="stSidebar"] label {
+            color: var(--text-secondary) !important;
+        }
+
+        /* ── Sidebar Navigation Menu (Radio buttons styling) ── */
+        [data-testid="stSidebar"] .stRadio > label {
+            display: none !important;
+        }
+        
+        [data-testid="stSidebar"] div[role="radiogroup"] {
+            gap: 4px !important;
+        }
+        
+        [data-testid="stSidebar"] div[role="radiogroup"] label {
+            padding: 8px 12px !important;
+            border-radius: 8px !important;
+            margin: 0 !important;
+            background: transparent !important;
+            transition: var(--transition) !important;
+            color: var(--text-secondary) !important;
+            width: 100% !important;
+            border: 1px solid transparent !important;
+            display: flex !important;
+            align-items: center !important;
+            cursor: pointer !important;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+            background: var(--bg-glass) !important;
+            color: var(--text-primary) !important;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child {
+            display: none !important; /* Hide the radio circle */
+        }
+        
+        [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+            background: var(--accent-glow) !important;
+            color: var(--accent-light) !important;
+            border-color: rgba(59, 130, 246, 0.3) !important;
+            font-weight: 600 !important;
+        }
+
+        /* ── Headers ──────────────────────────────────────── */
+        h1, h2, h3 {
+            font-family: var(--font) !important;
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: 2.2rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.15rem !important; }
+
+        p, li, span, label, [data-testid="stMarkdownContainer"] {
+            color: var(--text-secondary) !important;
+        }
+
+        /* ── Tabs ─────────────────────────────────────────── */
+        [data-baseweb="tab-list"] {
+            gap: 4px !important;
+            background: var(--bg-secondary) !important;
+            padding: 6px !important;
+            border-radius: 12px !important;
+            border: 1px solid var(--border) !important;
+        }
+
+        [data-baseweb="tab"] {
+            border-radius: 8px !important;
+            padding: 8px 16px !important;
+            font-weight: 500 !important;
+            font-size: 0.82rem !important;
+            color: var(--text-muted) !important;
+            background: transparent !important;
+            border: none !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-baseweb="tab"]:hover {
+            color: var(--text-primary) !important;
+            background: var(--bg-glass) !important;
+        }
+
+        [aria-selected="true"][data-baseweb="tab"] {
+            background: var(--accent) !important;
+            color: #fff !important;
+            font-weight: 600 !important;
+            box-shadow: var(--shadow-glow) !important;
+        }
+
+        [data-baseweb="tab-highlight"],
+        [data-baseweb="tab-border"] {
+            display: none !important;
+        }
+
+        /* ── Metric Cards ─────────────────────────────────── */
+        [data-testid="stMetric"] {
+            background: var(--bg-secondary) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius) !important;
+            padding: 1.25rem 1.5rem !important;
+            transition: var(--transition) !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+        }
+
+        [data-testid="stMetric"]:hover {
+            border-color: var(--border-hover) !important;
+            box-shadow: var(--shadow-glow) !important;
+            transform: translateY(-2px);
+        }
+
+        [data-testid="stMetricValue"] {
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+            font-size: 1.8rem !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            color: var(--text-muted) !important;
+            font-size: 0.78rem !important;
+            font-weight: 500 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.06em !important;
+        }
+
+        /* ── Buttons ──────────────────────────────────────── */
+        [data-testid="stBaseButton-primary"],
+        button[kind="primary"] {
+            background: var(--accent-gradient) !important;
+            color: #fff !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            padding: 0.6rem 1.4rem !important;
+            transition: var(--transition) !important;
+            box-shadow: var(--shadow-glow) !important;
+        }
+
+        [data-testid="stBaseButton-primary"]:hover,
+        button[kind="primary"]:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 0 32px var(--accent-glow), var(--shadow) !important;
+        }
+
+        [data-testid="stBaseButton-secondary"],
+        button[kind="secondary"] {
+            background: var(--bg-glass) !important;
+            backdrop-filter: blur(8px) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
+            font-weight: 500 !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-testid="stBaseButton-secondary"]:hover,
+        button[kind="secondary"]:hover {
+            border-color: var(--accent) !important;
+            color: var(--accent-light) !important;
+        }
+
+        /* ── Expanders ────────────────────────────────────── */
+        [data-testid="stExpander"] {
+            background: var(--bg-glass) !important;
+            backdrop-filter: blur(12px) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius) !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-testid="stExpander"]:hover {
+            border-color: var(--border-hover) !important;
+        }
+
+        [data-testid="stExpander"] summary {
+            color: var(--text-primary) !important;
+            font-weight: 600 !important;
+        }
+
+        /* ── Containers / Cards / Layout Symmetry ─────────── */
+        [data-testid="column"] {
+            gap: 1.5rem !important; /* Force symmetric vertical spacing inside columns */
+        }
+        
+        [data-testid="stVerticalBlockBorderWrapper"] > div:has(> [data-testid="stVerticalBlock"]) {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        /* ── Inputs ───────────────────────────────────────── */
+        [data-baseweb="input"], [data-baseweb="textarea"],
+        [data-baseweb="select"] > div {
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 8px !important;
+            color: var(--text-primary) !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-baseweb="input"]:focus-within,
+        [data-baseweb="textarea"]:focus-within {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 2px var(--accent-glow) !important;
+        }
+
+        /* ── DataFrames ───────────────────────────────────── */
+        [data-testid="stDataFrame"] {
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius) !important;
+            overflow: hidden !important;
+        }
+
+        /* ── Progress & Status ────────────────────────────── */
+        [data-testid="stProgress"] > div > div {
+            background: var(--accent-gradient) !important;
+            border-radius: 999px !important;
+        }
+
+        [data-testid="stStatusWidget"] {
+            background: var(--bg-glass) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius) !important;
+        }
+
+        /* ── Alerts ───────────────────────────────────────── */
+        [data-testid="stAlert"] {
+            border-radius: 12px !important;
+            border: 1px solid var(--border) !important;
+            backdrop-filter: blur(8px) !important;
+        }
+
+        /* ── File uploader ────────────────────────────────── */
+        [data-testid="stFileUploader"] section {
+            border: 2px dashed var(--border) !important;
+            border-radius: var(--radius) !important;
+            background: var(--bg-glass) !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-testid="stFileUploader"] section:hover {
+            border-color: var(--accent) !important;
+        }
+
+        /* ── Custom classes ───────────────────────────────── */
         .section-card {
-            background: var(--card);
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .section-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-glow);
         }
 
         .pill {
             display: inline-block;
-            padding: 0.2rem 0.7rem;
+            padding: 0.2rem 0.75rem;
             border-radius: 999px;
-            background: #eef2ff;
-            color: var(--text);
+            background: var(--bg-glass);
+            backdrop-filter: blur(6px);
+            color: var(--accent-light);
             margin-right: 0.4rem;
             border: 1px solid var(--border);
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .pill:hover {
+            border-color: var(--accent);
+            box-shadow: var(--shadow-glow);
         }
 
         .callout {
             border-left: 4px solid var(--accent);
-            background: #eef2ff;
-            padding: 0.75rem 1rem;
+            background: var(--bg-glass);
+            backdrop-filter: blur(8px);
+            padding: 0.85rem 1.15rem;
             border-radius: 12px;
-            color: var(--text);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
         }
 
         .compact-header h1, .compact-header p {
             margin-bottom: 0.35rem;
-            color: var(--text);
+            color: var(--text-primary);
+        }
+
+        .compact-header p {
+            color: var(--text-secondary) !important;
+        }
+
+        /* ── Hero ─────────────────────────────────────────── */
+        .hero-container {
+            background: var(--accent-gradient);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem 2rem;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .hero-container::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at 30% 50%, rgba(139,92,246,0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(59,130,246,0.10) 0%, transparent 40%);
+            pointer-events: none;
+        }
+
+        .hero-container h1 {
+            color: #fff !important;
+            font-size: 2.4rem !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+
+        .hero-container p, .hero-container .callout {
+            color: rgba(255,255,255,0.85) !important;
+            position: relative;
+        }
+
+        .hero-container .callout {
+            background: rgba(255,255,255,0.10);
+            border-left-color: rgba(255,255,255,0.5);
+        }
+
+        /* ── Scrollbar ────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* ── Animations ───────────────────────────────────── */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        [data-testid="stVerticalBlock"] > div {
+            animation: fadeIn 0.35s ease-out;
+        }
+
+        /* ── Download button ──────────────────────────────── */
+        [data-testid="stDownloadButton"] button {
+            background: var(--bg-glass) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
+            color: var(--accent-light) !important;
+            font-weight: 500 !important;
+            transition: var(--transition) !important;
+        }
+
+        [data-testid="stDownloadButton"] button:hover {
+            border-color: var(--accent) !important;
+            box-shadow: var(--shadow-glow) !important;
         }
     </style>
     """,
@@ -259,14 +615,14 @@ def section_header(title: str, description: str | None = None) -> None:
     st.markdown("<div class='compact-header'>", unsafe_allow_html=True)
     st.subheader(title)
     if description:
-        st.markdown(f"<p style='color:#475569;'>{description}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p>{description}</p>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 def card_container():
     """Provide a lightly styled container similar to OpenMetadata panels."""
 
-    return st.container(border=True)
+    return st.container(border=False)
 
 
 def _initialize_rag_agent() -> None:
@@ -322,27 +678,19 @@ def init_session_state() -> None:
 
 
 def hero_section() -> None:
-    """Top banner with quick context."""
-    with st.container(border=True):
-        col1, col2 = st.columns([3, 2])
-        with col1:
-            st.title("Data Governance AI Agents")
-            st.markdown(
-                "Uma interface simples para orquestrar o framework de IA Generativa que acelerará seu programa de Governança de dados."
-            )
-            st.markdown(
-                "<div class='callout'>Defina sua `OPENAI_API_KEY` para ativar buscas vetoriais, geração de metadados e relatórios ricos.</div>",
-                unsafe_allow_html=True,
-            )
-        with col2:
-            st.metric("Agentes disponíveis", "5", help="Lineage, Discovery, Enrichment, Classification e Quality")
-            st.metric("Status da sessão", "Pronto", help="Sessão inicializada com os caches padrões")
+    st.markdown("<div class='hero-container'>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='callout' style='margin-bottom: 1rem;'>⚠️ <strong>Atenção:</strong> Defina sua <code>OPENAI_API_KEY</code> para ativar "
+        "buscas vetoriais, geração de metadados e relatórios ricos.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_lineage_tab() -> None:
     """UI for running the Data Lineage Agent."""
     section_header(
-        "🔗 Data Lineage Agent",
+        "Data Lineage Agent",
         "Envie pipelines e acompanhe a análise de forma direta, sem painéis complexos.",
     )
 
@@ -502,9 +850,29 @@ def render_lineage_tab() -> None:
         with st.expander("Componentes críticos"):
             st.write(critical)
 
-        st.info(
-            "Para visualização completa do grafo, execute `streamlit run lineage/app.py`."
-        )
+        # --- Visualização interativa Cytoscape.js (cadeia_de_graficos_arquitetura) ---
+        st.markdown("---")
+        st.subheader("🗺️ Grafo Interativo de Linhagem")
+        try:
+            cytoscape_data = generate_cytoscape_json(results)
+            viewer_html = render_interactive_html(cytoscape_data, height=700)
+            import streamlit.components.v1 as components
+            components.html(viewer_html, height=700, scrolling=False)
+
+            # Botão de download do JSON Cytoscape.js
+            json_download = cytoscape_json_download(cytoscape_data)
+            st.download_button(
+                label="⬇️ Download JSON (Cytoscape.js)",
+                data=json_download,
+                file_name="lineage_graph.json",
+                mime="application/json",
+                key="lineage_cytoscape_download",
+            )
+        except Exception as exc:
+            st.warning(f"Não foi possível gerar a visualização Cytoscape.js: {exc}")
+            st.info(
+                "Para visualização alternativa do grafo, execute `streamlit run data_governance/lineage/app.py`."
+            )
 
 
 def _apply_connection_settings(settings: Dict[str, str]) -> None:
@@ -927,7 +1295,7 @@ def _answer_discovery_question(prompt: str) -> str:
 def render_rag_tab() -> None:
     """UI for the RAG discovery agent."""
     section_header(
-        "🔍 Data Discovery RAG Agent",
+        "Data Discovery RAG Agent",
         "Construa um catálogo rápido e converse em linguagem natural com uma experiência limpa.",
     )
 
@@ -939,7 +1307,11 @@ def render_rag_tab() -> None:
 
     _render_connection_guide()
 
-    connection_tab, chat_tab = st.tabs(["Conectar catálogo", "Conversar com o agente"])
+    connection_tab, guided_discovery_tab, chat_tab = st.tabs([
+        "Conectar catálogo", 
+        "Discovery Guiado (Novo)", 
+        "Conversar com o agente"
+    ])
 
     with connection_tab:
         st.markdown("Escolha como quer conectar seu catálogo antes de iniciar a conversa.")
@@ -1218,6 +1590,135 @@ def render_rag_tab() -> None:
         _render_connected_catalogs()
         _render_table_catalog(st.session_state.get("rag_catalog", []))
 
+    with guided_discovery_tab:
+        st.markdown(
+            "O **Discovery Guiado** é um processo estruturado em 6 etapas para entender suas necessidades "
+            "de negócio e recomendar as tabelas ideais, considerando viabilidade e esforço de entrega."
+        )
+        
+        agent = st.session_state.get("rag_agent")
+        
+        if not agent:
+            st.warning("O agente não está inicializado. Verifique a configuração da chave de API.")
+        elif not st.session_state.get("rag_catalog"):
+            st.info("Conecte um catálogo primeiro na aba 'Conectar catálogo'.")
+        else:
+            with st.form("guided_discovery_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    domain = st.selectbox(
+                        "Domínio de Negócio", 
+                        options=["Vendas", "Marketing", "Financeiro", "Operações", "Produto", "Outro"]
+                    )
+                    stakeholders = st.text_input(
+                        "Stakeholders (separados por vírgula)", 
+                        placeholder="ex: Diretoria Comercial, Equipe de BI"
+                    )
+                with col2:
+                    process = st.text_input(
+                        "Processo de Negócio", 
+                        placeholder="ex: Ciclo de Vendas B2B"
+                    )
+                    top_k = st.number_input("Máximo de tabelas a retornar", min_value=1, max_value=20, value=10)
+                
+                pain_point = st.text_area(
+                    "Dor Central / Pergunta de Negócio", 
+                    placeholder="Quais são as perguntas que você quer responder ou os relatórios que precisa criar?"
+                )
+                
+                submit_guided = st.form_submit_button("Executar Discovery Guiado", type="primary")
+
+            if submit_guided and pain_point:
+                stakeholders_list = [s.strip() for s in stakeholders.split(",") if s.strip()]
+                
+                with st.spinner("Executando framework de Data Discovery (6 etapas)..."):
+                    try:
+                        report = agent.guided_discovery(
+                            business_context=process,
+                            pain_point=pain_point,
+                            stakeholders=stakeholders_list,
+                            business_domain=domain,
+                            top_k=top_k,
+                            user="streamlit_user"
+                        )
+                        
+                        st.success("Discovery concluído com sucesso!")
+                        
+                        # --- Render Report ---
+                        
+                        # Necessidades
+                        st.subheader("1. Inventário de Necessidades e Assets")
+                        if report.needs:
+                            for need in report.needs:
+                                from data_governance.rag_discovery.models import MATURITY_LABELS
+                                mat_label = MATURITY_LABELS.get(need.maturity_level, f"L{need.maturity_level}")
+                                
+                                color = "red" if need.maturity_level == 0 else "blue" if need.maturity_level <= 2 else "green"
+                                
+                                with st.expander(f"**{need.name}** ({need.need_type.replace('_', ' ').title()})"):
+                                    col_a, col_b = st.columns(2)
+                                    with col_a:
+                                        st.markdown(f"**Tabela:** `{need.matched_table or 'Não encontrada'}`")
+                                        st.markdown(f"**Maturidade:** :{color}[{mat_label}]")
+                                        st.markdown(f"**Relevância:** {need.relevance_score:.0%}")
+                                    with col_b:
+                                        st.markdown(f"**Qualidade:** {need.quality_score:.0%} " if need.quality_score else "**Qualidade:** N/A")
+                                        st.markdown(f"**SLA:** {need.freshness_hours}h" if need.freshness_hours else "**SLA:** N/A")
+                                        st.markdown(f"**Classificação:** {need.classification or 'N/A'}")
+                        else:
+                            st.info("Nenhuma necessidade específica pôde ser mapeada para o catálogo.")
+                            
+                        # Riscos
+                        st.subheader("2. Viabilidade e Riscos")
+                        if report.risks or report.pii_warnings:
+                            for risk in report.risks:
+                                st.warning(risk, icon="⚠️")
+                            for pii in report.pii_warnings:
+                                st.error(pii, icon="🔒")
+                        else:
+                            st.success("Nenhum risco técnico ou de governança identificado.", icon="✅")
+                            
+                        # Plano de Entrega
+                        st.subheader("3. Plano de Entrega Recomendado")
+                        if report.delivery_plan:
+                            dp = report.delivery_plan
+                            
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.markdown("### V1 — Entrega Rápida")
+                                st.caption(f"Esforço Estimado: **{dp.v1_effort.upper()}**")
+                                st.markdown(dp.v1_scope)
+                                if dp.v1_tables:
+                                    st.markdown("**Tabelas prontas:**")
+                                    for t in dp.v1_tables:
+                                        st.markdown(f"- `{t}`")
+                                else:
+                                    st.info("Sem dados maduros o suficiente para V1 imediata.")
+                                    
+                            with c2:
+                                st.markdown("### V2 — Entrega Completa")
+                                st.caption(f"Esforço Estimado: **{dp.v2_effort.upper()}**")
+                                st.markdown(dp.v2_scope)
+                                if dp.v2_tables:
+                                    st.markdown("**Tabelas que precisam modelagem/ingestão:**")
+                                    for t in dp.v2_tables:
+                                        st.markdown(f"- `{t}`")
+                            
+                            if dp.gaps:
+                                st.markdown("### ⚠️ Gaps Identificados (Falta Ingestão)")
+                                for g in dp.gaps:
+                                    st.markdown(f"- `{g}`")
+                                    
+                        # Análise do Agente
+                        with st.expander("Ver Análise Completa do Agente"):
+                            st.markdown(report.llm_answer)
+                            
+                        # Meta
+                        st.caption(f"Confiança: {report.confidence:.0%} | Latência: {report.latency_ms}ms")
+
+                    except Exception as e:
+                        st.error(f"Erro ao executar Discovery Guiado: {e}")
+
     with chat_tab:
         _render_connected_catalogs()
         st.divider()
@@ -1265,8 +1766,8 @@ def _initialize_enrichment_agent():
 
 def render_enrichment_tab() -> None:
     """UI for the Metadata Enrichment Agent."""
-    st.subheader("🏷️ Metadata Enrichment Agent")
-    st.markdown(
+    section_header(
+        "Metadata Enrichment Agent",
         "Gere automaticamente descrições, tags e classificações para suas tabelas de dados. "
         "O agente analisa amostras de dados e usa padrões de arquitetura para inferir metadados."
     )
@@ -1534,10 +2035,10 @@ def _initialize_quality_agent():
 
 def render_quality_tab() -> None:
     """UI for the Data Quality Agent."""
-    st.subheader("📊 Data Quality Agent")
-    st.markdown(
-        "Monitore métricas de qualidade de dados: completude, unicidade, validade, "
-        "consistência, freshness (SLA) e detecção de schema drift."
+    section_header(
+        "Data Quality Agent",
+        "Gere automaticamente regras de qualidade de dados com base na estrutura da tabela e amostras, "
+        "e verifique sua aderência instantaneamente."
     )
 
     if not QUALITY_AVAILABLE:
@@ -1760,9 +2261,11 @@ def _initialize_contract_agent():
 
 def render_contracts_tab() -> None:
     """UI for Data Contracts and the contract creator feature."""
-    st.subheader("📜 Data Contracts")
-    st.markdown(
-        "Crie contratos de dados e valide ingestões com schema, regras de qualidade e SLAs."
+    
+    section_header(
+        "Data Contracts",
+        "Crie, valide e gerencie Contratos de Dados (Data Contracts) para garantir a estrutura, "
+        "SLA e qualidade dos dados entre produtores e consumidores."
     )
 
     if not CONTRACTS_AVAILABLE:
@@ -2034,7 +2537,7 @@ def render_contracts_tab() -> None:
         )
         data_file = st.file_uploader(
             "Carregar dados (CSV/Parquet)",
-            type=["csv", "parquet"],
+            type=["csv"],
             key="contract_validator_data",
         )
 
@@ -2121,10 +2624,11 @@ def _initialize_classification_agent():
 
 def render_classification_tab() -> None:
     """UI for the Data Classification Agent."""
-    st.subheader("🛡️ Data Classification Agent")
-    st.markdown(
-        "Classifique dados automaticamente por níveis de sensibilidade: "
-        "PII (dados pessoais), PHI (dados de saúde), PCI (dados de pagamento) e dados financeiros."
+    
+    section_header(
+        "Data Classification Agent",
+        "Classifique automaticamente colunas com base em padrões de PII, PHI "
+        "e confidencialidade comercial. Defina o grau de confidencialidade e recomendação de mascaramento."
     )
 
     if not CLASSIFICATION_AVAILABLE:
@@ -2395,11 +2899,12 @@ def _initialize_value_agent():
 
 
 def render_value_tab() -> None:
-    """UI for the Data Asset Value Agent."""
-    st.subheader("💎 Data Asset Value Scanner")
-    st.markdown(
-        "Analise o valor dos ativos de dados baseado em uso, JOINs, linhagem e impacto em data products. "
-        "Identifique ativos críticos, hubs de dados e ativos subutilizados."
+    """UI for the Data Asset Value Scanner."""
+    
+    section_header(
+        "Data Asset Value Scanner",
+        "Analise o valor de negócio, custos operacionais e o ROI estimado dos seus "
+        "ativos de dados com recomendações acionáveis de governança."
     )
 
     if not VALUE_AVAILABLE:
@@ -2904,10 +3409,11 @@ def render_value_tab() -> None:
 
 def render_ner_tab() -> None:
     """UI for the Sensitive Data NER Agent."""
-    st.subheader("🔒 Sensitive Data NER Agent")
-    st.markdown(
-        "Detecte e anonimize dados sensíveis em texto livre antes de enviar para LLMs. "
-        "Proteja PII, PHI, PCI, dados financeiros, informações estratégicas e **credenciais (API keys, tokens, senhas)**."
+    
+    section_header(
+        "Sensitive Data NER Agent",
+        "Identifique e extraia PII e PHI de grandes blocos de texto não-estruturado. "
+        "Detecte dados sensíveis em transcrições, chats e logs."
     )
 
     if not NER_AVAILABLE:
@@ -3173,11 +3679,12 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ.""",
 
 
 def render_vault_tab() -> None:
-    """UI for the Secure Vault management."""
-    st.subheader("🔐 Secure Vault")
-    st.markdown(
-        "Gerencie o cofre seguro para armazenamento criptografado de dados sensíveis. "
-        "Permite armazenar mapeamentos originais/anonimizados e recuperar dados posteriormente."
+    """UI for the Secure Vault."""
+    
+    section_header(
+        "Secure Vault",
+        "Cofre seguro com criptografia determinística (AES-SIV) para armazenamento "
+        "reversível de entidades mascaradas, com controle de acesso integrado."
     )
 
     if not VAULT_AVAILABLE:
@@ -3610,12 +4117,16 @@ def render_vault_tab() -> None:
 
 def render_steward_tab() -> None:
     """Data Steward Agent tab -- operational copilot for stewards."""
+    
+    section_header(
+        "Automated Data Steward",
+        "Orquestre ações ativas de governança: gerencie issues, crie rascunhos de glossário "
+        "e comunique-se com os proprietários dos dados automaticamente."
+    )
+
     if not STEWARD_AVAILABLE:
         st.warning("Data Steward Agent nao disponivel. Verifique a instalacao.")
         return
-
-    st.markdown("## Data Steward Agent")
-    st.caption("Copiloto operacional de governanca — o agente propoe, o steward aprova.")
 
     if "steward_agent" not in st.session_state:
         st.session_state.steward_agent = DataStewardAgent(persist_dir="./steward_data")
@@ -4403,39 +4914,66 @@ def get_warehouse_connector(warehouse_type: str, config: Dict[str, Any]):
 
 
 init_session_state()
-hero_section()
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
-    "Lineage",
-    "Discovery",
-    "Enrichment",
-    "Classification",
-    "Quality",
-    "Contracts",
-    "Asset Value",
-    "NER Module",
-    "Vault",
-    "Data Steward",
-    "⚙️ Settings",
-])
-with tab1:
-    render_lineage_tab()
-with tab2:
+
+# ── Authentication gate ────────────────────────────────────────
+require_auth()
+
+# Show current user badge and logout in sidebar
+if current_user():
+    with st.sidebar:
+        st.markdown(f"👤 **{current_user()}**")
+        if st.button("Sair", key="logout_btn"):
+            logout()
+            st.rerun()
+
+if not os.environ.get("OPENAI_API_KEY"):
+    hero_section()
+
+with st.sidebar:
+    st.title("Data Gov AI")
+    st.caption("Framework de Governança Generativa")
+    st.markdown("---")
+    
+    page = st.radio(
+        "Módulos Disponíveis",
+        options=[
+            "🔍 Discovery (RAG)",
+            "📊 Data Quality",
+            "🛡️ Classification",
+            "🕸️ Data Lineage",
+            "📝 Data Contracts",
+            "🏷️ Metadata Enrichment",
+            "💎 Data Asset Value",
+            "👨‍⚖️ Data Steward",
+            "🤖 AI NER & Vault",
+            "⚙️ Settings"
+        ],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    st.caption("Status: ✓ Pronto")
+
+if page == "🔍 Discovery (RAG)":
     render_rag_tab()
-with tab3:
-    render_enrichment_tab()
-with tab4:
-    render_classification_tab()
-with tab5:
+elif page == "📊 Data Quality":
     render_quality_tab()
-with tab6:
+elif page == "🛡️ Classification":
+    render_classification_tab()
+elif page == "🕸️ Data Lineage":
+    render_lineage_tab()
+elif page == "📝 Data Contracts":
     render_contracts_tab()
-with tab7:
+elif page == "🏷️ Metadata Enrichment":
+    render_enrichment_tab()
+elif page == "💎 Data Asset Value":
     render_value_tab()
-with tab8:
-    render_ner_tab()
-with tab9:
-    render_vault_tab()
-with tab10:
+elif page == "👨‍⚖️ Data Steward":
     render_steward_tab()
-with tab11:
+elif page == "🤖 AI NER & Vault":
+    # Combines NER and Vault for simplicity or renders them sequentially
+    render_ner_tab()
+    st.divider()
+    render_vault_tab()
+elif page == "⚙️ Settings":
     render_settings_tab()

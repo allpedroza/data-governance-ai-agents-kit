@@ -83,6 +83,13 @@ from parsers.airflow_parser import AirflowParser, parse_airflow_dags_folder
 from parsers.openlineage_parser import OpenLineageParser
 from openlineage_emitter import OpenLineageEmitter
 
+# Graph adapter for Cytoscape.js viewer (cadeia_de_graficos_arquitetura)
+try:
+    from graph_adapter import generate_cytoscape_json, render_interactive_html, cytoscape_json_download
+    CYTOSCAPE_AVAILABLE = True
+except ImportError:
+    CYTOSCAPE_AVAILABLE = False
+
 
 # Page configuration
 st.set_page_config(
@@ -92,74 +99,237 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS — consistent with main app design system (Ark95 dark / Claude light)
 st.markdown("""
 <style>
-    .main {
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+        --bg-primary:    #020617;
+        --bg-secondary:  #0f172a;
+        --bg-glass:      rgba(15,23,42,0.55);
+        --border:        rgba(51,65,85,0.45);
+        --border-hover:  rgba(59,130,246,0.35);
+        --text-primary:  #f1f5f9;
+        --text-secondary:#94a3b8;
+        --text-muted:    #64748b;
+        --accent:        #3b82f6;
+        --accent-light:  #60a5fa;
+        --accent-glow:   rgba(59,130,246,0.25);
+        --accent-gradient: linear-gradient(135deg,#3b82f6,#8b5cf6);
+        --success:       #22c55e;
+        --warning:       #f59e0b;
+        --error:         #ef4444;
+        --radius:        14px;
+        --radius-lg:     20px;
+        --shadow:        0 8px 32px rgba(0,0,0,0.35);
+        --shadow-glow:   0 0 24px rgba(59,130,246,0.18);
+        --transition:    all 0.25s cubic-bezier(.4,0,.2,1);
+        --font:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    @media (prefers-color-scheme: light) {
+        :root {
+            --bg-primary:    #f5f1eb;
+            --bg-secondary:  #ffffff;
+            --bg-glass:      rgba(255,255,255,0.70);
+            --border:        rgba(209,196,175,0.40);
+            --border-hover:  rgba(201,100,66,0.35);
+            --text-primary:  #1a1510;
+            --text-secondary:#6b5f50;
+            --text-muted:    #9c917e;
+            --accent:        #c96442;
+            --accent-light:  #d98a6a;
+            --accent-glow:   rgba(201,100,66,0.15);
+            --accent-gradient: linear-gradient(135deg,#c96442,#a855f7);
+            --shadow:        0 4px 24px rgba(26,21,16,0.08);
+            --shadow-glow:   0 0 20px rgba(201,100,66,0.10);
+        }
+    }
+
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: var(--font) !important;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    .main, [data-testid="stAppViewContainer"] {
+        background: var(--bg-primary) !important;
         padding: 0rem 1rem;
     }
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
-        border-radius: 5px;
-        border: none;
+
+    [data-testid="stSidebar"] {
+        background: var(--bg-secondary) !important;
+        border-right: 1px solid var(--border) !important;
+    }
+
+    h1, h2, h3 {
+        font-family: var(--font) !important;
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+    }
+
+    p, li, span, label { color: var(--text-secondary) !important; }
+
+    /* Buttons */
+    .stButton>button, [data-testid="stBaseButton-primary"] {
+        background: var(--accent-gradient) !important;
+        color: white !important;
+        border-radius: 10px !important;
+        border: none !important;
         padding: 0.5rem 1rem;
-        font-weight: bold;
-        transition: all 0.3s;
+        font-weight: 600 !important;
+        transition: var(--transition);
+        box-shadow: var(--shadow-glow) !important;
     }
-    .stButton>button:hover {
-        background-color: #45a049;
-        transform: scale(1.02);
+    .stButton>button:hover, [data-testid="stBaseButton-primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 32px var(--accent-glow), var(--shadow) !important;
     }
+
+    /* Cards */
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: var(--bg-glass);
+        backdrop-filter: blur(12px);
+        color: var(--text-primary);
         padding: 1.5rem;
-        border-radius: 10px;
+        border-radius: var(--radius);
         margin: 0.5rem 0;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        transition: var(--transition);
     }
+    .metric-card:hover {
+        border-color: var(--border-hover);
+        box-shadow: var(--shadow-glow);
+    }
+
+    /* Status boxes */
     .warning-box {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
+        background: var(--bg-glass);
+        backdrop-filter: blur(8px);
+        border-left: 4px solid var(--warning);
         padding: 1rem;
         margin: 1rem 0;
-        border-radius: 5px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
     }
     .success-box {
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
+        background: var(--bg-glass);
+        backdrop-filter: blur(8px);
+        border-left: 4px solid var(--success);
         padding: 1rem;
         margin: 1rem 0;
-        border-radius: 5px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
     }
     .error-box {
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
+        background: var(--bg-glass);
+        backdrop-filter: blur(8px);
+        border-left: 4px solid var(--error);
         padding: 1rem;
         margin: 1rem 0;
-        border-radius: 5px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
     }
+
+    /* Graph container */
     .graph-container {
-        border: 2px solid #e0e0e0;
-        border-radius: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
         padding: 1rem;
-        background: white;
+        background: var(--bg-glass);
+        backdrop-filter: blur(12px);
         margin: 1rem 0;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
+
+    /* Tabs */
+    [data-baseweb="tab-list"] {
+        gap: 4px !important;
+        background: var(--bg-secondary) !important;
+        padding: 6px !important;
+        border-radius: 12px !important;
+        border: 1px solid var(--border) !important;
     }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #f0f2f6;
-        border-radius: 10px 10px 0 0;
-        padding: 0.5rem 1.5rem;
-        font-weight: 600;
+    [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 500 !important;
+        font-size: 0.82rem !important;
+        color: var(--text-muted) !important;
+        background: transparent !important;
+        border: none !important;
+        transition: var(--transition) !important;
     }
-    .stTabs [aria-selected="true"] {
-        background-color: #4CAF50;
-        color: white;
+    [data-baseweb="tab"]:hover {
+        color: var(--text-primary) !important;
+        background: var(--bg-glass) !important;
     }
+    [aria-selected="true"][data-baseweb="tab"] {
+        background: var(--accent) !important;
+        color: #fff !important;
+        font-weight: 600 !important;
+        box-shadow: var(--shadow-glow) !important;
+    }
+    [data-baseweb="tab-highlight"],
+    [data-baseweb="tab-border"] { display: none !important; }
+
+    /* Metrics */
+    [data-testid="stMetric"] {
+        background: var(--bg-glass) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius) !important;
+        padding: 1rem 1.25rem !important;
+        transition: var(--transition) !important;
+    }
+    [data-testid="stMetric"]:hover {
+        border-color: var(--border-hover) !important;
+        box-shadow: var(--shadow-glow) !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stMetricValue"] {
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: var(--text-muted) !important;
+        font-size: 0.78rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+    }
+
+    /* Expanders */
+    [data-testid="stExpander"] {
+        background: var(--bg-glass) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius) !important;
+    }
+
+    /* Inputs */
+    [data-baseweb="input"], [data-baseweb="textarea"],
+    [data-baseweb="select"] > div {
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        color: var(--text-primary) !important;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    [data-testid="stVerticalBlock"] > div { animation: fadeIn 0.35s ease-out; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -309,9 +479,12 @@ def sidebar_configuration():
     # Visualization options
     st.sidebar.header("📊 Visualização")
     
+    _graph_types = ["Force-Directed", "Hierárquico", "Sankey", "Radial", "3D"]
+    if CYTOSCAPE_AVAILABLE:
+        _graph_types.append("Cytoscape.js (Arquitetura)")
     graph_type = st.sidebar.selectbox(
         "Tipo de Grafo",
-        ["Force-Directed", "Hierárquico", "Sankey", "Radial", "3D"]
+        _graph_types
     )
     
     show_labels = st.sidebar.checkbox("Mostrar Labels", value=True)
@@ -622,6 +795,27 @@ def visualize_lineage_graph(analysis_results: Dict, config: Dict):
     st.session_state.visualizer.graph = graph
     
     # Create visualization based on selected type
+    if config['graph_type'] == "Cytoscape.js (Arquitetura)" and CYTOSCAPE_AVAILABLE:
+        # Render Cytoscape.js viewer inline
+        lineage_data = analysis_results['data_lineage']
+        try:
+            cytoscape_data = generate_cytoscape_json(lineage_data)
+            viewer_html = render_interactive_html(cytoscape_data, height=700)
+            import streamlit.components.v1 as components
+            components.html(viewer_html, height=700, scrolling=False)
+
+            json_download = cytoscape_json_download(cytoscape_data)
+            st.download_button(
+                label="⬇️ Download JSON (Cytoscape.js)",
+                data=json_download,
+                file_name="lineage_graph.json",
+                mime="application/json",
+                key="lineage_cytoscape_dl",
+            )
+        except Exception as exc:
+            st.warning(f"Erro ao gerar visualização Cytoscape.js: {exc}")
+        return  # Cytoscape.js não usa Plotly, retornamos aqui
+
     if config['graph_type'] == "Force-Directed":
         fig = create_force_directed_graph(graph, config)
     elif config['graph_type'] == "Hierárquico":

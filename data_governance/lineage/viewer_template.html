@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualizador de Linhagem - Cytoscape.js</title>
+<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:#020617; color:#f1f5f9; overflow:hidden;
+    background-image: radial-gradient(circle at 20% 50%, rgba(59,130,246,0.04) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(139,92,246,0.03) 0%, transparent 40%);
+  }
+  #cy { width:100%; height:100vh; }
+  .controls { position:fixed; bottom:16px; right:16px; display:flex; gap:6px; z-index:10; }
+  .controls button {
+    width:36px; height:36px; border:none; border-radius:10px;
+    background:rgba(15,23,42,0.80); color:#f1f5f9; font-size:18px;
+    cursor:pointer; backdrop-filter:blur(12px); display:flex; align-items:center; justify-content:center;
+    transition: all 0.25s cubic-bezier(.4,0,.2,1);
+    border:1px solid rgba(51,65,85,0.45);
+  }
+  .controls button:hover {
+    background:rgba(59,130,246,0.15);
+    border-color:rgba(59,130,246,0.35);
+    box-shadow:0 0 20px rgba(59,130,246,0.18);
+  }
+  #tooltip {
+    position:fixed; display:none; padding:12px 16px; border-radius:14px;
+    background:rgba(2,6,23,0.92); backdrop-filter:blur(12px);
+    border:1px solid rgba(51,65,85,0.45); color:#f1f5f9;
+    font-size:13px; max-width:300px; pointer-events:none; z-index:20;
+    box-shadow:0 8px 32px rgba(0,0,0,0.45);
+  }
+  #tooltip strong { color:#60a5fa; }
+  #tooltip .tech { color:#a78bfa; font-size:11px; font-weight:500; }
+  #title-bar {
+    position:fixed; top:12px; left:12px; z-index:10;
+    background:rgba(2,6,23,0.80); backdrop-filter:blur(12px);
+    border:1px solid rgba(51,65,85,0.45); border-radius:12px;
+    padding:8px 18px; font-size:14px; font-weight:600; color:#f1f5f9;
+    letter-spacing:-0.01em;
+  }
+</style>
+</head>
+<body>
+<div id="title-bar">__PROJECT_NAME__</div>
+<div id="cy"></div>
+<div id="tooltip"></div>
+<div class="controls">
+  <button onclick="cy.zoom(cy.zoom()*1.2);cy.center()" title="Zoom in">+</button>
+  <button onclick="cy.zoom(cy.zoom()/1.2);cy.center()" title="Zoom out">−</button>
+  <button onclick="cy.fit(undefined,40)" title="Ajustar">⊡</button>
+</div>
+<script>
+(function(){
+  var graphData = __GRAPH_JSON__;
+  var elements = [];
+
+  // Nodes
+  (graphData.nodes || []).forEach(function(n){
+    elements.push({
+      group:'nodes',
+      data: n.data,
+      classes: n.classes || ''
+    });
+  });
+  // Edges
+  (graphData.edges || []).forEach(function(e){
+    elements.push({
+      group:'edges',
+      data: e.data,
+      classes: e.classes || ''
+    });
+  });
+
+  var cy = window.cy = cytoscape({
+    container: document.getElementById('cy'),
+    elements: elements,
+    style: [
+      { selector:'node.layer-node',
+        style:{
+          'shape':'round-rectangle','width':180,'height':50,
+          'background-color':'data(color)','background-opacity':.15,
+          'border-width':2,'border-color':'data(color)',
+          'label':'data(label)','text-valign':'center','text-halign':'center',
+          'font-size':14,'font-weight':'bold','color':'data(color)',
+          'text-outline-width':0
+        }
+      },
+      { selector:'node.comp-node',
+        style:{
+          'shape':'round-rectangle','width':140,'height':38,
+          'background-color':'data(color)','background-opacity':.85,
+          'border-width':1,'border-color':'data(color)',
+          'label':'data(label)','text-valign':'center','text-halign':'center',
+          'font-size':11,'color':'#fff',
+          'text-outline-width':1,'text-outline-color':'rgba(0,0,0,.5)'
+        }
+      },
+      { selector:'edge.flow-edge',
+        style:{
+          'width':3,'line-color':'data(color)','target-arrow-color':'data(color)',
+          'target-arrow-shape':'triangle','curve-style':'bezier','opacity':.6,
+          'arrow-scale':1.2
+        }
+      },
+      { selector:'edge.member-edge',
+        style:{
+          'width':1.5,'line-color':'data(color)','line-style':'dashed',
+          'target-arrow-shape':'none','curve-style':'bezier','opacity':.3
+        }
+      },
+      { selector:'edge.comp-flow-edge',
+        style:{
+          'width':2,'line-color':'data(color)','target-arrow-color':'data(color)',
+          'target-arrow-shape':'triangle','curve-style':'bezier','opacity':.7,
+          'arrow-scale':1
+        }
+      },
+      { selector:'node:selected',
+        style:{'border-width':3,'border-color':'#facc15','background-opacity':1}
+      }
+    ],
+    layout:{
+      name:'dagre',
+      rankDir:'LR',
+      nodeSep:60,
+      edgeSep:20,
+      rankSep:120,
+      padding:40
+    },
+    minZoom:0.15,
+    maxZoom:4,
+    wheelSensitivity:0.3
+  });
+
+  // Tooltip
+  var tip = document.getElementById('tooltip');
+  cy.on('mouseover','node',function(e){
+    var d = e.target.data();
+    var html = '<strong>'+d.label+'</strong>';
+    if(d.tech) html += '<br><span class="tech">'+d.tech+'</span>';
+    if(d.description) html += '<br>'+d.description;
+    if(d.comp_type) html += '<br>Tipo: '+d.comp_type;
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+  });
+  cy.on('mousemove',function(e){
+    if(tip.style.display==='block'){
+      tip.style.left = (e.originalEvent.clientX+14)+'px';
+      tip.style.top = (e.originalEvent.clientY+14)+'px';
+    }
+  });
+  cy.on('mouseout','node',function(){tip.style.display='none';});
+
+  // Fit after layout
+  cy.on('layoutstop',function(){ cy.fit(undefined,40); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+tabela,atributo,tipo_dado,descricao,cardinalidade,exemplo
+cancoes,id_cancao,integer,Identificador único da canção (Chave Primária),Único,1001
+cancoes,cancao,string,Título da música cadastrada,Variável,"Evidências"
+cancoes,cantor,string,Nome do artista ou banda original,Variável,"Chitãozinho & Xororó"
+cancoes,album,string,Álbum de referência da gravação,Variável,"Cowboy do Asfalto"
+cancoes,tom_cadastrado,string,Tom musical original da faixa (Notação musical),Variável,"E"
+cancoes,disp_plat,list(string),Plataformas onde a música está disponível (separado por vírgula),Multivalorado,"YouTube,Spotify"
+cancoes,origem,string,Fonte de ingestão do arquivo no sistema,Categórico,"Sistema"
+cancoes,status,string,Estado atual de disponibilidade da faixa,Categórico,"Ativo"
+reproducoes,id,integer,Identificador único da sessão (Chave Primária),Único,5001
+reproducoes,id_cancao,integer,Identificador da canção cantada (Chave Estrangeira),Referencial,1001
+reproducoes,duracao_sessao,integer,Tempo total da sessão em segundos,Contínuo,285
+reproducoes,nota_total,float,Pontuação geral consolidada (0.0 a 100.0),Contínuo,92.5
+reproducoes,nota_tom,float,Pontuação específica de precisão tonal,Contínuo,95.0
+reproducoes,nota_letra,float,Pontuação de acerto de tempo e letra,Contínuo,90.0
+reproducoes,nota_animacao,float,Pontuação baseada em volume/performance,Contínuo,85.0
+reproducoes,ts_avaliacao,datetime,Timestamp do momento da avaliação (ISO 8601),Temporal,2023-10-27T20:30:00Z
+reproducoes,#tokens,integer,Custo de créditos/tokens consumidos na sessão,Discreto,150

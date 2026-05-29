@@ -316,7 +316,7 @@ Referente ao Projeto Confidencial para aquisição da empresa XYZ."""
                     st.markdown("### Texto com Destaque")
                     entities_dict = [e.to_dict() for e in result.entities]
                     highlighted = highlight_entities(input_text, entities_dict)
-                    st.markdown(f'<div style="white-space:pre-wrap;font-family:monospace;background:#f5f5f5;padding:15px;border-radius:5px;">{highlighted}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="white-space:pre-wrap;font-family:monospace;background:rgba(15,23,42,0.7);color:#94a3b8;padding:15px;border-radius:14px;border:1px solid rgba(51,65,85,0.45);">{highlighted}</div>', unsafe_allow_html=True)
                 else:
                     st.success("Nenhuma entidade sensível detectada!")
 

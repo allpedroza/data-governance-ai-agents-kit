@@ -102,7 +102,7 @@ def render_dimension_card(dimension: str, data: dict):
         text-align: center;
     ">
         <div style="font-size: 24px;">{icon}</div>
-        <div style="font-size: 14px; color: #888; margin-top: 4px;">{dimension.upper()}</div>
+        <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">{dimension.upper()}</div>
         <div style="font-size: 28px; font-weight: bold; color: {color};">{score:.0%}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -294,7 +294,7 @@ def main():
                     <div style="font-size: 48px; font-weight: bold; color: {score_color};">
                         {report.overall_score:.0%}
                     </div>
-                    <div style="color: #888;">Score Geral</div>
+                    <div style="color: #94a3b8;">Score Geral</div>
                 </div>
                 """, unsafe_allow_html=True)
             with col2:

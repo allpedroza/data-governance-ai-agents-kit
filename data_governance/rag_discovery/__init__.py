@@ -83,6 +83,31 @@ from .agent import (
     DiscoveryResult
 )
 
+# Discovery framework models
+from .discovery_report import (
+    DiscoveryReport,
+    DiscoveryNeed,
+    DeliveryPlan
+)
+
+# Model constants
+from .models import (
+    MATURITY_INEXISTENT,
+    MATURITY_RAW,
+    MATURITY_STAGING,
+    MATURITY_CURATED,
+    MATURITY_DATA_PRODUCT,
+    MATURITY_LABELS,
+    ASSET_TYPE_FACT,
+    ASSET_TYPE_DIMENSION,
+    ASSET_TYPE_VIEW,
+    ASSET_TYPE_SEMANTIC_MODEL,
+    CLASSIFICATION_PUBLIC,
+    CLASSIFICATION_INTERNAL,
+    CLASSIFICATION_CONFIDENTIAL,
+    CLASSIFICATION_RESTRICTED,
+)
+
 # Providers
 from .providers import (
     EmbeddingProvider,
@@ -135,6 +160,31 @@ __all__ = [
     "DataDiscoveryAgent",
     "TableMetadata",
     "DiscoveryResult",
+
+    # Discovery framework
+    "DiscoveryReport",
+    "DiscoveryNeed",
+    "DeliveryPlan",
+
+    # Maturity constants
+    "MATURITY_INEXISTENT",
+    "MATURITY_RAW",
+    "MATURITY_STAGING",
+    "MATURITY_CURATED",
+    "MATURITY_DATA_PRODUCT",
+    "MATURITY_LABELS",
+
+    # Asset type constants
+    "ASSET_TYPE_FACT",
+    "ASSET_TYPE_DIMENSION",
+    "ASSET_TYPE_VIEW",
+    "ASSET_TYPE_SEMANTIC_MODEL",
+
+    # Classification constants
+    "CLASSIFICATION_PUBLIC",
+    "CLASSIFICATION_INTERNAL",
+    "CLASSIFICATION_CONFIDENTIAL",
+    "CLASSIFICATION_RESTRICTED",
 
     # Providers
     "EmbeddingProvider",

@@ -1,0 +1,334 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Relatório de Análise de Linhagem de Dados</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 200px;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .metric-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        .visualization-links {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .viz-link {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .viz-link:hover {
+            background: #2980b9;
+        }
+        .documentation {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        pre {
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 14px;
+        }
+        .insights-section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .insight-summary {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .risk-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+        .risk-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .risk-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .recommendation-list {
+            list-style: none;
+            padding: 0;
+        }
+        .recommendation-list li {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+        .critical-component {
+            background: #fff3cd;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border-left: 3px solid #ffc107;
+        }
+        .warning-icon {
+            color: #ff9800;
+        }
+        .error-icon {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Relatório de Análise de Linhagem de Dados</h1>
+    <p class="timestamp">Gerado: 2026-01-05 15:14:30</p>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-value">42</div>
+            <div class="metric-label">Total de Assets</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">32</div>
+            <div class="metric-label">Transformações</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">1</div>
+            <div class="metric-label">Tipos de Assets</div>
+        </div>
+    </div>
+
+    <h2>🤖 Insights Automáticos e Análise Crítica</h2>
+    <div class="insights-section">
+
+        <h3>📊 Resumo Executivo</h3>
+        <div class="insight-summary">
+            <p>A linhagem apresenta 42 tabelas e 32 transformações, com baixa densidade e grau médio de 1,52, sem ciclos. O desenho sugere pipelines relativamente simples e predominantemente lineares, com clara estratificação bronze → silver → gold. No entanto, há concentração de dependências em poucos nós, criando pontos únicos de falha e um gargalo no topo de consumo (gold.orders_enriched).
+Apesar da simplicidade estrutural, 14 pontos únicos de falha e um gargalo explícito elevam o risco operacional. A robustez pode ser significativamente melhorada com desduplicação de dependências críticas, qualidade de dados preventiva nas camadas iniciais e estratégias de resiliência e performance na camada gold.</p>
+        </div>
+
+        <h3>💡 Avaliação de Risco</h3>
+        <div class="risk-badge risk-medium">MEDIUM - Muitos pontos únicos de falha (14) e um gargalo central em gold.orders_enriched elevam o risco de indisponibilidade e atraso, embora a ausência de ciclos e a baixa densidade reduzam a complexidade operacional.</div>
+
+        <h3>📋 Recomendações</h3>
+        <ul class="recommendation-list">
+            <li>Mitigar SPOFs: criar caminhos redundantes ou fallback (ex.: checkpoints/materializações intermediárias) para bronze.customers_raw, bronze.orders_raw, silver.customers_clean, silver.orders_clean e gold.orders_enriched.</li>
+            <li>Quality by design na camada bronze/silver: validações de esquema, contratos de dados e regras de dedupe e conformidade antes de promover para silver/gold.</li>
+            <li>Incremental loads e CDC onde possível para reduzir janelas de processamento e impacto do gargalo em gold.orders_enriched.</li>
+            <li>Particionamento e clustering de tabelas de orders e customers; otimizar joins (estatísticas, bloom filters, pushdown) no enriquecimento gold.</li>
+            <li>Materializar resultados críticos (gold.orders_enriched) com refresh programado e cache controlado para desacoplar consumidores.</li>
+            <li>Orquestração com prioridades e paralelismo: escalonar tarefas para evitar contenção no nó gold e balancear SLA entre pipelines.</li>
+            <li>Observabilidade: métricas de frescor, completude e anomalias; alertas específicos para os 5 SPOFs listados e para latência do gold.</li>
+            <li>Versionamento de esquemas e contratos com produtores upstream; validar breaking changes antes da promoção.</li>
+            <li>Testes de dados automatizados (unitários e de regressão) em transformações silver→gold, incluindo reconciliação de contagens e totais.</li>
+            <li>Catálogo e ownership claros por domínio (orders, customers); definir RTO/RPO e playbooks de recuperação por componente.</li>
+            <li>Backfills controlados e reprocessamento idempotente com checkpointing para reduzir riscos de duplicidade.</li>
+            <li>Revisar dependências desnecessárias para diminuir acoplamento e reduzir a quantidade de SPOFs efetivos.</li>
+            <li>Documentar SLAs por camada e consumidores downstream do gold, alinhando expectativas de frescor e disponibilidade.</li>
+        </ul>
+
+        <h3><span class="error-icon">🔴</span> Pontos Únicos de Falha</h3>
+        <div class="critical-component">
+            <strong>gold.orders_enriched</strong> (table)<br>
+            Impacta <strong>2</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>bronze.customers_raw</strong> (table)<br>
+            Impacta <strong>4</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>silver.customers_clean</strong> (table)<br>
+            Impacta <strong>3</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>silver.orders_clean</strong> (table)<br>
+            Impacta <strong>3</strong> assets downstream
+        </div>
+        <div class="critical-component">
+            <strong>bronze.orders_raw</strong> (table)<br>
+            Impacta <strong>4</strong> assets downstream
+        </div>
+
+        <h3><span class="warning-icon">⚠️</span> Bottlenecks Identificados</h3>
+        <div class="critical-component">
+            <strong>gold.orders_enriched</strong> (table)<br>
+            2 entradas → 2 saídas
+        </div>
+
+        <h3>🛣️ Caminhos Críticos</h3>
+        <div class="critical-component">
+            <strong>Caminho crítico com 5 assets</strong><br>
+            <code style="font-size: 0.85em;">raw/orders.csv → bronze.orders_raw → silver.orders_clean → gold.orders_enriched → gold.revenue_daily</code>
+        </div>
+    </div>
+
+    <h2>📈 Visualizações Interativas</h2>
+    <div class="visualization-links">
+        <a href="report_dashboard.html" class="viz-link" target="_blank">Dashboard</a>
+        <a href="report_force.html" class="viz-link" target="_blank">Grafo Force-Directed</a>
+        <a href="report_sankey.html" class="viz-link" target="_blank">Diagrama de Fluxo de Dados</a>
+
+    </div>
+
+    <h2>📝 Documentação Detalhada</h2>
+    <div class="documentation">
+        <pre># 📊 Documentação de Linhagem de Dados
+**Gerado em:** 2026-01-05 15:14:30
+
+## 📈 Resumo
+- **Total de Assets:** 42
+- **Total de Transformações:** 32
+- **Tipos de Assets:** table
+
+## 🗂️ Assets de Dados
+
+### TABLE
+- **raw/orders.csv**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/python/ingest_bronze.py`
+- **bronze.orders_raw**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/python/ingest_bronze.py`
+- **raw/customers.csv**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/python/ingest_bronze.py`
+- **bronze.customers_raw**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/python/ingest_bronze.py`
+- **silver.orders_clean**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.customers_clean**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.order_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.order_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.customer_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.customer_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.customers_clean.customer_name**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.customer_name**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.customers_clean.country**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.country**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.order_total**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.order_total**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.discount**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.discount**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.net_total**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.status**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.status**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **silver.orders_clean.updated_at**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.orders_enriched.updated_at**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/orders_enrichment.py`
+- **gold.revenue_daily**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/spark/databricks_notebook_gold.sql.py`
+- **bronze.customers_raw.customer_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **silver.customers_clean.customer_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **bronze.customers_raw.customer_name**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **bronze.customers_raw.email**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **silver.customers_clean.email**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **bronze.customers_raw.created_at**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **silver.customers_clean.created_at**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **bronze.customers_raw.country**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_customers_clean.sql`
+- **bronze.orders_raw.order_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **bronze.orders_raw.customer_id**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **bronze.orders_raw.order_total**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **bronze.orders_raw.discount**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **bronze.orders_raw.updated_at**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **bronze.orders_raw.status**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/silver_orders_clean.sql`
+- **gold.revenue_daily.day**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/gold_revenue_daily.sql`
+- **gold.revenue_daily.orders**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/gold_revenue_daily.sql`
+- **gold.revenue_daily.net_revenue**
+  - Arquivo: `lineage/lineage_demo_pipelines/ecommerce_orders/sql/gold_revenue_daily.sql`
+
+## 🔄 Fluxos de Dados Principais
+
+## ⚠️ Alertas e Observações
+</pre>
+    </div>
+    
+</body>
+</html>

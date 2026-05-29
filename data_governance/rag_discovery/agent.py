@@ -65,6 +65,8 @@ from .providers.base import EmbeddingProvider, LLMProvider, VectorStoreProvider
 from .retrieval.hybrid_retriever import HybridRetriever, HybridRetrieverConfig, RetrievalResult
 from .validation.table_validator import TableValidator
 from .utils.logger import StructuredLogger
+from .models import MATURITY_LABELS
+from .discovery_report import DiscoveryReport, DiscoveryNeed, DeliveryPlan
 
 if TYPE_CHECKING:
     pass
@@ -585,3 +587,296 @@ Gere uma resposta recomendando as tabelas mais relevantes."""
         count = self.validator.load_catalog(catalog_source)
         self.logger.info(f"Loaded catalog with {count} tables")
         return count
+
+    # ------------------------------------------------------------------
+    # Guided Discovery — 6-step framework
+    # ------------------------------------------------------------------
+
+    _GUIDED_SYSTEM_PROMPT = """Você é um Especialista em Data Discovery.
+
+A partir do contexto de negócio fornecido e dos metadados das tabelas encontradas,
+produza um relatório estruturado seguindo EXATAMENTE estas seções:
+
+## 1. Entendimento do Negócio
+Sintetize o processo, a dor e os stakeholders.
+
+## 2. Necessidades Identificadas
+Liste cada dado necessário classificando como:
+- **Asset existente**: dados que já existem em tabelas do catálogo
+- **Métrica derivada**: cálculos que operam sobre tabelas existentes
+- **Gap**: dados que não foram encontrados no catálogo
+
+## 3. Inventário de Assets Encontrados
+Para cada tabela encontrada, indique:
+| Asset | Tipo | Maturidade | Source | Quality Score | Classificação |
+
+Onde Maturidade segue: L0=Inexiste, L1=Raw, L2=Staging, L3=Curated, L4=Data Product
+
+## 4. Viabilidade e Riscos
+- Dados sensíveis (PII/PHI) identificados
+- Dependências de lineage relevantes
+- SLAs de freshness vs. necessidade do caso
+- Gaps que precisam de ingestão de novas fontes
+
+## 5. Plano de Entrega
+- **V1 (rápida)**: Scope + tabelas disponíveis (maturidade ≥ L3)
+- **V2 (completa)**: Scope + o que precisa de ingestão/modelagem/contratos
+- **Esforço estimado**: Baixo / Médio / Alto para cada versão
+
+Use apenas tabelas validadas. Responda em português brasileiro."""
+
+    def guided_discovery(
+        self,
+        business_context: str,
+        pain_point: str,
+        stakeholders: Optional[List[str]] = None,
+        business_domain: str = "",
+        top_k: int = 10,
+        user: Optional[str] = None
+    ) -> DiscoveryReport:
+        """
+        Discovery guiado seguindo o framework de 6 etapas.
+
+        Etapa 1: Recebe contexto de negócio (input do usuário)
+        Etapa 2: LLM infere necessidades a partir do contexto
+        Etapa 3: RAG busca assets relevantes no catálogo
+        Etapa 4: Cross-reference com quality, classification, contracts, lineage
+        Etapa 5: Assessment técnico automático
+        Etapa 6: LLM gera plano de entrega V1/V2
+
+        Args:
+            business_context: Descrição do processo de negócio
+            pain_point: Dor central / pergunta de negócio
+            stakeholders: Lista de pessoas envolvidas
+            business_domain: Domínio de negócio ("Vendas", "Marketing", etc.)
+            top_k: Número máximo de tabelas a retornar
+            user: Identificador do usuário
+
+        Returns:
+            DiscoveryReport com relatório completo das 6 etapas
+        """
+        start_time = time.time()
+        stakeholders = stakeholders or []
+
+        # ---- Etapa 3: Busca semântica ----
+        # Combina contexto + dor para query mais rica
+        search_query = f"{business_context}. {pain_point}"
+        if business_domain:
+            search_query = f"[{business_domain}] {search_query}"
+
+        retrieval_results = self.retriever.retrieve(
+            query=search_query,
+            top_k=top_k * 2,
+            apply_diversity=True
+        )
+
+        discovered_tables = self._extract_tables_from_results(retrieval_results)
+
+        if self.validator:
+            validated_tables, invalid_tables = self.validator.validate(discovered_tables)
+        else:
+            validated_tables = discovered_tables
+            invalid_tables = []
+
+        validated_tables = validated_tables[:top_k]
+
+        # ---- Etapa 4: Cross-module enrichment (lazy) ----
+        enriched_tables = self._enrich_with_cross_modules(validated_tables)
+
+        # ---- Etapa 5: Build context for LLM ----
+        context = self._build_guided_context(
+            business_context, pain_point, stakeholders,
+            business_domain, enriched_tables, invalid_tables
+        )
+
+        # ---- Etapa 2 + 6: LLM generates needs analysis + delivery plan ----
+        llm_answer = self._generate_guided_response(context)
+
+        # ---- Build discovery needs from validated tables ----
+        needs = []
+        v1_tables = []
+        v2_tables = []
+
+        for t in enriched_tables:
+            maturity = t.get('maturity_level', 0)
+            need = DiscoveryNeed(
+                name=t.get('table_name', ''),
+                need_type='asset_existente',
+                description=t.get('description', ''),
+                matched_table=t.get('table_name', ''),
+                maturity_level=maturity,
+                classification=t.get('classification', ''),
+                quality_score=t.get('data_quality_score'),
+                freshness_hours=t.get('freshness_hours'),
+                relevance_score=t.get('relevance_score', 0.0),
+            )
+            needs.append(need)
+
+            if maturity >= 3:
+                v1_tables.append(t.get('table_name', ''))
+            else:
+                v2_tables.append(t.get('table_name', ''))
+
+        # Build delivery plan
+        delivery_plan = DeliveryPlan(
+            v1_scope=f"Entrega rápida com {len(v1_tables)} tabelas já curadas (L3+).",
+            v1_tables=v1_tables,
+            v1_effort="baixo" if v1_tables else "n/a",
+            v2_scope=f"Entrega completa incluindo {len(v2_tables)} tabelas que precisam de tratamento.",
+            v2_tables=v2_tables,
+            v2_effort="médio" if len(v2_tables) <= 3 else "alto",
+            gaps=[t.get('table_name', '') for t in invalid_tables]
+        )
+
+        # Confidence
+        if retrieval_results:
+            avg_score = sum(r.combined_score for r in retrieval_results) / len(retrieval_results)
+            validation_rate = len(validated_tables) / len(discovered_tables) if discovered_tables else 0
+            confidence = (avg_score * 0.7) + (validation_rate * 0.3)
+        else:
+            confidence = 0.0
+
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        # Build risks / PII warnings from enriched data
+        risks = []
+        pii_warnings = []
+        for t in enriched_tables:
+            if t.get('classification') in ('confidencial', 'restrito'):
+                pii_warnings.append(
+                    f"Tabela {t.get('table_name', '?')} classificada como "
+                    f"{t.get('classification')} — requer controle de acesso."
+                )
+            if t.get('freshness_hours') and t.get('freshness_hours', 0) > 24:
+                risks.append(
+                    f"Tabela {t.get('table_name', '?')} tem SLA de freshness "
+                    f"de {t.get('freshness_hours')}h — verificar se atende a necessidade."
+                )
+
+        # Log
+        self.logger.log_query(
+            query=search_query,
+            discovered_tables=len(discovered_tables),
+            validated_tables=len(validated_tables),
+            invalid_tables=len(invalid_tables),
+            latency_ms=latency_ms,
+            model=self.llm_provider.model_name,
+            embedding_model=self.embedding_provider.model_name,
+            response=llm_answer,
+            user=user
+        )
+
+        report = DiscoveryReport(
+            business_context=business_context,
+            pain_point=pain_point,
+            stakeholders=stakeholders,
+            needs=needs,
+            risks=risks,
+            pii_warnings=pii_warnings,
+            technical_summary={
+                "tables_searched": len(retrieval_results),
+                "tables_discovered": len(discovered_tables),
+                "tables_validated": len(validated_tables),
+                "tables_invalid": len(invalid_tables),
+                "retriever_stats": self.retriever.get_statistics(),
+            },
+            delivery_plan=delivery_plan,
+            llm_answer=llm_answer,
+            confidence=confidence,
+            latency_ms=latency_ms,
+            tables_found=len(discovered_tables),
+            tables_validated=len(validated_tables),
+        )
+
+        return report
+
+    def _enrich_with_cross_modules(
+        self,
+        tables: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Enrich table data with info from other governance modules (lazy import).
+
+        Falls back gracefully if modules are not available.
+        """
+        enriched = []
+        for t in tables:
+            enriched_table = {**t}
+
+            # Propagate metadata fields if present in catalog_metadata
+            catalog = t.get('catalog_metadata', {})
+            if catalog:
+                enriched_table.setdefault('maturity_level', catalog.get('maturity_level', 0))
+                enriched_table.setdefault('classification', catalog.get('classification', ''))
+                enriched_table.setdefault('data_quality_score', catalog.get('data_quality_score'))
+                enriched_table.setdefault('freshness_hours', catalog.get('freshness_hours'))
+                enriched_table.setdefault('source_system', catalog.get('source_system', ''))
+                enriched_table.setdefault('asset_type', catalog.get('asset_type', ''))
+                enriched_table.setdefault('granularity', catalog.get('granularity', ''))
+
+            enriched.append(enriched_table)
+
+        return enriched
+
+    def _build_guided_context(
+        self,
+        business_context: str,
+        pain_point: str,
+        stakeholders: List[str],
+        business_domain: str,
+        validated_tables: List[Dict[str, Any]],
+        invalid_tables: List[Dict[str, Any]]
+    ) -> str:
+        """Build rich context string for the guided discovery LLM call."""
+        parts = []
+
+        parts.append("# Contexto do Usuário")
+        if business_domain:
+            parts.append(f"Domínio: {business_domain}")
+        parts.append(f"Processo: {business_context}")
+        parts.append(f"Dor central: {pain_point}")
+        if stakeholders:
+            parts.append(f"Stakeholders: {', '.join(stakeholders)}")
+
+        parts.append("")
+        parts.append("# Tabelas Validadas no Catálogo")
+
+        for t in validated_tables:
+            maturity = t.get('maturity_level', 0)
+            mat_label = MATURITY_LABELS.get(maturity, f"L{maturity}")
+            quality = t.get('data_quality_score')
+            quality_str = f"{quality:.0%}" if quality is not None else "—"
+            classification = t.get('classification', '—') or '—'
+            source = t.get('source_system', '—') or '—'
+            asset_type = t.get('asset_type', '—') or '—'
+            freshness = t.get('freshness_hours')
+            freshness_str = f"{freshness}h" if freshness is not None else "—"
+
+            parts.append(f"")
+            parts.append(f"## {t.get('table_name', '?')}")
+            parts.append(f"Descrição: {t.get('description', 'Sem descrição')}")
+            parts.append(f"Tipo: {asset_type} | Maturidade: {mat_label}")
+            parts.append(f"Fonte: {source} | Quality: {quality_str} | Classificação: {classification}")
+            parts.append(f"Freshness SLA: {freshness_str}")
+            parts.append(f"Relevância: {t.get('relevance_score', 0.0):.2%}")
+
+        if invalid_tables:
+            parts.append("")
+            parts.append("# Tabelas NÃO encontradas no catálogo (possíveis gaps)")
+            for t in invalid_tables:
+                parts.append(f"- {t.get('table_name', '?')}: {t.get('reason', 'não encontrada')}")
+
+        return "\n".join(parts)
+
+    def _generate_guided_response(self, context: str) -> str:
+        """Generate the guided discovery response using the structured prompt."""
+        prompt = f"""{context}
+
+Com base no contexto acima, produza o relatório de Data Discovery estruturado."""
+
+        response = self.llm_provider.generate(
+            prompt=prompt,
+            system_prompt=self._GUIDED_SYSTEM_PROMPT,
+            temperature=0.0
+        )
+
+        return response.content
