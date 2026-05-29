@@ -45,3 +45,13 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code — local session context (never commit)
+.planning/
+CLAUDE.private.md
+
+# Claude Code — local session context (never commit)
+
+# Claude Code — local session context (never commit)
+
+# Claude Code — local session context (never commit)

@@ -1,0 +1,13 @@
+{
+  "active_key_id": "key_58ed87f26f56c3fd",
+  "keys": {
+    "key_58ed87f26f56c3fd": {
+      "encrypted_key": "Z0FBQUFBQnFHTHN6WGxWd1ItbGI0eWJSbFRmZXZfd0w2WTNWLS1zc212QW1WaklvX0FxWXM3a2l0TDltaThjR1VTMzZGc2NEOVh2UEcxc2Z0WGRXVTVPS0piUUppTU90SnBXakowOVA1RHM5c1M1TC1FMUlUaTBVVS1EaXRnZEdmM2tUQlBqRTFCbEQ=",
+      "created_at": "2026-05-28T22:01:23.098357",
+      "expires_at": "2026-06-27T22:01:23.098343",
+      "is_active": true,
+      "version": 1,
+      "rotated_from": null
+    }
+  }
+}

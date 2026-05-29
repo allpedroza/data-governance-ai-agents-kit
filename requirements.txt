@@ -1,9 +1,13 @@
-# Unified app requirements
--r lineage/requirements.txt
--r rag_discovery/requirements.txt
--r warehouse/requirements.txt
-streamlit>=1.32.0
+# Minimal base requirements — for full agent support use:
+#   pip install -e ".[all]"
+#
+# Or pick specific agent groups:
+#   pip install -e ".[lineage,rag]"
+#
+# See pyproject.toml for the full list of optional groups.
 
-# OpenLineage integration - padrão aberto para linhagem de dados
-# https://openlineage.io/
-openlineage-python>=1.0.0
+streamlit>=1.32.0
+openai>=1.0.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+requests>=2.31.0
