@@ -56,7 +56,16 @@ Embedding Providers - Implementações de geradores de embeddings
 from .sentence_transformer import SentenceTransformerEmbeddings
 from .openai_embeddings import OpenAIEmbeddings
 
+try:
+    from .linear_adapter import LinearAdapterEmbeddings
+    _linear_adapter_available = True
+except ImportError:  # numpy missing
+    _linear_adapter_available = False
+
 __all__ = [
     "SentenceTransformerEmbeddings",
-    "OpenAIEmbeddings"
+    "OpenAIEmbeddings",
 ]
+
+if _linear_adapter_available:
+    __all__.append("LinearAdapterEmbeddings")

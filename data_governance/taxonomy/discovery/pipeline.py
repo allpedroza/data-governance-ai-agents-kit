@@ -19,6 +19,10 @@ from ..scorer import TaxonomyScore, TaxonomyScorer
 from .anonymizer import SampleAnonymizer
 from .collector import SchemaInventory, WarehouseInventoryCollector
 from .evaluator import EvaluationResult, TaxonomyEvaluator
+from .governance import (
+    GovernanceConfig, LLMGovernanceGate, LocalGovernanceBackend,
+    json_validator, yaml_fence_validator,
+)
 from .synthesizer import SynthesisResult, TaxonomySynthesizer
 
 if TYPE_CHECKING:
@@ -35,6 +39,7 @@ class DiscoveryRunResult:
     score: TaxonomyScore
     evaluation: EvaluationResult
     anonymization_report: Dict[str, Any] = field(default_factory=dict)
+    governance_report: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def taxonomy(self) -> TaxonomyDocument:
@@ -63,6 +68,7 @@ class DiscoveryRunResult:
                 "token_clusters": len(self.inventory.token_clusters),
             },
             "anonymization": self.anonymization_report,
+            "governance": self.governance_report,
             "synthesis_model": self.synthesis.model,
             "evaluation_model": self.evaluation.model,
             "score": self.score.to_dict(),
@@ -97,9 +103,30 @@ class TaxonomyDiscoveryPipeline:
         scorer: Optional[TaxonomyScorer] = None,
         synthesis_max_tokens: int = 4000,
         evaluation_max_tokens: int = 4000,
+        governance: Optional[GovernanceConfig] = None,
+        governance_backend: Optional[Any] = None,
     ) -> None:
-        self.synthesizer = TaxonomySynthesizer(llm, max_tokens=synthesis_max_tokens)
-        self.evaluator = TaxonomyEvaluator(evaluator_llm or llm, max_tokens=evaluation_max_tokens)
+        # Optionally wrap each LLM in a governance gate. Synthesis uses the
+        # YAML-fence validator; evaluation uses the strict JSON validator.
+        synth_llm = llm
+        eval_llm = evaluator_llm or llm
+        self._synth_gate: Optional[LLMGovernanceGate] = None
+        self._eval_gate: Optional[LLMGovernanceGate] = None
+        if governance is not None:
+            backend = governance_backend or LocalGovernanceBackend()
+            synth_cfg = GovernanceConfig(
+                **{**governance.__dict__, "schema_validator": yaml_fence_validator}
+            )
+            eval_cfg = GovernanceConfig(
+                **{**governance.__dict__, "schema_validator": json_validator}
+            )
+            self._synth_gate = LLMGovernanceGate(synth_llm, backend=backend, config=synth_cfg)
+            self._eval_gate = LLMGovernanceGate(eval_llm, backend=backend, config=eval_cfg)
+            synth_llm = self._synth_gate
+            eval_llm = self._eval_gate
+
+        self.synthesizer = TaxonomySynthesizer(synth_llm, max_tokens=synthesis_max_tokens)
+        self.evaluator = TaxonomyEvaluator(eval_llm, max_tokens=evaluation_max_tokens)
         self.anonymizer = anonymizer or SampleAnonymizer()
         self.scorer = scorer or TaxonomyScorer()
 
@@ -157,10 +184,17 @@ class TaxonomyDiscoveryPipeline:
         score = self.scorer.score(synthesis.taxonomy, profile=profile)
         evaluation = self.evaluator.evaluate(synthesis.taxonomy, score)
 
+        governance_report: Dict[str, Any] = {}
+        if self._synth_gate is not None:
+            governance_report["synthesis"] = self._synth_gate.aggregate_metrics()
+        if self._eval_gate is not None:
+            governance_report["evaluation"] = self._eval_gate.aggregate_metrics()
+
         return DiscoveryRunResult(
             inventory=inventory,
             synthesis=synthesis,
             score=score,
             evaluation=evaluation,
             anonymization_report=anon_report,
+            governance_report=governance_report,
         )

@@ -26,6 +26,11 @@ from .prompts import (
 from .synthesizer import TaxonomySynthesizer, SynthesisResult
 from .evaluator import TaxonomyEvaluator, EvaluationResult
 from .pipeline import TaxonomyDiscoveryPipeline, DiscoveryRunResult
+from .governance import (
+    GovernanceBackend, GovernanceConfig, GovernanceMetrics,
+    LLMGovernanceGate, LocalGovernanceBackend, MechGovBackend,
+    json_validator, yaml_fence_validator,
+)
 
 # Optional Anthropic helper — only import works if the `anthropic` SDK is installed.
 try:

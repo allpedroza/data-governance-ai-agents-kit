@@ -25,14 +25,16 @@ Built for data teams that need governance to be **continuous**, not a one-off pr
 
 ---
 
-## The 10 Agents
+## The Agents
 
 ### Data Governance
 
 | Agent | What it does | Key Value |
 |-------|-------------|-----------|
+| **Taxonomy** | Discovers, scores and evolves the canonical data dictionary | Single source of truth that drives every downstream agent |
+| **Data Engineering** | Generates DDL, dbt models and CLI commands aligned to the taxonomy | New assets born already compliant — no drift |
 | **Data Lineage** | Maps dependencies across datasets and pipelines | Assess change impact before breaking production |
-| **Data Discovery** | Semantic search with hybrid RAG | Find data in seconds, not days |
+| **Data Discovery** | Semantic search with hybrid RAG (optional linear-adapter boost) | Find data in seconds, not days |
 | **Metadata Enrichment** | Auto-generates descriptions, tags, and glossary entries | Always-documented catalog with zero manual effort |
 | **Data Classification** | Classifies sensitivity (PII/PHI/PCI) | Automated compliance and smart masking |
 | **Data Quality** | Monitors quality with SLAs and alerts | Reliable data for critical decisions |
@@ -164,8 +166,10 @@ data-governance-ai-agents-kit/
 ├── app.py                              # Unified Streamlit UI
 │
 ├── data_governance/
+│   ├── taxonomy/                       # Taxonomy agent (scorer, discovery, governance gate)
+│   ├── data_engineering_agent/         # DDL / dbt / CLI generator + copilot
 │   ├── lineage/                        # Data Lineage Agent
-│   ├── rag_discovery/                  # Data Discovery Agent
+│   ├── rag_discovery/                  # Data Discovery Agent (incl. linear-adapter wrapper)
 │   ├── metadata_enrichment/            # Metadata Enrichment Agent
 │   ├── data_classification/            # Data Classification Agent
 │   ├── data_quality/                   # Data Quality Agent
@@ -194,6 +198,95 @@ Contributions are welcome! Follow this flow:
 4. **Make your changes** and commit: `git commit -m "feat: add new feature"`
 5. **Push** to your fork: `git push origin feature/my-feature`
 6. **Open a Pull Request**
+
+---
+
+## Third-Party Integrations & Acknowledgments
+
+This project optionally integrates with two Apache 2.0 libraries published by
+the [SantanderAI](https://github.com/SantanderAI) open-source program. Both
+are **optional**: install only if you want the corresponding feature. We
+follow open-source best practice — explicit attribution, upstream link,
+license disclosure, and no vendoring of the upstream code.
+
+### 1. `mech-gov-framework` — LLM governance gate
+
+Wraps the taxonomy discovery LLM calls (synthesis + evaluation) with the
+R1/R2/R3 mechanical-governance regimes (entropy commit-reveal, ambiguity
+gate, candidate freezing) and exposes the official metric suite
+(CDL, DIU, IPI, FVS, ESD, FSR) in the run result.
+
+- **Upstream:** https://github.com/SantanderAI/mech-gov-framework
+- **License:** Apache License 2.0
+- **Install:** `pip install mech-gov-framework`
+- **Where it plugs in:** `data_governance/taxonomy/discovery/governance.py`
+  (`MechGovBackend`). A pure-Python `LocalGovernanceBackend` is provided as
+  a fallback so the framework works even when the upstream library is
+  absent.
+
+```python
+# Imports used to wire mech-gov into our pipeline
+from mech_gov.data.banking_case import BankingCase, TransactionType
+from mech_gov.governance.r1_text_only import R1TextOnly
+from mech_gov.governance.r2_mechanical import R2Mechanical
+from mech_gov.governance.r3_adaptive import R3Adaptive
+from mech_gov.llm.registry import create_llm
+from mech_gov.metrics.governance import compute_governance_metrics
+
+# Activation in our discovery pipeline
+from data_governance.taxonomy.discovery import (
+    TaxonomyDiscoveryPipeline, GovernanceConfig, MechGovBackend,
+)
+
+pipeline = TaxonomyDiscoveryPipeline(
+    llm=my_llm,
+    governance=GovernanceConfig(regime="r2", max_retries=2),
+    governance_backend=MechGovBackend(),   # uses mech_gov_framework
+)
+```
+
+### 2. `linear-adapter-trainer` — RAG embedding adapter
+
+Lifts retrieval precision in the Data Discovery RAG agent by applying a
+small learned linear transformation on top of any base embedder
+(Sentence-Transformer, OpenAI, …) — without retraining the embedding
+model.
+
+- **Upstream:** https://github.com/SantanderAI/linear-adapter-trainer
+- **License:** Apache License 2.0
+- **Install:** `pip install "linear-adapter-trainer[sentence-transformers]"`
+- **Where it plugs in:**
+  `data_governance/rag_discovery/providers/embeddings/linear_adapter.py`
+  (`LinearAdapterEmbeddings`). A pure-numpy adapter loader is built in so
+  trained `.npz` matrices work even without the upstream torch dependency.
+
+```python
+# Training (one-off, against your knowledge base)
+from linear_adapter_trainer import (
+    AdapterTrainer, DatasetConfig, DatasetGenerator, KnowledgeBase,
+    TemplateQueryGenerator, TrainingConfig,
+)
+from linear_adapter_trainer.embeddings import SentenceTransformerEmbedder
+
+# Inference (wraps any of our existing embedders)
+from data_governance.rag_discovery.providers.embeddings import (
+    SentenceTransformerEmbeddings, LinearAdapterEmbeddings,
+)
+
+embedder = LinearAdapterEmbeddings(
+    base=SentenceTransformerEmbeddings("all-MiniLM-L6-v2"),
+    adapter_path="adapter.pt",   # or "adapter.npz" for the numpy fallback
+)
+# Drop straight into ChromaStore / DataDiscoveryRAGAgent — same EmbeddingProvider contract.
+```
+
+### Attribution notice
+
+Both libraries are © Santander AI Lab and distributed under Apache License 2.0
+(<https://www.apache.org/licenses/LICENSE-2.0>). When you install them, the
+upstream `LICENSE` and `NOTICE` files travel with the package. We do not
+redistribute or modify either source tree — our integration points consume
+the published public APIs only.
 
 ---
 
@@ -305,14 +398,16 @@ Acesse `http://localhost:8501` e comece a explorar os agentes.
 
 ---
 
-## Os 10 Agentes
+## Os Agentes
 
 ### Governança de Dados
 
 | Agente | O que faz | Valor principal |
 |--------|-----------|-----------------|
+| **Taxonomy** | Descobre, pontua e evolui o dicionário canônico de dados | Fonte da verdade que alimenta todos os demais agentes |
+| **Data Engineering** | Gera DDL, modelos dbt e comandos CLI alinhados à taxonomia | Novos ativos já nascem compliant — sem drift |
 | **Data Lineage** | Mapeia dependências entre datasets e pipelines | Avalie impacto de mudanças antes de quebrar produção |
-| **Data Discovery** | Busca semântica com RAG híbrido | Encontre dados em segundos, não em dias |
+| **Data Discovery** | Busca semântica com RAG híbrido (boost opcional via linear adapter) | Encontre dados em segundos, não em dias |
 | **Metadata Enrichment** | Gera descrições, tags e glossário automaticamente | Catálogo sempre documentado sem esforço manual |
 | **Data Classification** | Classifica sensibilidade (PII/PHI/PCI) | Compliance automático e masking inteligente |
 | **Data Quality** | Monitora qualidade com SLAs e alertas | Dados confiáveis para decisões críticas |
@@ -547,6 +642,93 @@ Contribuições são bem-vindas! Siga o fluxo:
 4. **Faça suas alterações** e commit: `git commit -m "feat: adiciona nova funcionalidade"`
 5. **Push** para seu fork: `git push origin feature/minha-feature`
 6. **Abra um Pull Request**
+
+---
+
+## Integrações de Terceiros e Atribuições
+
+Este projeto integra-se opcionalmente a duas bibliotecas Apache 2.0 publicadas
+pelo programa open source [SantanderAI](https://github.com/SantanderAI).
+Ambas são **opcionais**: instale apenas se quiser a feature correspondente.
+Seguimos as melhores práticas open source — atribuição explícita, link
+upstream, divulgação de licença e zero vendoring do código.
+
+### 1. `mech-gov-framework` — gate de governança LLM
+
+Envolve as chamadas LLM do pipeline de descoberta da taxonomia (sintetização +
+avaliação) com os regimes mecânicos R1/R2/R3 (entropy commit-reveal,
+ambiguity gate, candidate freezing) e expõe o suite oficial de métricas
+(CDL, DIU, IPI, FVS, ESD, FSR) no resultado da execução.
+
+- **Upstream:** https://github.com/SantanderAI/mech-gov-framework
+- **Licença:** Apache License 2.0
+- **Instalação:** `pip install mech-gov-framework`
+- **Onde plugar:** `data_governance/taxonomy/discovery/governance.py`
+  (`MechGovBackend`). O `LocalGovernanceBackend` em puro Python serve como
+  fallback quando a lib upstream não estiver instalada.
+
+```python
+# Imports usados para conectar mech-gov ao pipeline
+from mech_gov.data.banking_case import BankingCase, TransactionType
+from mech_gov.governance.r1_text_only import R1TextOnly
+from mech_gov.governance.r2_mechanical import R2Mechanical
+from mech_gov.governance.r3_adaptive import R3Adaptive
+from mech_gov.llm.registry import create_llm
+from mech_gov.metrics.governance import compute_governance_metrics
+
+# Ativação no nosso pipeline de descoberta
+from data_governance.taxonomy.discovery import (
+    TaxonomyDiscoveryPipeline, GovernanceConfig, MechGovBackend,
+)
+
+pipeline = TaxonomyDiscoveryPipeline(
+    llm=my_llm,
+    governance=GovernanceConfig(regime="r2", max_retries=2),
+    governance_backend=MechGovBackend(),
+)
+```
+
+### 2. `linear-adapter-trainer` — adapter de embeddings para RAG
+
+Eleva a precisão do Data Discovery RAG aplicando uma pequena transformação
+linear treinada sobre qualquer embedder base (Sentence-Transformer,
+OpenAI, …) — sem retreinar o modelo de embedding.
+
+- **Upstream:** https://github.com/SantanderAI/linear-adapter-trainer
+- **Licença:** Apache License 2.0
+- **Instalação:** `pip install "linear-adapter-trainer[sentence-transformers]"`
+- **Onde plugar:**
+  `data_governance/rag_discovery/providers/embeddings/linear_adapter.py`
+  (`LinearAdapterEmbeddings`). Há um loader numpy embutido para que
+  matrizes treinadas em `.npz` funcionem sem a dependência torch upstream.
+
+```python
+# Treinamento (one-off, contra sua knowledge base)
+from linear_adapter_trainer import (
+    AdapterTrainer, DatasetConfig, DatasetGenerator, KnowledgeBase,
+    TemplateQueryGenerator, TrainingConfig,
+)
+from linear_adapter_trainer.embeddings import SentenceTransformerEmbedder
+
+# Inferência (envolvendo qualquer dos nossos embedders)
+from data_governance.rag_discovery.providers.embeddings import (
+    SentenceTransformerEmbeddings, LinearAdapterEmbeddings,
+)
+
+embedder = LinearAdapterEmbeddings(
+    base=SentenceTransformerEmbeddings("all-MiniLM-L6-v2"),
+    adapter_path="adapter.pt",   # ou "adapter.npz" para o fallback numpy
+)
+# Plug direto no ChromaStore / DataDiscoveryRAGAgent — mesmo contrato EmbeddingProvider.
+```
+
+### Aviso de atribuição
+
+Ambas as bibliotecas são © Santander AI Lab e distribuídas sob Apache
+License 2.0 (<https://www.apache.org/licenses/LICENSE-2.0>). Ao instalá-las,
+os arquivos `LICENSE` e `NOTICE` upstream acompanham o pacote. Não
+redistribuímos nem modificamos as árvores de código upstream — nossa
+integração consome apenas as APIs públicas publicadas.
 
 ---
 
