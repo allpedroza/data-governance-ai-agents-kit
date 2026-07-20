@@ -38,6 +38,7 @@ Built for data teams that need governance to be **continuous**, not a one-off pr
 | **Data Quality** | Monitors quality with SLAs and alerts | Reliable data for critical decisions |
 | **Data Asset Value** | Quantifies value by usage and dependencies | Prioritize investments based on real data |
 | **Data Product Scoring** | Unified maturity score | Consolidated governance view per data product |
+| **Data Taxonomy** | Organizes and classifies data structures automatically | Standardized vocabularies and domains |
 
 ### AI Governance
 
@@ -171,6 +172,7 @@ data-governance-ai-agents-kit/
 │   ├── data_quality/                   # Data Quality Agent
 │   ├── data_asset_value/               # Data Asset Value Agent
 │   ├── data_product_scoring/           # Data Product Scoring Layer
+│   ├── taxonomy/                       # Data Taxonomy Agent
 │   └── warehouse/                      # DW connectors
 │
 ├── ai_governance/
@@ -318,6 +320,7 @@ Acesse `http://localhost:8501` e comece a explorar os agentes.
 | **Data Quality** | Monitora qualidade com SLAs e alertas | Dados confiáveis para decisões críticas |
 | **Data Asset Value** | Quantifica valor por uso e dependências | Priorize investimentos com base em dados |
 | **Data Product Scoring** | Score unificado de maturidade | Visão consolidada de governança por produto |
+| **Data Taxonomy** | Organiza e classifica estruturas de dados automaticamente | Vocabulários e domínios padronizados |
 
 ### Governança de IA
 
@@ -448,6 +451,7 @@ data-governance-ai-agents-kit/
 │   ├── data_quality/                   # Data Quality Agent
 │   ├── data_asset_value/               # Data Asset Value Agent
 │   ├── data_product_scoring/           # Data Product Scoring Layer
+│   ├── taxonomy/                       # Data Taxonomy Agent
 │   └── warehouse/                      # Conectores para DWs
 │
 ├── ai_governance/
@@ -531,6 +535,7 @@ Cada agente possui documentação específica:
 | Data Classification | [`data_governance/data_classification/README.md`](data_governance/data_classification/README.md) |
 | Data Quality | [`data_governance/data_quality/README.md`](data_governance/data_quality/README.md) |
 | Data Asset Value | [`data_governance/data_asset_value/README.md`](data_governance/data_asset_value/README.md) |
+| Data Taxonomy | [`data_governance/taxonomy/README.md`](data_governance/taxonomy/README.md) |
 | Sensitive Data NER | [`ai_governance/sensitive_data_ner/README.md`](ai_governance/sensitive_data_ner/README.md) |
 | AI Business Value | [`ai_governance/ai_business_value/README.md`](ai_governance/ai_business_value/README.md) |
 | AI Policy Engine | [`ai_governance/policy_engine/README.md`](ai_governance/policy_engine/README.md) |
