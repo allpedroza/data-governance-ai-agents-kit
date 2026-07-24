@@ -151,7 +151,7 @@ print(f"Projected ROI: {report.initiatives[0].roi_percentage:.1f}%")
 
 **Data Catalogs:** OpenMetadata · Apache Atlas · AWS Glue
 
-**Data Warehouses:** Snowflake · Amazon Redshift · Google BigQuery · Azure Synapse
+**Data Warehouses:** Snowflake · Amazon Redshift · Google BigQuery · Azure Synapse · Databricks
 
 Connectors available in `data_governance/warehouse/`.
 
@@ -431,6 +431,7 @@ O **AI Policy Engine** oferece um pack inicial de políticas em `ai_governance/p
 - Amazon Redshift
 - Google BigQuery
 - Azure Synapse
+- Databricks (Unity Catalog)
 
 Conectores disponíveis em `data_governance/warehouse/`.
 
