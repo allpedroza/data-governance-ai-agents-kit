@@ -7,6 +7,7 @@
 #   "chromadb>=0.4.0",
 #   "cryptography>=41.0.0",
 #   "databricks-sdk>=0.5.0",
+#   "databricks-sql-connector>=2.9.0",
 #   "faiss-cpu>=1.7.0",
 #   "flake8>=5.0.0",
 #   "google-cloud-bigquery-storage>=2.0.0",
@@ -64,6 +65,7 @@ from .snowflake import SnowflakeConnector
 from .redshift import RedshiftConnector
 from .bigquery import BigQueryConnector
 from .synapse import SynapseConnector
+from .databricks import DatabricksConnector
 
 
 def create_warehouse_connector(
@@ -85,6 +87,7 @@ def create_warehouse_connector(
         "redshift": RedshiftConnector,
         "bigquery": BigQueryConnector,
         "synapse": SynapseConnector,
+        "databricks": DatabricksConnector,
     }
 
     warehouse_type = warehouse_type.lower()
@@ -101,5 +104,6 @@ __all__ = [
     "RedshiftConnector",
     "BigQueryConnector",
     "SynapseConnector",
+    "DatabricksConnector",
     "create_warehouse_connector",
 ]
