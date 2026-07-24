@@ -227,9 +227,9 @@ O **AI & Data Governance Agents Kit** oferece **10 agentes de IA especializados*
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         GOVERNANÇA AUTOMATIZADA                          │
+│                         FRAMEWORK DE GOVERNANÇA                         │
 ├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
+│                                                                         │
 │   1. DESCOBRIR           2. MEDIR              3. PROTEGER              │
 │   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐          │
 │   │ • Discovery  │      │ • Quality    │      │ • Policy     │          │
@@ -237,10 +237,10 @@ O **AI & Data Governance Agents Kit** oferece **10 agentes de IA especializados*
 │   │ • Metadata   │      │ • Business   │      │ • NER        │          │
 │   │ • Classify   │      │   Value      │      │ • Gates      │          │
 │   └──────────────┘      └──────────────┘      └──────────────┘          │
-│                                                                          │
+│                                                                         │
 │   Encontre e entenda    Quantifique valor    Aplique políticas          │
 │   seus dados            e riscos             automaticamente            │
-│                                                                          │
+│                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
